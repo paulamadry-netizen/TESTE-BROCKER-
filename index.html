@@ -42,12 +42,12 @@ footer{margin-top:20px;font-size:13px;text-align:center;color:#9ca3af}
     <div class="controls">
       <label>Actif :
         <select id="symbolSelect">
-          <optgroup label="Indices (via ETFs IG)">
-            <option value="SPY">SPDR S&P 500 ETF</option>
-            <option value="DIA">SPDR Dow Jones Industrial ETF</option>
-            <option value="QQQ">Invesco QQQ Trust (Nasdaq 100)</option>
-            <option value="EXS1.DE">iShares DAX UCITS ETF</option>
-            <option value="C40.PA">Amundi CAC 40 ETF</option>
+          <optgroup label="Indices (via CFD IG)">
+            <option value="S&P500">S&P 500</option>
+            <option value="DowJones">Dow Jones</option>
+            <option value="Nasdaq100">Nasdaq 100</option>
+            <option value="DAX">DAX</option>
+            <option value="CAC40">CAC 40</option>
           </optgroup>
           <optgroup label="Forex (Twelve Data)">
             <option value="EUR/USD">EUR/USD</option>
@@ -72,7 +72,7 @@ footer{margin-top:20px;font-size:13px;text-align:center;color:#9ca3af}
         <button class="full-btn" onclick="toggleFullscreen()">⛶ Plein écran</button>
       </div>
       <iframe id="tradingviewIframe"
-        src="https://s.tradingview.com/widgetembed/?symbol=AMEX:SPY&interval=1&theme=dark&hide_side_toolbar=1"></iframe>
+        src="https://s.tradingview.com/widgetembed/?symbol=INDEX:SPX&interval=1&theme=dark&hide_side_toolbar=1"></iframe>
 
       <div class="tradebox">
         <button class="buy" onclick="placeOrder('buy')">ACHETER</button>
@@ -110,11 +110,11 @@ const IG_API_KEY = "44e7b1c12a47da8eb6a0a1c579fa1aae92132b24";
 const TWELVE_API_KEY = "c9140c9a72264e82bb9f5235b86b2806";
 
 const IG_SYMBOLS = {
-  SPY:"CS.D.SP500.MINI.IP",
-  DIA:"CS.D.DOW.MINI.IP",
-  QQQ:"CS.D.NASDAQ.MINI.IP",
-  "EXS1.DE":"CS.D.DAX.IFE.IP",
-  "C40.PA":"CS.D.CAC40.IFE.IP"
+  "S&P500":"CS.D.SP500.MINI.IP",
+  "DowJones":"CS.D.DOW.MINI.IP",
+  "Nasdaq100":"CS.D.NASDAQ.MINI.IP",
+  "DAX":"CS.D.DAX.IFE.IP",
+  "CAC40":"CS.D.CAC40.IFE.IP"
 };
 
 const TWELVE_SYMBOLS = {
@@ -125,7 +125,7 @@ const TWELVE_SYMBOLS = {
   "USD/CAD":"USD/CAD"
 };
 
-let positions = [], history = [], currentSymbol = "SPY";
+let positions = [], history = [], currentSymbol = "S&P500";
 let lastPrices = {}, smoothPrices = {};
 
 // --- FETCH IG PRICES ---
@@ -133,6 +133,7 @@ async function fetchIGPrice(symbol) {
   try {
     const igSymbol = IG_SYMBOLS[symbol];
     if (!igSymbol) return null;
+
     const res = await fetch(`https://demo-api.ig.com/gateway/deal/prices?symbols=${igSymbol}`, {
       headers: {
         "X-IG-API-KEY": IG_API_KEY,
@@ -276,12 +277,12 @@ function renderHistory(){
 document.getElementById("symbolSelect").addEventListener("change", e=>{
   currentSymbol = e.target.value;
   const tv = {
-    SPY: "AMEX:SPY",
-    DIA: "AMEX:DIA",
-    QQQ: "NASDAQ:QQQ",
-    "EXS1.DE": "XETRA:EXS1",
-    "C40.PA": "EPA:C40"
-  }[currentSymbol] || currentSymbol.replace("/", "");
+    "S&P500":"INDEX:SPX",
+    "DowJones":"INDEX:DJI",
+    "Nasdaq100":"INDEX:NDX",
+    "DAX":"INDEX:DAX",
+    "CAC40":"INDEX:PX1"
+  }[currentSymbol] || currentSymbol;
   document.getElementById("tradingviewIframe").src =
     `https://s.tradingview.com/widgetembed/?symbol=${tv}&interval=1&theme=dark&hide_side_toolbar=1`;
   refreshAllPrices();
