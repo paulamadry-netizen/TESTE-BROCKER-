@@ -1,249 +1,271 @@
-<!DOCTYPE html>
-<html lang="fr">
-<head>
-<meta charset="UTF-8" />
-<title>AmA Broker — Web Trader Demo</title>
 <style>
-*{box-sizing:border-box}
-body{font-family:Inter,Arial,sans-serif;margin:0;background:linear-gradient(135deg,#0b1220,#111b2d);color:#f3f4f6;min-height:100vh}
-.app{max-width:1400px;margin:0 auto;padding:16px}
-header{display:flex;justify-content:space-between;align-items:center;background:rgba(255,255,255,.05);padding:14px 20px;border-radius:14px;backdrop-filter:blur(10px);box-shadow:0 4px 12px rgba(0,0,0,.4)}
-.brand{font-size:26px;font-weight:700;letter-spacing:1px;color:#22d3ee}
-.brand span{color:#10b981}
-header .controls{display:flex;gap:14px;align-items:center;flex-wrap:wrap}
-select,input{padding:6px 10px;border-radius:6px;background:#1b2533;color:white;border:1px solid #334155}
-.price{font-weight:600;color:#e0e0e0}
-.layout{display:grid;grid-template-columns:1fr 380px;gap:16px;margin-top:16px}
-.chart,.sidebar .panel{background:rgba(255,255,255,.05);border-radius:14px;padding:14px;backdrop-filter:blur(10px);box-shadow:0 6px 18px rgba(0,0,0,.4)}
-.chart iframe{width:100%;height:480px;border:0;border-radius:10px}
-.fullscreen{position:fixed!important;top:0;left:0;width:100vw!important;height:100vh!important;z-index:999;background:#000;border-radius:0!important}
-.tradebox{display:flex;gap:10px;margin-top:14px}
-button.buy,button.sell{flex:1;font-weight:bold;border:none;padding:12px 20px;border-radius:10px;cursor:pointer;transition:all .2s;font-size:16px}
-button.buy{background:#10b981;color:white}
-button.sell{background:#ef4444;color:white}
-button.buy:hover{background:#059669}
-button.sell:hover{background:#dc2626}
-table{width:100%;border-collapse:collapse;font-size:14px}
-td,th{padding:6px 8px;text-align:left}
-th{color:#9ca3af}
-tr:nth-child(odd){background:rgba(255,255,255,.02)}
-footer{margin-top:20px;font-size:13px;text-align:center;color:#9ca3af}
-.full-btn{float:right;background:#1e293b;border:0;color:#22d3ee;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:13px}
-.full-btn:hover{background:#0f172a}
-.total-pnl{margin-top:10px;text-align:right;font-weight:bold;font-size:15px;color:#22d3ee;}
+/* Reset & Base */
+*{
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+body {
+    font-family: 'Inter', Arial, sans-serif;
+    background: #1C212E; /* Darker, more neutral background */
+    color: #E0E3EB; /* Light grey for general text */
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+/* App Container */
+.app {
+    max-width: 1500px; /* Slightly wider */
+    margin: 0 auto;
+    padding: 16px;
+    flex-grow: 1;
+}
+
+/* Header */
+header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #2A2F3F; /* Darker header background */
+    padding: 14px 24px;
+    border-radius: 12px; /* Slightly less rounded */
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.4); /* More pronounced shadow */
+    margin-bottom: 16px;
+}
+.brand {
+    font-size: 28px; /* Slightly larger */
+    font-weight: 800; /* Bolder */
+    letter-spacing: 0.5px;
+    color: #4CAF50; /* Green brand color */
+}
+.brand span {
+    color: #BBDEFB; /* Light blue accent */
+}
+header .controls {
+    display: flex;
+    gap: 18px; /* Increased gap */
+    align-items: center;
+    flex-wrap: wrap;
+}
+select, input {
+    padding: 8px 12px; /* More padding */
+    border-radius: 8px; /* Slightly more rounded inputs */
+    background: #3B4050; /* Darker input background */
+    color: #E0E3EB;
+    border: 1px solid #5A6075; /* Subtler border */
+    font-size: 15px;
+    transition: all 0.2s ease;
+}
+select:focus, input:focus {
+    border-color: #4CAF50; /* Highlight on focus */
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.3);
+}
+.price {
+    font-weight: 700;
+    color: #BBDEFB; /* Light blue for price */
+    font-size: 17px;
+}
+.price span {
+    color: #4CAF50; /* Green for actual price value */
+}
+label {
+    color: #A9B1C2; /* Lighter label text */
+    font-size: 15px;
+}
+
+/* Layout */
+.layout {
+    display: grid;
+    grid-template-columns: 1fr 400px; /* Slightly wider sidebar */
+    gap: 18px; /* Increased gap between sections */
+    flex-grow: 1;
+}
+
+/* Chart & Panel Base Styles */
+.chart, .sidebar .panel {
+    background: #2A2F3F; /* Darker panel background */
+    border-radius: 12px;
+    padding: 18px; /* More padding */
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45); /* Stronger shadow */
+    border: 1px solid #3B4050; /* Subtle border for panels */
+}
+
+/* Chart Specifics */
+.chart h3 {
+    margin: 0 0 10px 0;
+    color: #BBDEFB; /* Light blue heading */
+    font-size: 20px;
+    font-weight: 600;
+}
+.chart iframe {
+    width: 100%;
+    height: 520px; /* Taller chart */
+    border: 0;
+    border-radius: 10px;
+    background: #1C212E; /* Ensure iframe background matches overall dark theme */
+}
+.fullscreen {
+    position: fixed !important;
+    top: 0;
+    left: 0;
+    width: 100vw !important;
+    height: 100vh !important;
+    z-index: 9999; /* Higher z-index */
+    background: #1C212E;
+    border-radius: 0 !important;
+    padding: 0 !important; /* Remove padding in fullscreen */
+}
+.full-btn {
+    float: right;
+    background: #3B4050;
+    border: 1px solid #5A6075;
+    color: #BBDEFB;
+    padding: 8px 14px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.2s ease;
+}
+.full-btn:hover {
+    background: #4A4F60;
+    color: #FFF;
+}
+
+/* Trade Box Buttons */
+.tradebox {
+    display: flex;
+    gap: 12px; /* Slightly increased gap */
+    margin-top: 20px; /* More space above buttons */
+}
+button.buy, button.sell {
+    flex: 1;
+    font-weight: bold;
+    border: none;
+    padding: 14px 22px; /* More padding */
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-size: 17px;
+    letter-spacing: 0.5px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+button.buy {
+    background: #4CAF50; /* Green buy button */
+    color: white;
+}
+button.sell {
+    background: #F44336; /* Red sell button */
+    color: white;
+}
+button.buy:hover {
+    background: #5CB85C; /* Lighter green on hover */
+    box-shadow: 0 4px 12px rgba(76, 175, 80, 0.4);
+}
+button.sell:hover {
+    background: #EF5350; /* Lighter red on hover */
+    box-shadow: 0 4px 12px rgba(244, 67, 54, 0.4);
+}
+
+/* Sidebar & Positions Table */
+.sidebar h3 {
+    color: #BBDEFB;
+    margin: 0 0 15px 0;
+    font-size: 20px;
+    font-weight: 600;
+}
+table {
+    width: 100%;
+    border-collapse: separate; /* Use separate to allow border-radius on cells */
+    border-spacing: 0; /* Remove default spacing */
+    font-size: 14px;
+    background: #3B4050; /* Darker table background */
+    border-radius: 8px;
+    overflow: hidden; /* Ensures rounded corners are visible */
+}
+th, td {
+    padding: 10px 12px; /* More padding in table cells */
+    text-align: left;
+    border-bottom: 1px solid #4A4F60; /* Subtle row separator */
+    color: #E0E3EB;
+}
+th {
+    background: #3B4050; /* Slightly different header background */
+    color: #A9B1C2;
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 13px;
+}
+tr:nth-child(even) { /* Changed to even for better contrast on dark theme */
+    background: #303542; /* Slightly different row background */
+}
+tr:last-child td {
+    border-bottom: none; /* No border on last row */
+}
+/* Specific styles for PnL column */
+td:nth-child(6) {
+    font-weight: 600;
+}
+
+/* Close Position Button */
+td button {
+    background: #5A6075;
+    color: #E0E3EB;
+    border: none;
+    padding: 6px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.2s ease;
+    font-size: 13px;
+    line-height: 1;
+}
+td button:hover {
+    background: #6D748A;
+}
+
+/* Total PnL */
+.total-pnl {
+    margin-top: 15px;
+    text-align: right;
+    font-weight: 700;
+    font-size: 18px; /* Larger total PnL */
+    color: #BBDEFB;
+    padding-top: 10px;
+    border-top: 1px solid #3B4050; /* Separator for total PnL */
+}
+.total-pnl[style*="color: rgb(16, 185, 129)"] { /* Green for positive */
+    color: #4CAF50 !important;
+}
+.total-pnl[style*="color: rgb(239, 68, 68)"] { /* Red for negative */
+    color: #F44336 !important;
+}
+
+/* Footer */
+footer {
+    margin-top: 25px;
+    font-size: 13px;
+    text-align: center;
+    color: #7B879C; /* Softer footer text */
+    padding: 10px 0;
+}
+
+/* Scrollbar Styles (for modern look) */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+::-webkit-scrollbar-track {
+    background: #2A2F3F;
+    border-radius: 10px;
+}
+::-webkit-scrollbar-thumb {
+    background: #5A6075;
+    border-radius: 10px;
+    border: 2px solid #2A2F3F;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: #6D748A;
+}
+
 </style>
-</head>
-<body>
-<div class="app">
-  <header>
-    <div class="brand">AmA <span>Broker</span></div>
-    <div class="controls">
-      <label>Actif :
-        <select id="symbolSelect">
-          <optgroup label="Indices">
-            <option value="SPX">S&P 500</option>
-            <option value="DJI">Dow Jones</option>
-            <option value="NDX">NASDAQ 100</option>
-            <option value="FTSE">FTSE 100</option>
-            <option value="DAX">DAX 40</option>
-            <option value="FCHI">CAC 40</option>
-            <option value="NKY">Nikkei 225</option>
-          </optgroup>
-          <optgroup label="Forex">
-            <option value="EUR/USD">EUR/USD</option>
-            <option value="GBP/USD">GBP/USD</option>
-            <option value="USD/JPY">USD/JPY</option>
-            <option value="AUD/USD">AUD/USD</option>
-            <option value="USD/CAD">USD/CAD</option>
-          </optgroup>
-          <optgroup label="Métaux">
-            <option value="XAU/USD">Or (Gold)</option>
-          </optgroup>
-        </select>
-      </label>
-      <div class="price">Prix actuel : <span id="priceDisplay">—</span></div>
-      <label>Lots :
-        <input type="number" id="lotInput" value="1" min="1" step="1" style="width:70px;text-align:center;">
-      </label>
-    </div>
-  </header>
-
-  <main class="layout">
-    <section class="chart">
-      <div style="display:flex;justify-content:space-between;align-items:center;">
-        <h3 style="margin:0;color:#22d3ee;">Graphique</h3>
-        <button class="full-btn" onclick="toggleFullscreen()">⛶ Plein écran</button>
-      </div>
-      <iframe id="tradingviewIframe"
-        src="https://s.tradingview.com/widgetembed/?symbol=INDEX:SPX&interval=1&theme=dark&hide_side_toolbar=1"></iframe>
-
-      <div class="tradebox">
-        <button class="buy" onclick="placeOrder('buy')">ACHETER</button>
-        <button class="sell" onclick="placeOrder('sell')">VENDRE</button>
-      </div>
-    </section>
-
-    <aside class="sidebar">
-      <div class="panel">
-        <h3 style="color:#22d3ee;">Positions Ouvertes</h3>
-        <table id="positionsTable">
-          <thead><tr><th>Sym</th><th>Side</th><th>Lots</th><th>Entrée</th><th>Dernier</th><th>PnL</th><th></th></tr></thead>
-          <tbody></tbody>
-        </table>
-        <div id="totalPnl" class="total-pnl">PnL total : 0.0000</div>
-      </div>
-    </aside>
-  </main>
-
-  <footer>© 2025 AmA Broker • Données Stooq • Graphiques TradingView</footer>
-</div>
-
-<script>
-// --- MAP DES SYMBOLES TradingView ---
-const SYMBOL_MAP_TV = {
-  SPX:"INDEX:SPX", DJI:"INDEX:DJI", NDX:"INDEX:NDX", FTSE:"INDEX:UKX",
-  DAX:"INDEX:DAX", FCHI:"INDEX:FR40", NKY:"INDEX:NKY",
-  "EUR/USD":"FX:EURUSD", "GBP/USD":"FX:GBPUSD", "USD/JPY":"FX:USDJPY",
-  "AUD/USD":"FX:AUDUSD", "USD/CAD":"FX:USDCAD",
-  "XAU/USD":"TVC:GOLD"
-};
-
-// --- CORS Proxy pour Render / Stooq ---
-const CORS_PROXY = "https://corsproxy.io/?";
-
-let positions = [];
-let currentSymbol = "SPX";
-let lastPrices = {};
-
-// --- Conversion symboles lisibles → Stooq ---
-function convertToStooqSymbol(symbol){
-  return symbol.toLowerCase().replace(/\s+/g,'').replace(/\//g,'');
-}
-
-// --- Récupérer prix Stooq via proxy ---
-async function fetchStooqPrice(symbol){
-  try {
-    const stooqSymbol = convertToStooqSymbol(symbol);
-    const stooqUrl = `https://stooq.com/q/l/?s=${stooqSymbol}&f=sd2t2ohlcv&h&e=csv`;
-    const url = CORS_PROXY + encodeURIComponent(stooqUrl);
-
-    const res = await fetch(url);
-    if (!res.ok) return null;
-
-    const text = await res.text();
-    if(text.includes("N/D")) return null;
-
-    const line = text.split("\n")[1];
-    if(!line) return null;
-
-    const last = parseFloat(line.split(",")[6]);
-    return isNaN(last) ? null : last;
-  } catch(e) {
-    console.error("fetchStooqPrice error:", e);
-    return null;
-  }
-}
-
-// --- Mise à jour prix toutes les secondes ---
-async function refreshAllPrices(){
-  const needed = new Set();
-  needed.add(currentSymbol);
-  positions.forEach(p => needed.add(p.symbol));
-
-  for(const sym of needed){
-    const price = await fetchStooqPrice(sym);
-    if(price) lastPrices[sym] = price;
-  }
-
-  if(lastPrices[currentSymbol]){
-    document.getElementById("priceDisplay").innerText =
-      lastPrices[currentSymbol].toFixed(4);
-  }
-
-  updatePnL();
-}
-setInterval(refreshAllPrices, 1000);
-refreshAllPrices();
-
-// --- Placer un ordre ---
-async function placeOrder(side){
-  const price = await fetchStooqPrice(currentSymbol);
-  if(!price) return alert("Impossible d'obtenir le prix.");
-
-  const qty = parseInt(document.getElementById("lotInput").value)||1;
-
-  positions.push({
-    id: Date.now(),
-    symbol: currentSymbol,
-    side,
-    qty,
-    entry: price,
-    pnl: 0
-  });
-
-  renderPositions();
-}
-
-// --- Fermer une position ---
-function closePosition(id){
-  positions = positions.filter(p => p.id !== id);
-  renderPositions();
-}
-
-// --- Mise à jour PnL ---
-function updatePnL(){
-  let total = 0;
-  positions.forEach(p => {
-    const price = lastPrices[p.symbol];
-    if(!price) return;
-    const dir = p.side==="buy"?1:-1;
-    p.pnl = (price - p.entry)*dir*p.qty;
-    total += p.pnl;
-  });
-  renderPositions(total);
-}
-
-// --- Afficher le tableau ---
-function renderPositions(total=0){
-  const tbody = document.querySelector("#positionsTable tbody");
-  tbody.innerHTML = "";
-
-  positions.forEach(p=>{
-    const last = lastPrices[p.symbol]??null;
-    const tr=document.createElement("tr");
-    tr.innerHTML=`
-      <td>${p.symbol}</td>
-      <td>${p.side}</td>
-      <td>${p.qty}</td>
-      <td>${p.entry.toFixed(4)}</td>
-      <td>${last?last.toFixed(4):"—"}</td>
-      <td style="color:${p.pnl>0?"#10b981":p.pnl<0?"#ef4444":"white"}">${p.pnl.toFixed(4)}</td>
-      <td>
-        <button onclick="closePosition(${p.id})"
-        style="background:#334155;color:white;border:0;padding:4px 8px;border-radius:6px;cursor:pointer;">✖</button>
-      </td>
-    `;
-    tbody.appendChild(tr);
-  });
-
-  const t=document.getElementById("totalPnl");
-  t.innerText="PnL total : "+total.toFixed(4);
-  t.style.color = total>0?"#10b981":total<0?"#ef4444":"#22d3ee";
-}
-
-// --- Changer d'actif ---
-document.getElementById("symbolSelect").addEventListener("change", e=>{
-  currentSymbol=e.target.value;
-  const tv=SYMBOL_MAP_TV[currentSymbol];
-  document.getElementById("tradingviewIframe").src=
-    `https://s.tradingview.com/widgetembed/?symbol=${tv}&interval=1&theme=dark&hide_side_toolbar=1`;
-  refreshAllPrices();
-});
-
-// --- Plein écran ---
-function toggleFullscreen(){
-  document.getElementById("tradingviewIframe").classList.toggle("fullscreen");
-}
-</script>
-</body>
-</html>
