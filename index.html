@@ -133,37 +133,35 @@ async function fetchTwelveDataPrice(symbol){
     const res = await fetch(url);
     if(!res.ok) return null;
     const data = await res.json();
-    if(!data.price) return null;
+    // Vérifie si la réponse contient bien la propriété 'price'
+    if(!data || typeof data.price === 'undefined') { 
+      // Ceci est l'erreur que vous obtenez: Twelve Data ne trouve pas le symbole
+      console.error("Twelve Data API: Symbole non trouvé ou prix manquant pour", symbol, data);
+      return null;
+    }
     return parseFloat(data.price);
   }catch(e){console.error("Twelve Data error:", e);return null;}
 }
 
-/* ******************************************************************* * ===== CORRECTION APPLIQUÉE ICI : Routage auto corrigé pour indices =====
- * Tentative d'utiliser des noms de contrats CFD courants, souvent requis
- * par les API pour la récupération des prix des indices.
+/* ******************************************************************* * * CORRECTION APPLIQUÉE ICI : Routage auto corrigé pour indices 
+ * Utilisation des symboles standards qui semblent fonctionner sur le compte 
+ * Démo/Gratuit de Twelve Data pour les indices.
  * ******************************************************************* */
 async function fetchPrice(symbol){
-  const MAP_TWELVE = {
-    // Noms de contrats CFD courants
-    SPX: "SPX500",   
-    DJI: "US30",     
-    NDX: "NDX100",   
-    DAX: "GER30",    
-    FCHI: "FRA40"   
-  };
-  
-  const apiSymbol = MAP_TWELVE[symbol] || symbol;
-
-  // Si le symbole fait partie des indices, on tente d'ajouter le suffixe /CFD
-  const finalSymbol = MAP_TWELVE[symbol] ? `${apiSymbol}/CFD` : apiSymbol;
-
-  // Si l'indice ne fonctionne toujours pas, commenter la ligne ci-dessus 
-  // et décommenter celle-ci (sans suffixe /CFD)
-  // const finalSymbol = apiSymbol;
-
-  return await fetchTwelveDataPrice(finalSymbol);
+  const MAP_TWELVE = {
+    // Symboles d'indices boursiers simples (utilisés par Twelve Data pour les indices)
+    SPX: "SPX",    // S&P 500
+    DJI: "DJI",    // Dow Jones
+    NDX: "NDX",    // Nasdaq 100
+    DAX: "GDAXI",  // DAX 40 (GDAXI est souvent plus fiable)
+    FCHI: "FCHI"   // CAC 40
+  };
+  const apiSymbol = MAP_TWELVE[symbol] || symbol;
+  return await fetchTwelveDataPrice(apiSymbol);
 }
-// ******************************************************************* /* ===== Refresh 10 s ===== */
+// *******************************************************************
+
+/* ===== Refresh 10 s ===== */
 async function refreshAllPrices(){
   const needed = new Set([currentSymbol]);
   positions.forEach(p => needed.add(p.symbol));
@@ -197,6 +195,7 @@ setInterval(()=>{
 /* ===== Trading ===== */
 async function placeOrder(side){
   const price=lastPrices[currentSymbol];
+  // C'est ici que l'alerte apparaît si le prix est null après fetchPrice
   if(!price)return alert("Impossible d'obtenir le prix.");
   const qty=parseInt(document.getElementById("lotInput").value)||1;
   positions.push({id:Date.now(),symbol:currentSymbol,side,qty,entry:price,pnl:0});
