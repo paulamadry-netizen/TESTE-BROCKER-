@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8" />
-<title>AmA Broker — Web Trader Demo avec Twelve Data</title>
+<title>AmA Broker — Web Trader Demo Alpha Vantage & Twelve Data</title>
 <style>
 /* Styles inchangés... */
 *{box-sizing:border-box}
@@ -43,14 +43,14 @@ footer{margin-top:20px;font-size:13px;text-align:center;color:#9ca3af}
     <div class="controls">
       <label>Actif :
         <select id="symbolSelect">
-          <optgroup label="Indices (via ETFs)">
+          <optgroup label="Indices (via ETFs sur Alpha Vantage)">
             <option value="SPY">SPDR S&P 500 ETF</option>
             <option value="DIA">SPDR Dow Jones Industrial ETF</option>
             <option value="QQQ">Invesco QQQ Trust (Nasdaq 100)</option>
             <option value="EXS1.DE">iShares DAX UCITS ETF</option>
             <option value="C40.PA">Amundi CAC 40 ETF</option>
           </optgroup>
-          <optgroup label="Forex">
+          <optgroup label="Forex (Twelve Data)">
             <option value="EUR/USD">EUR/USD</option>
             <option value="GBP/USD">GBP/USD</option>
             <option value="USD/JPY">USD/JPY</option>
@@ -103,37 +103,57 @@ footer{margin-top:20px;font-size:13px;text-align:center;color:#9ca3af}
     </aside>
   </main>
 
-  <footer>© 2025 AmA Broker • Données Twelve Data • Graphiques TradingView</footer>
+  <footer>© 2025 AmA Broker • Données Alpha Vantage & Twelve Data • Graphiques TradingView</footer>
 </div>
 
 <script>
+const ALPHA_API_KEY = "82WBZXKXM0SQ167S";
 const TWELVE_API_KEY = "c9140c9a72264e82bb9f5235b86b2806";
 
-const SYMBOL_MAP_TWELVE = {
-  SPY: "SPY",
-  DIA: "DIA",
-  QQQ: "QQQ",
-  "EXS1.DE": "EXS1.DE",
-  "C40.PA": "C40.PA",
-  "EUR/USD": "EUR/USD",
-  "GBP/USD": "GBP/USD",
-  "USD/JPY": "USD/JPY",
-  "AUD/USD": "AUD/USD",
-  "USD/CAD": "USD/CAD"
+const ALPHA_SYMBOLS = {
+  SPY:"SPY",
+  DIA:"DIA",
+  QQQ:"QQQ",
+  "EXS1.DE":"EXS1.DE",
+  "C40.PA":"C40.PA"
+};
+
+const TWELVE_SYMBOLS = {
+  "EUR/USD":"EUR/USD",
+  "GBP/USD":"GBP/USD",
+  "USD/JPY":"USD/JPY",
+  "AUD/USD":"AUD/USD",
+  "USD/CAD":"USD/CAD"
 };
 
 let positions = [], history = [], currentSymbol = "SPY";
 let lastPrices = {}, smoothPrices = {};
 
+async function fetchAlphaPrice(symbol) {
+  try {
+    const alphaSymbol = ALPHA_SYMBOLS[symbol];
+    if (!alphaSymbol) return null;
+    const url = `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${encodeURIComponent(alphaSymbol)}&apikey=${ALPHA_API_KEY}`;
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!data["Global Quote"] || !data["Global Quote"]["05. price"]) return null;
+    return parseFloat(data["Global Quote"]["05. price"]);
+  } catch (e) {
+    console.error("Alpha Vantage API error:", e);
+    return null;
+  }
+}
+
 async function fetchTwelvePrice(symbol) {
   try {
-    const twelveSymbol = SYMBOL_MAP_TWELVE[symbol];
+    const twelveSymbol = TWELVE_SYMBOLS[symbol];
     if (!twelveSymbol) return null;
     const url = `https://api.twelvedata.com/price?symbol=${encodeURIComponent(twelveSymbol)}&apikey=${TWELVE_API_KEY}`;
     const res = await fetch(url);
     if (!res.ok) return null;
     const data = await res.json();
-    if (!data || !data.price) return null;
+    if (!data.price) return null;
     return parseFloat(data.price);
   } catch (e) {
     console.error("Twelve Data API error:", e);
@@ -141,8 +161,10 @@ async function fetchTwelvePrice(symbol) {
   }
 }
 
-async function fetchPrice(symbol) {
-  return await fetchTwelvePrice(symbol);
+async function fetchPrice(symbol){
+  if(ALPHA_SYMBOLS[symbol]) return await fetchAlphaPrice(symbol);
+  if(TWELVE_SYMBOLS[symbol]) return await fetchTwelvePrice(symbol);
+  return null;
 }
 
 async function refreshAllPrices() {
@@ -160,7 +182,10 @@ async function refreshAllPrices() {
     document.getElementById("priceDisplay").innerText = lastPrices[currentSymbol].toFixed(4);
   updatePnL();
 }
-setInterval(refreshAllPrices, 15000);
+
+// Alpha Vantage free tier : 5 req/min, Twelve Data ~60 req/min.
+// Pour respecter Alpha Vantage, on rafraîchit toutes les 15s.
+setInterval(refreshAllPrices,15000);
 refreshAllPrices();
 
 setInterval(() => {
@@ -174,7 +199,7 @@ setInterval(() => {
   updatePnL(true);
 }, 200);
 
-async function placeOrder(side) {
+async function placeOrder(side){
   const price = lastPrices[currentSymbol];
   if (!price) return alert("Impossible d'obtenir le prix.");
   const qty = parseInt(document.getElementById("lotInput").value) || 1;
@@ -182,7 +207,7 @@ async function placeOrder(side) {
   renderPositions();
 }
 
-function closePosition(id) {
+function closePosition(id){
   const pos = positions.find(p => p.id === id);
   if (!pos) return;
   const exit = lastPrices[pos.symbol] || pos.entry;
@@ -195,7 +220,7 @@ function closePosition(id) {
   renderHistory();
 }
 
-function updatePnL(isSmooth = false) {
+function updatePnL(isSmooth = false){
   let total = 0;
   positions.forEach(p => {
     const price = isSmooth ? smoothPrices[p.symbol] : lastPrices[p.symbol];
@@ -207,7 +232,7 @@ function updatePnL(isSmooth = false) {
   renderPositions(total);
 }
 
-function renderPositions(total = 0) {
+function renderPositions(total = 0){
   const tbody = document.querySelector("#positionsTable tbody");
   tbody.innerHTML = "";
   positions.forEach(p => {
@@ -226,7 +251,7 @@ function renderPositions(total = 0) {
   t.style.color = total > 0 ? "#10b981" : total < 0 ? "#ef4444" : "#22d3ee";
 }
 
-function renderHistory() {
+function renderHistory(){
   const tbody = document.querySelector("#historyTable tbody");
   tbody.innerHTML = "";
   history.forEach(h => {
@@ -240,7 +265,7 @@ function renderHistory() {
   });
 }
 
-document.getElementById("symbolSelect").addEventListener("change", e => {
+document.getElementById("symbolSelect").addEventListener("change", e=>{
   currentSymbol = e.target.value;
   const tv = {
     SPY: "AMEX:SPY",
@@ -254,12 +279,13 @@ document.getElementById("symbolSelect").addEventListener("change", e => {
   refreshAllPrices();
 });
 
-function toggleFullscreen() {
+function toggleFullscreen(){
   document.getElementById("tradingviewIframe").classList.toggle("fullscreen");
 }
 </script>
 </body>
 </html>
+
 
 
 
