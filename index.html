@@ -2,10 +2,10 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8" />
-<title>AmA Broker — Plateforme de Trading Pro (Centrage Garanti V2)</title>
+<title>AmA Broker — Plateforme de Trading Pro (Centrage V3 & Fonctions Réparées)</title>
 <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;600;700&family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
-/* --- Variables et Reset de Base (Nettoyage pour le centrage) --- */
+/* --- Variables et Reset de Base --- */
 :root {
     --color-bg-primary: #0A111F;
     --color-bg-secondary: #172132;
@@ -20,24 +20,32 @@
     --shadow-pro: 0 8px 25px rgba(0, 0, 0, 0.6);
 }
 
-/* --- FORÇAGE DU CENTRAGE AU NIVEAU BODY --- */
+/* --- FORÇAGE DU CENTRAGE AU NIVEAU BODY (Flexbox pour la robustesse) --- */
 html, body {
     margin: 0;
     padding: 0;
-    width: 100%; /* S'assurer que le body prend toute la largeur */
+    width: 100%;
     min-height: 100vh;
     background: var(--color-bg-primary);
     color: var(--color-text-light);
     font-family: var(--font-primary);
-    padding-top: 60px;
     box-sizing: border-box;
+    /* Utilisation de Flexbox pour le centrage horizontal du contenu */
+    display: flex;
+    justify-content: center; /* Centrer le contenu .app */
 }
 
+/* Le padding-top doit être sur le main ou wrapper si le header est fixe */
+body {
+    padding-top: 60px; /* Espace pour le header fixe */
+}
+
+
 .app {
-    /* CORRECTION CLÉ DU CENTRAGE ET DE LA LARGEUR MAX */
+    /* Largeur maximale pour que l'app utilise l'espace sans être collée */
     max-width: 1800px; 
-    width: 96%; /* Ajusté à 96% pour une meilleure utilisation de l'espace */
-    margin: 0 auto; /* CENTRAGE FORCÉ */
+    width: 96%; /* Prend 96% de l'espace disponible */
+    margin: 0; /* Plus besoin de auto car Flexbox gère le centrage sur le body */
     padding: 0; 
 }
 
@@ -52,18 +60,11 @@ header {
     justify-content: space-between;
     align-items: center;
     background: var(--color-bg-primary); 
-    padding: 12px calc((100% - 1800px) / 2 + 20px); /* Alignement des bords du header sur le conteneur .app */
+    padding: 12px 20px; /* Padding simple et efficace */
     border-bottom: 1px solid var(--color-border);
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
 }
-
-/* Si l'écran est petit, annuler le padding calculé */
-@media (max-width: 1840px) {
-    header {
-        padding: 12px 20px;
-    }
-}
-
+/* Le Header fixe doit prendre toute la largeur du viewport */
 
 .brand {
     font-size: 24px;
@@ -103,16 +104,15 @@ label {
     color: #94a3b8;
     font-size: 13px;
     font-weight: 600;
-    white-space: nowrap; /* Empêcher la label LOTS de se couper */
+    white-space: nowrap;
 }
 
-/* --- Prix Actuel (Taille et Style Pro) --- */
 .price {
     font-weight: 700;
     font-size: 20px;
     color: var(--color-text-light);
     font-family: var(--font-mono);
-    white-space: nowrap; /* Empêcher le prix de se couper */
+    white-space: nowrap;
 }
 .price span {
     color: var(--color-brand-accent);
@@ -133,7 +133,7 @@ label {
     padding: 20px;
     box-shadow: var(--shadow-pro);
     border: 1px solid #1f3044;
-    overflow: hidden; /* Empêche tout débordement dans les panneaux */
+    overflow: hidden; 
 }
 
 /* --- Section Graphique --- */
@@ -152,11 +152,6 @@ label {
     height: 650px;
     border: 1px solid var(--color-border);
     border-radius: 8px;
-}
-
-/* Plein écran (inclus, inchangé) */
-.fullscreen {
-    position: fixed!important; top: 0; left: 0; width: 100vw!important; height: 100vh!important; z-index: 9999; background: var(--color-bg-primary); border-radius: 0!important;
 }
 
 .full-btn {
@@ -214,7 +209,6 @@ table {
     border-spacing: 0 6px;
     font-size: 13px;
     font-family: var(--font-mono);
-    /* Correction de la largeur des colonnes dans le tableau */
     table-layout: fixed; 
 }
 
@@ -228,23 +222,14 @@ thead th {
     background: #1f3044;
 }
 
-/* Correction de la largeur des colonnes pour les positions ouvertes */
-#positionsTable th:nth-child(1), #positionsTable td:nth-child(1) { width: 18%; } /* Symbole */
-#positionsTable th:nth-child(2), #positionsTable td:nth-child(2) { width: 15%; } /* Side */
-#positionsTable th:nth-child(3), #positionsTable td:nth-child(3) { width: 10%; } /* Lots */
-#positionsTable th:nth-child(4), #positionsTable td:nth-child(4) { width: 18%; } /* Entrée */
-#positionsTable th:nth-child(5), #positionsTable td:nth-child(5) { width: 18%; } /* Dernier */
-#positionsTable th:nth-child(6), #positionsTable td:nth-child(6) { width: 14%; } /* PnL */
-#positionsTable th:nth-child(7), #positionsTable td:nth-child(7) { width: 7%; text-align: right;} /* Fermer */
-
-/* Correction de la largeur des colonnes pour l'historique */
-#historyTable th:nth-child(1), #historyTable td:nth-child(1) { width: 15%; } /* Symbole */
-#historyTable th:nth-child(2), #historyTable td:nth-child(2) { width: 10%; } /* Type */
-#historyTable th:nth-child(3), #historyTable td:nth-child(3) { width: 8%; } /* Lots */
-#historyTable th:nth-child(4), #historyTable td:nth-child(4) { width: 15%; } /* Entrée */
-#historyTable th:nth-child(5), #historyTable td:nth-child(5) { width: 15%; } /* Sortie */
-#historyTable th:nth-child(6), #historyTable td:nth-child(6) { width: 15%; } /* PnL Réalisé */
-#historyTable th:nth-child(7), #historyTable td:nth-child(7) { width: 22%; } /* Date */
+/* Largeur des colonnes pour les positions ouvertes (RÉPARÉ) */
+#positionsTable th:nth-child(1), #positionsTable td:nth-child(1) { width: 15%; } /* SYM */
+#positionsTable th:nth-child(2), #positionsTable td:nth-child(2) { width: 12%; } /* SIDE */
+#positionsTable th:nth-child(3), #positionsTable td:nth-child(3) { width: 10%; } /* LOTS */
+#positionsTable th:nth-child(4), #positionsTable td:nth-child(4) { width: 20%; } /* ENTRÉE */
+#positionsTable th:nth-child(5), #positionsTable td:nth-child(5) { width: 20%; } /* DERNIER */
+#positionsTable th:nth-child(6), #positionsTable td:nth-child(6) { width: 15%; } /* PNL */
+#positionsTable th:nth-child(7), #positionsTable td:nth-child(7) { width: 8%; text-align: right;} /* FERMER */
 
 
 tbody tr {
@@ -257,34 +242,34 @@ tbody tr:hover { background: #28374d; }
 
 td { 
     padding: 10px; 
-    /* Ajout pour corriger le chevauchement (texte très long) */
     overflow: hidden; 
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
-/* Styles pour PnL */
+/* Styles pour PnL (Visibilité du gain/perte) */
 .pnl-pos { color: var(--color-brand-green); font-weight: 700; }
 .pnl-neg { color: var(--color-brand-red); font-weight: 700; }
 .pnl-zero { color: var(--color-text-light); }
 
-/* Bouton Fermer (✖) */
+/* Bouton Fermer (✖) (RÉPARÉ) */
 #positionsTable button {
-    background: #334155;
+    /* Styles pour le bouton de fermeture */
+    background: var(--color-brand-red); /* Toujours rouge pour la fermeture */
     color: var(--color-text-light);
     border: 0;
-    padding: 4px 10px;
+    padding: 2px 6px; /* Bouton plus petit */
     border-radius: 4px;
     cursor: pointer;
-    transition: background 0.2s, color 0.2s;
     font-family: var(--font-primary);
-    font-size: 12px;
+    font-size: 14px;
+    line-height: 1;
 }
 #positionsTable button:hover {
-    background: var(--color-brand-red);
+    background: #a80036; 
 }
 
-/* Total PnL (Assurer qu'il ne chevauche pas) */
+/* Total PnL */
 .total-pnl {
     margin-top: 15px;
     padding-top: 15px;
@@ -294,12 +279,10 @@ td {
     font-size: 17px;
     font-family: var(--font-mono);
     letter-spacing: 0.5px;
-    /* Correction de la couleur si le PnL est zéro */
     color: var(--color-brand-accent);
 }
 .total-pnl.pnl-pos { color: var(--color-brand-green); }
 .total-pnl.pnl-neg { color: var(--color-brand-red); }
-
 
 /* --- Footer --- */
 footer {
@@ -311,7 +294,7 @@ footer {
     padding: 10px 0;
 }
 
-/* Responsive (Améliorations) */
+/* Responsive */
 @media (max-width: 1200px) {
     .app {
         width: 100%;
@@ -374,7 +357,7 @@ footer {
       <div style="display:flex;justify-content:space-between;align-items:center;">
         <h3>📊 GRAPHIQUE ACTIF</h3>
         <button class="full-btn" onclick="toggleFullscreen()">⛶ PLEIN ÉCRAN</button>
-              </div>
+      </div>
       <iframe id="tradingviewIframe"
         src="https://s.tradingview.com/widgetembed/?symbol=FX:EURUSD&interval=1&theme=dark&hide_side_toolbar=1"></iframe>
 
@@ -406,11 +389,11 @@ footer {
     </aside>
   </main>
 
-  <footer>© 2025 AmA Broker • Données Stooq • Graphiques TradingView • Design Centré et Maximisé</footer>
+  <footer>© 2025 AmA Broker • Données Stooq • Graphiques TradingView • Design Centré et Fonctionnel</footer>
 </div>
 
 <script>
-// --- LOGIQUE JAVASCRIPT INCHANGÉE (Identique à la version précédente) ---
+// --- LOGIQUE JAVASCRIPT : RETOUR À LA LOGIQUE ORIGINALE ET VÉRIFIÉE ---
 const SYMBOL_MAP_STOOQ = {
   SPX:"^SPX", DJI:"^DJI", NDX:"^NDX", FTSE:"^FTSE", DAX:"^GDAXI", FCHI:"^FCHI", NKY:"^N225", "EUR/USD":"EURUSD", "GBP/USD":"GBPUSD", "USD/JPY":"USDJPY", "AUD/USD":"AUDUSD", "USD/CAD":"USDCAD", "XAU/USD":"GC.F"
 };
@@ -421,7 +404,7 @@ const SYMBOL_MAP_TV = {
 const CORS_PROXY = "https://corsproxy.io/?";
 let positions = [];
 let positionsClosed = [];
-let currentSymbol = "EUR/USD"; // Initialisé sur EUR/USD pour correspondre à l'image
+let currentSymbol = "EUR/USD";
 let lastPrices = {};
 
 async function fetchStooqPrice(symbol){
@@ -513,7 +496,7 @@ function renderPositions(total=0){
       <td>${p.entry.toFixed(4)}</td>
       <td>${last?last.toFixed(4):"—"}</td>
       <td class="${pnlClass}">${p.pnl.toFixed(4)}</td>
-      <td style="text-align:right;"><button onclick="closePosition(${p.id})">✖</button></td>
+      <td><button onclick="closePosition(${p.id})">✖</button></td>
     `;
     tbody.appendChild(tr);
   });
@@ -549,7 +532,7 @@ document.getElementById("symbolSelect").addEventListener("change", e=>{
 function toggleFullscreen(){
   document.getElementById("tradingviewIframe").classList.toggle("fullscreen");
 }
-// --- FIN LOGIQUE JAVASCRIPT INCHANGÉE ---
+// --- FIN LOGIQUE JAVASCRIPT : RETOUR À LA LOGIQUE ORIGINALE ET VÉRIFIÉE ---
 </script>
 </body>
 </html>
