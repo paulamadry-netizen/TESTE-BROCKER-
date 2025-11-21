@@ -2,9 +2,8 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8" />
-<title>AmA Broker — Web Trader Demo Alpha Vantage & Twelve Data</title>
+<title>AmA Broker — Web Trader Demo IG & Twelve Data</title>
 <style>
-/* Styles inchangés... */
 *{box-sizing:border-box}
 body{font-family:Inter,Arial,sans-serif;margin:0;background:linear-gradient(135deg,#0b1220,#111b2d);color:#f3f4f6;min-height:100vh}
 .app{max-width:1400px;margin:0 auto;padding:16px}
@@ -43,7 +42,7 @@ footer{margin-top:20px;font-size:13px;text-align:center;color:#9ca3af}
     <div class="controls">
       <label>Actif :
         <select id="symbolSelect">
-          <optgroup label="Indices (via ETFs sur Alpha Vantage)">
+          <optgroup label="Indices (via ETFs IG)">
             <option value="SPY">SPDR S&P 500 ETF</option>
             <option value="DIA">SPDR Dow Jones Industrial ETF</option>
             <option value="QQQ">Invesco QQQ Trust (Nasdaq 100)</option>
@@ -103,19 +102,19 @@ footer{margin-top:20px;font-size:13px;text-align:center;color:#9ca3af}
     </aside>
   </main>
 
-  <footer>© 2025 AmA Broker • Données Alpha Vantage & Twelve Data • Graphiques TradingView</footer>
+  <footer>© 2025 AmA Broker • Données IG Markets & Twelve Data • Graphiques TradingView</footer>
 </div>
 
 <script>
-const ALPHA_API_KEY = "82WBZXKXM0SQ167S";
+const IG_API_KEY = "44e7b1c12a47da8eb6a0a1c579fa1aae92132b24";
 const TWELVE_API_KEY = "c9140c9a72264e82bb9f5235b86b2806";
 
-const ALPHA_SYMBOLS = {
-  SPY:"SPY",
-  DIA:"DIA",
-  QQQ:"QQQ",
-  "EXS1.DE":"EXS1.DE",
-  "C40.PA":"C40.PA"
+const IG_SYMBOLS = {
+  SPY:"CS.D.SP500.MINI.IP",
+  DIA:"CS.D.DOW.MINI.IP",
+  QQQ:"CS.D.NASDAQ.MINI.IP",
+  "EXS1.DE":"CS.D.DAX.IFE.IP",
+  "C40.PA":"CS.D.CAC40.IFE.IP"
 };
 
 const TWELVE_SYMBOLS = {
@@ -129,27 +128,34 @@ const TWELVE_SYMBOLS = {
 let positions = [], history = [], currentSymbol = "SPY";
 let lastPrices = {}, smoothPrices = {};
 
-async function fetchAlphaPrice(symbol) {
+// --- FETCH IG PRICES ---
+async function fetchIGPrice(symbol) {
   try {
-    const alphaSymbol = ALPHA_SYMBOLS[symbol];
-    if (!alphaSymbol) return null;
-    const url = `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${encodeURIComponent(alphaSymbol)}&apikey=${ALPHA_API_KEY}`;
-    const res = await fetch(url);
+    const igSymbol = IG_SYMBOLS[symbol];
+    if (!igSymbol) return null;
+    const res = await fetch(`https://demo-api.ig.com/gateway/deal/prices?symbols=${igSymbol}`, {
+      headers: {
+        "X-IG-API-KEY": IG_API_KEY,
+        "Content-Type": "application/json",
+        "Version": "1"
+      }
+    });
     if (!res.ok) return null;
     const data = await res.json();
-    if (!data["Global Quote"] || !data["Global Quote"]["05. price"]) return null;
-    return parseFloat(data["Global Quote"]["05. price"]);
+    if (!data.prices || data.prices.length === 0) return null;
+    const priceObj = data.prices[0];
+    const mid = (priceObj.bid + priceObj.offer) / 2;
+    return parseFloat(mid);
   } catch (e) {
-    console.error("Alpha Vantage API error:", e);
+    console.error("IG Markets API error:", e);
     return null;
   }
 }
 
+// --- FETCH TWELVE DATA (Forex) ---
 async function fetchTwelvePrice(symbol) {
   try {
-    const twelveSymbol = TWELVE_SYMBOLS[symbol];
-    if (!twelveSymbol) return null;
-    const url = `https://api.twelvedata.com/price?symbol=${encodeURIComponent(twelveSymbol)}&apikey=${TWELVE_API_KEY}`;
+    const url = `https://api.twelvedata.com/price?symbol=${encodeURIComponent(symbol)}&apikey=${TWELVE_API_KEY}`;
     const res = await fetch(url);
     if (!res.ok) return null;
     const data = await res.json();
@@ -161,12 +167,14 @@ async function fetchTwelvePrice(symbol) {
   }
 }
 
-async function fetchPrice(symbol){
-  if(ALPHA_SYMBOLS[symbol]) return await fetchAlphaPrice(symbol);
-  if(TWELVE_SYMBOLS[symbol]) return await fetchTwelvePrice(symbol);
+// --- FETCH PRICE GENERIQUE ---
+async function fetchPrice(symbol) {
+  if (IG_SYMBOLS[symbol]) return await fetchIGPrice(symbol);
+  if (TWELVE_SYMBOLS[symbol]) return await fetchTwelvePrice(symbol);
   return null;
 }
 
+// --- RAFRAÎCHISSEMENT DES PRIX ---
 async function refreshAllPrices() {
   const needed = new Set([currentSymbol]);
   positions.forEach(p => needed.add(p.symbol));
@@ -183,9 +191,8 @@ async function refreshAllPrices() {
   updatePnL();
 }
 
-// Alpha Vantage free tier : 5 req/min, Twelve Data ~60 req/min.
-// Pour respecter Alpha Vantage, on rafraîchit toutes les 15s.
-setInterval(refreshAllPrices,15000);
+// --- INTERVALLE DE RAFRAÎCHISSEMENT ---
+setInterval(refreshAllPrices, 15000);
 refreshAllPrices();
 
 setInterval(() => {
@@ -199,6 +206,7 @@ setInterval(() => {
   updatePnL(true);
 }, 200);
 
+// --- ORDRES ET POSITIONS ---
 async function placeOrder(side){
   const price = lastPrices[currentSymbol];
   if (!price) return alert("Impossible d'obtenir le prix.");
@@ -285,6 +293,7 @@ function toggleFullscreen(){
 </script>
 </body>
 </html>
+
 
 
 
