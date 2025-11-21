@@ -2,9 +2,9 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8" />
-<title>AmA Broker — Web Trader Demo avec Finnhub et ETFs</title>
+<title>AmA Broker — Web Trader Demo avec Twelve Data</title>
 <style>
-/* Votre style inchangé */
+/* Styles inchangés... */
 *{box-sizing:border-box}
 body{font-family:Inter,Arial,sans-serif;margin:0;background:linear-gradient(135deg,#0b1220,#111b2d);color:#f3f4f6;min-height:100vh}
 .app{max-width:1400px;margin:0 auto;padding:16px}
@@ -45,10 +45,10 @@ footer{margin-top:20px;font-size:13px;text-align:center;color:#9ca3af}
         <select id="symbolSelect">
           <optgroup label="Indices (via ETFs)">
             <option value="SPY">SPDR S&P 500 ETF</option>
-            <option value="DIA">SPDR Dow Jones Industrial Average ETF</option>
+            <option value="DIA">SPDR Dow Jones Industrial ETF</option>
             <option value="QQQ">Invesco QQQ Trust (Nasdaq 100)</option>
-            <option value="EXS1.DE">iShares DAX UCITS ETF (Allemagne)</option>
-            <option value="C40.PA">Amundi CAC 40 ETF (Euronext Paris)</option>
+            <option value="EXS1.DE">iShares DAX UCITS ETF</option>
+            <option value="C40.PA">Amundi CAC 40 ETF</option>
           </optgroup>
           <optgroup label="Forex">
             <option value="EUR/USD">EUR/USD</option>
@@ -73,7 +73,7 @@ footer{margin-top:20px;font-size:13px;text-align:center;color:#9ca3af}
         <button class="full-btn" onclick="toggleFullscreen()">⛶ Plein écran</button>
       </div>
       <iframe id="tradingviewIframe"
-        src="https://s.tradingview.com/widgetembed/?symbol=OANDA:EURUSD&interval=1&theme=dark&hide_side_toolbar=1"></iframe>
+        src="https://s.tradingview.com/widgetembed/?symbol=AMEX:SPY&interval=1&theme=dark&hide_side_toolbar=1"></iframe>
 
       <div class="tradebox">
         <button class="buy" onclick="placeOrder('buy')">ACHETER</button>
@@ -103,173 +103,164 @@ footer{margin-top:20px;font-size:13px;text-align:center;color:#9ca3af}
     </aside>
   </main>
 
-  <footer>© 2025 AmA Broker • Données Finnhub API • Graphiques TradingView</footer>
+  <footer>© 2025 AmA Broker • Données Twelve Data • Graphiques TradingView</footer>
 </div>
 
 <script>
-/* ===== CONFIG ===== */
-const FINNHUB_API_KEY = "d4g61b9r01qm5b343fo0d4g61b9r01qm5b343fog"; // Votre clé Finnhub
+const TWELVE_API_KEY = "c9140c9a72264e82bb9f5235b86b2806";
 
-/* ===== Mappage symboles pour Finnhub ===== */
-const SYMBOL_MAP_FINNHUB = {
+const SYMBOL_MAP_TWELVE = {
   SPY: "SPY",
   DIA: "DIA",
   QQQ: "QQQ",
-  "EXS1.DE": "EXS1.DE",  // DAX ETF Allemagne
-  "C40.PA": "C40.PA",    // CAC 40 ETF Paris
-  "EUR/USD": "OANDA:EURUSD",
-  "GBP/USD": "OANDA:GBPUSD",
-  "USD/JPY": "OANDA:USDJPY",
-  "AUD/USD": "OANDA:AUDUSD",
-  "USD/CAD": "OANDA:USDCAD"
+  "EXS1.DE": "EXS1.DE",
+  "C40.PA": "C40.PA",
+  "EUR/USD": "EUR/USD",
+  "GBP/USD": "GBP/USD",
+  "USD/JPY": "USD/JPY",
+  "AUD/USD": "AUD/USD",
+  "USD/CAD": "USD/CAD"
 };
 
 let positions = [], history = [], currentSymbol = "SPY";
 let lastPrices = {}, smoothPrices = {};
 
-/* ===== FETCH Finnhub QUOTE ===== */
-async function fetchFinnhubPrice(symbol){
-  try{
-    const finnhubSymbol = SYMBOL_MAP_FINNHUB[symbol];
-    if(!finnhubSymbol) return null;
-    const url = `https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(finnhubSymbol)}&token=${FINNHUB_API_KEY}`;
+async function fetchTwelvePrice(symbol) {
+  try {
+    const twelveSymbol = SYMBOL_MAP_TWELVE[symbol];
+    if (!twelveSymbol) return null;
+    const url = `https://api.twelvedata.com/price?symbol=${encodeURIComponent(twelveSymbol)}&apikey=${TWELVE_API_KEY}`;
     const res = await fetch(url);
-    if(!res.ok) return null;
+    if (!res.ok) return null;
     const data = await res.json();
-    if(!data || data.c === 0) return null;
-    return parseFloat(data.c);
-  }catch(e){
-    console.error("Finnhub API error:", e);
+    if (!data || !data.price) return null;
+    return parseFloat(data.price);
+  } catch (e) {
+    console.error("Twelve Data API error:", e);
     return null;
   }
 }
 
-/* ===== FETCH PRICE wrapper ===== */
-async function fetchPrice(symbol){
-  return await fetchFinnhubPrice(symbol);
+async function fetchPrice(symbol) {
+  return await fetchTwelvePrice(symbol);
 }
 
-/* ===== Refresh prices every 15s (limit API calls free plan) ===== */
-async function refreshAllPrices(){
+async function refreshAllPrices() {
   const needed = new Set([currentSymbol]);
-  positions.forEach(p=>needed.add(p.symbol));
-  for(const sym of needed){
+  positions.forEach(p => needed.add(p.symbol));
+  for (const sym of needed) {
     const price = await fetchPrice(sym);
-    if(price){
-      if(!lastPrices[sym]) lastPrices[sym] = price;
+    if (price) {
+      if (!lastPrices[sym]) lastPrices[sym] = price;
       smoothPrices[sym] = lastPrices[sym];
       lastPrices[sym] = price;
     }
   }
-  if(lastPrices[currentSymbol])
+  if (lastPrices[currentSymbol])
     document.getElementById("priceDisplay").innerText = lastPrices[currentSymbol].toFixed(4);
   updatePnL();
 }
-setInterval(refreshAllPrices,15000);
+setInterval(refreshAllPrices, 15000);
 refreshAllPrices();
 
-/* ===== Smooth prices for UI ===== */
-setInterval(()=>{
+setInterval(() => {
   const alpha = 0.2;
-  for(const s in lastPrices){
-    if(!smoothPrices[s]) smoothPrices[s]=lastPrices[s];
-    smoothPrices[s]+=(lastPrices[s]-smoothPrices[s])*alpha;
+  for (const s in lastPrices) {
+    if (!smoothPrices[s]) smoothPrices[s] = lastPrices[s];
+    smoothPrices[s] += (lastPrices[s] - smoothPrices[s]) * alpha;
   }
-  if(smoothPrices[currentSymbol])
-    document.getElementById("priceDisplay").innerText=smoothPrices[currentSymbol].toFixed(4);
+  if (smoothPrices[currentSymbol])
+    document.getElementById("priceDisplay").innerText = smoothPrices[currentSymbol].toFixed(4);
   updatePnL(true);
-},200);
+}, 200);
 
-/* ===== Trading functions ===== */
-async function placeOrder(side){
+async function placeOrder(side) {
   const price = lastPrices[currentSymbol];
-  if(!price) return alert("Impossible d'obtenir le prix.");
-  const qty = parseInt(document.getElementById("lotInput").value)||1;
-  positions.push({id:Date.now(),symbol:currentSymbol,side,qty,entry:price,pnl:0});
+  if (!price) return alert("Impossible d'obtenir le prix.");
+  const qty = parseInt(document.getElementById("lotInput").value) || 1;
+  positions.push({ id: Date.now(), symbol: currentSymbol, side, qty, entry: price, pnl: 0 });
   renderPositions();
 }
 
-function closePosition(id){
-  const pos = positions.find(p=>p.id===id);
-  if(!pos) return;
-  const exit = lastPrices[pos.symbol]||pos.entry;
-  const dir = pos.side==="buy"?1:-1;
-  const pnlFinal = (exit-pos.entry)*dir*pos.qty;
-  const closed = {...pos,exit,pnl:pnlFinal,time:new Date().toLocaleTimeString()};
+function closePosition(id) {
+  const pos = positions.find(p => p.id === id);
+  if (!pos) return;
+  const exit = lastPrices[pos.symbol] || pos.entry;
+  const dir = pos.side === "buy" ? 1 : -1;
+  const pnlFinal = (exit - pos.entry) * dir * pos.qty;
+  const closed = { ...pos, exit, pnl: pnlFinal, time: new Date().toLocaleTimeString() };
   history.unshift(closed);
-  positions = positions.filter(p=>p.id!==id);
+  positions = positions.filter(p => p.id !== id);
   renderPositions();
   renderHistory();
 }
 
-function updatePnL(isSmooth=false){
+function updatePnL(isSmooth = false) {
   let total = 0;
-  positions.forEach(p=>{
-    const price = isSmooth?smoothPrices[p.symbol]:lastPrices[p.symbol];
-    if(!price) return;
-    const dir = p.side==="buy"?1:-1;
-    p.pnl = (price-p.entry)*dir*p.qty;
+  positions.forEach(p => {
+    const price = isSmooth ? smoothPrices[p.symbol] : lastPrices[p.symbol];
+    if (!price) return;
+    const dir = p.side === "buy" ? 1 : -1;
+    p.pnl = (price - p.entry) * dir * p.qty;
     total += p.pnl;
   });
   renderPositions(total);
 }
 
-/* ===== Render functions ===== */
-function renderPositions(total=0){
-  const tbody=document.querySelector("#positionsTable tbody");
-  tbody.innerHTML="";
-  positions.forEach(p=>{
-    const last=smoothPrices[p.symbol]??null;
-    const tr=document.createElement("tr");
-    tr.innerHTML=`
+function renderPositions(total = 0) {
+  const tbody = document.querySelector("#positionsTable tbody");
+  tbody.innerHTML = "";
+  positions.forEach(p => {
+    const last = smoothPrices[p.symbol] ?? null;
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
       <td>${p.symbol}</td><td>${p.side}</td><td>${p.qty}</td>
-      <td>${p.entry.toFixed(5)}</td><td>${last?last.toFixed(5):"—"}</td>
-      <td style="color:${p.pnl>0?"#10b981":p.pnl<0?"#ef4444":"white"}">${p.pnl.toFixed(5)}</td>
+      <td>${p.entry.toFixed(5)}</td><td>${last ? last.toFixed(5) : "—"}</td>
+      <td style="color:${p.pnl > 0 ? "#10b981" : p.pnl < 0 ? "#ef4444" : "white"}">${p.pnl.toFixed(5)}</td>
       <td><button onclick="closePosition(${p.id})"
       style="background:#334155;color:white;border:0;padding:4px 8px;border-radius:6px;cursor:pointer;">✖</button></td>`;
     tbody.appendChild(tr);
   });
-  const t=document.getElementById("totalPnl");
-  t.innerText="PnL total : "+total.toFixed(5);
-  t.style.color=total>0?"#10b981":total<0?"#ef4444":"#22d3ee";
+  const t = document.getElementById("totalPnl");
+  t.innerText = "PnL total : " + total.toFixed(5);
+  t.style.color = total > 0 ? "#10b981" : total < 0 ? "#ef4444" : "#22d3ee";
 }
 
-function renderHistory(){
-  const tbody=document.querySelector("#historyTable tbody");
-  tbody.innerHTML="";
-  history.forEach(h=>{
-    const tr=document.createElement("tr");
-    tr.innerHTML=`
+function renderHistory() {
+  const tbody = document.querySelector("#historyTable tbody");
+  tbody.innerHTML = "";
+  history.forEach(h => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
       <td>${h.symbol}</td><td>${h.side}</td><td>${h.qty}</td>
       <td>${h.entry.toFixed(5)}</td><td>${h.exit.toFixed(5)}</td>
-      <td style="color:${h.pnl>0?"#10b981":h.pnl<0?"#ef4444":"white"}">${h.pnl.toFixed(5)}</td>
+      <td style="color:${h.pnl > 0 ? "#10b981" : h.pnl < 0 ? "#ef4444" : "white"}">${h.pnl.toFixed(5)}</td>
       <td>${h.time}</td>`;
     tbody.appendChild(tr);
   });
 }
 
-/* ===== Symbol select ===== */
-document.getElementById("symbolSelect").addEventListener("change",e=>{
+document.getElementById("symbolSelect").addEventListener("change", e => {
   currentSymbol = e.target.value;
   const tv = {
-    SPY:"AMEX:SPY",
-    DIA:"AMEX:DIA",
-    QQQ:"NASDAQ:QQQ",
-    "EXS1.DE":"XETRA:EXS1",
-    "C40.PA":"EPA:C40"
-  }[currentSymbol] || `OANDA:${currentSymbol.replace("/", "")}`;
-  document.getElementById("tradingviewIframe").src=
+    SPY: "AMEX:SPY",
+    DIA: "AMEX:DIA",
+    QQQ: "NASDAQ:QQQ",
+    "EXS1.DE": "XETRA:EXS1",
+    "C40.PA": "EPA:C40"
+  }[currentSymbol] || currentSymbol.replace("/", "");
+  document.getElementById("tradingviewIframe").src =
     `https://s.tradingview.com/widgetembed/?symbol=${tv}&interval=1&theme=dark&hide_side_toolbar=1`;
   refreshAllPrices();
 });
 
-/* ===== Fullscreen chart ===== */
-function toggleFullscreen(){
+function toggleFullscreen() {
   document.getElementById("tradingviewIframe").classList.toggle("fullscreen");
 }
 </script>
 </body>
 </html>
+
 
 
 
