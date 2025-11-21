@@ -2,219 +2,279 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8" />
-<title>AmA Broker — Web Trader Demo</title>
+<title>Web Trader Demo — Indices & Forex</title>
 
 <style>
-*{box-sizing:border-box}
-body{font-family:Inter,Arial,sans-serif;margin:0;background:linear-gradient(135deg,#0b1220,#111b2d);color:#f3f4f6;min-height:100vh}
-.app{max-width:1400px;margin:0 auto;padding:16px}
-header{display:flex;justify-content:space-between;align-items:center;background:rgba(255,255,255,.05);padding:14px 20px;border-radius:14px;backdrop-filter:blur(10px);box-shadow:0 4px 12px rgba(0,0,0,.4)}
-.brand{font-size:26px;font-weight:700;letter-spacing:1px;color:#22d3ee}
-.brand span{color:#10b981}
-header .controls{display:flex;gap:14px;align-items:center;flex-wrap:wrap}
-select,input{padding:6px 10px;border-radius:6px;background:#1b2533;color:white;border:1px solid #334155}
-.price{font-weight:600;color:#e0e0e0}
-.layout{display:grid;grid-template-columns:1fr 380px;gap:16px;margin-top:16px}
-.chart,.sidebar .panel{background:rgba(255,255,255,.05);border-radius:14px;padding:14px;backdrop-filter:blur(10px);box-shadow:0 6px 18px rgba(0,0,0,.4)}
-.chart iframe{width:100%;height:480px;border:0;border-radius:10px}
-.tradebox{display:flex;gap:10px;margin-top:14px}
-button.buy,button.sell{flex:1;font-weight:bold;border:none;padding:12px 20px;border-radius:10px;cursor:pointer;transition:all .2s;font-size:16px}
-button.buy{background:#10b981}
-button.sell{background:#ef4444}
-table{width:100%;border-collapse:collapse;font-size:14px}
-td,th{padding:6px 8px;text-align:left}
-tr:nth-child(odd){background:rgba(255,255,255,.02)}
-.total-pnl{margin-top:10px;text-align:right;font-weight:bold;font-size:15px}
-.full-btn{float:right;background:#1e293b;border:0;color:#22d3ee;padding:6px 12px;border-radius:6px;cursor:pointer}
+    body {
+        margin: 0;
+        padding: 0;
+        background: #0b0e11;
+        color: white;
+        font-family: Inter, Arial, sans-serif;
+    }
+
+    #app {
+        display: grid;
+        grid-template-columns: 280px 1fr 380px;
+        height: 100vh;
+    }
+
+    /* --- LEFT PANEL --- */
+    #left {
+        background: #111418;
+        padding: 20px;
+        border-right: 1px solid #222;
+        overflow-y: auto;
+    }
+
+    h2 {
+        margin-top: 0;
+        font-size: 20px;
+    }
+
+    select, button {
+        width: 100%;
+        padding: 12px;
+        border: none;
+        background: #1a1f25;
+        color: white;
+        margin-bottom: 15px;
+        border-radius: 8px;
+        font-size: 16px;
+    }
+
+    button {
+        background: #1c7dfd;
+        cursor: pointer;
+    }
+    button:hover {
+        background: #1464cc;
+    }
+
+    .sell {
+        background: #d9534f;
+    }
+    .sell:hover {
+        background: #b84743;
+    }
+
+    /* --- CENTER (TRADINGVIEW + PRICE) --- */
+    #center {
+        padding: 20px;
+        position: relative;
+    }
+
+    #priceDisplay {
+        font-size: 32px;
+        font-weight: bold;
+        margin-bottom: 15px;
+    }
+
+    /* --- RIGHT PANEL (POSITIONS) --- */
+    #right {
+        background: #111418;
+        padding: 20px;
+        border-left: 1px solid #222;
+        overflow-y: auto;
+    }
+
+    .pos {
+        padding: 12px;
+        margin-bottom: 15px;
+        background: #1a1f25;
+        border-radius: 8px;
+    }
+
+    .green { color: #00d46a; }
+    .red { color: #ff5555; }
 </style>
 </head>
 
 <body>
-<div class="app">
+<div id="app">
 
-<header>
-  <div class="brand">AmA <span>Broker</span></div>
+    <!-- LEFT PANEL -->
+    <div id="left">
+        <h2>Actif</h2>
 
-  <div class="controls">
-    <label>Actif :
-      <select id="symbolSelect">
-        
-        <!-- CFD IG (Indices) -->
-        <optgroup label="Indices CFD (IG Markets)">
-          <option value="SP500">S&P 500</option>
-          <option value="DOW">Dow Jones</option>
-          <option value="NAS100">Nasdaq 100</option>
-          <option value="DAX">DAX</option>
-          <option value="CAC40">CAC 40</option>
-        </optgroup>
+        <select id="symbolSelect">
+            <option value="SPY">S&P 500 (ETF)</option>
+            <option value="QQQ">Nasdaq 100 (ETF)</option>
+            <option value="DIA">Dow Jones (ETF)</option>
 
-        <!-- FOREX NORMAL (Twelve Data) -->
-        <optgroup label="Forex (Twelve Data)">
-          <option value="EUR/USD">EUR/USD</option>
-          <option value="GBP/USD">GBP/USD</option>
-          <option value="USD/JPY">USD/JPY</option>
-          <option value="AUD/USD">AUD/USD</option>
-          <option value="USD/CAD">USD/CAD</option>
-        </optgroup>
+            <option disabled>──────────</option>
 
-      </select>
-    </label>
+            <option value="EUR/USD">EUR/USD</option>
+            <option value="GBP/USD">GBP/USD</option>
+            <option value="USD/JPY">USD/JPY</option>
+            <option value="USD/CAD">USD/CAD</option>
+            <option value="AUD/USD">AUD/USD</option>
+        </select>
 
-    <div class="price">Prix actuel : <span id="priceDisplay">—</span></div>
-
-    <label>Lots :
-      <input type="number" id="lotInput" value="1" min="1" step="1" style="width:70px;text-align:center;">
-    </label>
-
-  </div>
-</header>
-
-<main class="layout">
-
-  <!-- CHART -->
-  <section class="chart">
-    <div style="display:flex;justify-content:space-between">
-      <h3 style="color:#22d3ee;margin:0;">Graphique</h3>
-      <button class="full-btn" onclick="toggleFullscreen()">⛶ Plein écran</button>
+        <button id="buyBtn">Acheter</button>
+        <button class="sell" id="sellBtn">Vendre</button>
     </div>
 
-    <iframe id="tradingviewIframe"
-      src="https://s.tradingview.com/widgetembed/?symbol=INDEX:SPX&interval=1&theme=dark"></iframe>
-
-    <div class="tradebox">
-      <button class="buy" onclick="placeOrder('buy')">ACHETER</button>
-      <button class="sell" onclick="placeOrder('sell')">VENDRE</button>
+    <!-- CENTER -->
+    <div id="center">
+        <div id="priceDisplay">--</div>
+        <div id="tvChart" style="height: 80vh;"></div>
     </div>
 
-    <div class="history-panel">
-      <h3 style="color:#22d3ee">Historique</h3>
-      <table id="historyTable">
-        <thead><tr><th>Sym</th><th>Side</th><th>Lots</th><th>Entrée</th><th>Sortie</th><th>PnL</th></tr></thead>
-        <tbody></tbody>
-      </table>
+    <!-- RIGHT PANEL -->
+    <div id="right">
+        <h2>Positions ouvertes</h2>
+        <div id="positions"></div>
     </div>
-  </section>
 
-  <!-- POSITIONS -->
-  <aside class="sidebar">
-    <div class="panel">
-      <h3 style="color:#22d3ee;">Positions Ouvertes</h3>
-      <table id="positionsTable">
-        <thead><tr><th>Sym</th><th>Side</th><th>Lots</th><th>Entrée</th><th>Dernier</th><th>PnL</th><th></th></tr></thead>
-        <tbody></tbody>
-      </table>
-      <div id="totalPnl" class="total-pnl">PnL total : 0.0000</div>
-    </div>
-  </aside>
-
-</main>
-
-<footer style="text-align:center;margin-top:20px;color:#7b8a9a">
-© 2025 AmA Broker • IG CFD + Twelve Data Forex
-</footer>
 </div>
 
 <script>
-const TWELVE_API_KEY = "c9140c9a72264e82bb9f5235b86b2806";
+// ----------------------------------------------------------
+// SETTINGS
+// ----------------------------------------------------------
+const TWELVE_KEY = "demo"; // ← Mets ta clé TwelveData
 
-/* === CFD IG SYMBOLS (corrigés) === */
-const IG_SYMBOLS = {
-  SP500: "CS.D.SP500.MINI.IP",
-  DOW: "CS.D.DOW.MINI.IP",
-  NAS100: "CS.D.NASDAQ.MINI.IP",
-  DAX: "IX.D.DAX.IFD.IP",
-  CAC40: "IX.D.CAC.IFD.IP"
+let lastPrice = 0;
+let positions = [];
+let currentSymbol = document.getElementById("symbolSelect").value;
+
+function isForex(sym) {
+    return sym.includes("/");
+}
+
+// ----------------------------------------------------------
+// FETCH PRICE (ETFs + FOREX)
+// ----------------------------------------------------------
+async function fetchPrice(sym) {
+    try {
+        let url;
+
+        if (isForex(sym)) {
+            // FOREX Twelve Data format : EUR/USD → EURUSD
+            const fx = sym.replace("/", "");
+            url = `https://api.twelvedata.com/price?symbol=${fx}&apikey=${TWELVE_KEY}`;
+        } else {
+            // ETFs → SPY, QQQ, DIA (Twelve Data)
+            url = `https://api.twelvedata.com/price?symbol=${sym}&apikey=${TWELVE_KEY}`;
+        }
+
+        const r = await fetch(url);
+        const data = await r.json();
+
+        if (!data.price) return null;
+        return parseFloat(data.price);
+
+    } catch (e) {
+        console.error("Erreur prix :", e);
+        return null;
+    }
+}
+
+// ----------------------------------------------------------
+// UPDATE PRICE
+// ----------------------------------------------------------
+async function updatePrice() {
+    const price = await fetchPrice(currentSymbol);
+    if (!price) return;
+
+    lastPrice = price;
+    document.getElementById("priceDisplay").innerText = price.toFixed(4);
+
+    updatePnL();
+}
+setInterval(updatePrice, 1000);
+updatePrice();
+
+// ----------------------------------------------------------
+// BUY / SELL
+// ----------------------------------------------------------
+function openPosition(type) {
+    const pos = {
+        symbol: currentSymbol,
+        type,
+        entry: lastPrice,
+        size: 1,
+        pnl: 0
+    };
+    positions.push(pos);
+    renderPositions();
+}
+
+document.getElementById("buyBtn").onclick = () => openPosition("BUY");
+document.getElementById("sellBtn").onclick = () => openPosition("SELL");
+
+// ----------------------------------------------------------
+// UPDATE POSITIONS PNL
+// ----------------------------------------------------------
+function updatePnL() {
+    positions.forEach(p => {
+        if (p.type === "BUY")
+            p.pnl = (lastPrice - p.entry);
+        else
+            p.pnl = (p.entry - lastPrice);
+    });
+    renderPositions();
+}
+
+function renderPositions() {
+    const box = document.getElementById("positions");
+    box.innerHTML = "";
+
+    positions.forEach(p => {
+        const div = document.createElement("div");
+        div.className = "pos";
+
+        div.innerHTML = `
+            <b>${p.symbol}</b><br>
+            Type : ${p.type}<br>
+            Entrée : ${p.entry}<br>
+            PNL : <span class="${p.pnl>=0?"green":"red"}">${p.pnl.toFixed(4)}</span>
+        `;
+        box.appendChild(div);
+    });
+}
+
+// ----------------------------------------------------------
+// ON SYMBOL CHANGE
+// ----------------------------------------------------------
+document.getElementById("symbolSelect").onchange = e => {
+    currentSymbol = e.target.value;
+    loadTradingView(currentSymbol);
+    updatePrice();
 };
 
-/* === FOREX (Twelve Data) === */
-const TWELVE_SYMBOLS = {
-  "EUR/USD":"EUR/USD",
-  "GBP/USD":"GBP/USD",
-  "USD/JPY":"USD/JPY",
-  "AUD/USD":"AUD/USD",
-  "USD/CAD":"USD/CAD"
-};
+// ----------------------------------------------------------
+// TRADINGVIEW LOADER
+// ----------------------------------------------------------
+function loadTradingView(sym) {
+    document.getElementById("tvChart").innerHTML = "";
 
+    let tvTicker = sym;
 
-let positions = [], history = [];
-let lastPrices = {}, smoothPrices = {};
-let currentSymbol = "SP500";
+    if (isForex(sym)) {
+        tvTicker = "FX:" + sym.replace("/", "");
+    } else {
+        tvTicker = "AMEX:" + sym;
+    }
 
-/* ===== IG FETCH (désactivé pour le moment car backend requis) ===== */
-async function fetchIGPrice(symbol){
-  return null; // On activera plus tard avec backend
+    new TradingView.widget({
+        "container_id": "tvChart",
+        "symbol": tvTicker,
+        "interval": "5",
+        "theme": "dark",
+        "style": "1",
+        "locale": "fr",
+        "height": "100%",
+    });
 }
-
-/* ===== FOREX FETCH ===== */
-async function fetchTwelvePrice(symbol){
-  try {
-    const res = await fetch(`https://api.twelvedata.com/price?symbol=${symbol}&apikey=${TWELVE_API_KEY}`);
-    const data = await res.json();
-    return data.price ? parseFloat(data.price) : null;
-  } catch { return null }
-}
-
-/* ========= GET PRICE ========= */
-async function fetchPrice(symbol){
-  if(IG_SYMBOLS[symbol]) return null; // IG plus tard
-  if(TWELVE_SYMBOLS[symbol]) return fetchTwelvePrice(symbol);
-  return null;
-}
-
-/* ========= REFRESH ========= */
-async function refreshAllPrices(){
-  const price = await fetchPrice(currentSymbol);
-  if(price){
-    lastPrices[currentSymbol] = price;
-    document.getElementById("priceDisplay").innerText = price;
-  }
-}
-refreshAllPrices();
-setInterval(refreshAllPrices, 15000);
-
-/* ========= ORDERS ========= */
-function placeOrder(side){
-  const p = lastPrices[currentSymbol];
-  if(!p) return alert("Prix indisponible");
-  const qty = parseInt(lotInput.value) || 1;
-  const pos = {id:Date.now(),symbol:currentSymbol,side,qty,entry:p,pnl:0};
-  positions.push(pos);
-  renderPositions();
-}
-
-function renderPositions(){
-  const tb = document.querySelector("#positionsTable tbody");
-  tb.innerHTML = "";
-  positions.forEach(p=>{
-    const last = lastPrices[p.symbol] ?? p.entry;
-    p.pnl = (last - p.entry) * (p.side==="buy"?1:-1) * p.qty;
-    tb.innerHTML += `
-      <tr>
-        <td>${p.symbol}</td><td>${p.side}</td><td>${p.qty}</td>
-        <td>${p.entry}</td><td>${last}</td>
-        <td>${p.pnl.toFixed(4)}</td>
-        <td><button onclick="closePosition(${p.id})">X</button></td>
-      </tr>`;
-  });
-}
-
-/* ========= CLOSE ========= */
-function closePosition(id){
-  const p = positions.find(x=>x.id===id);
-  const exit = lastPrices[p.symbol] ?? p.entry;
-  history.unshift({...p,exit});
-  positions = positions.filter(x=>x.id!==id);
-  renderPositions();
-}
-
-/* ========= SYMBOL SELECT ========= */
-document.getElementById("symbolSelect").addEventListener("change", e=>{
-  currentSymbol = e.target.value;
-});
+loadTradingView(currentSymbol);
 </script>
 
+<script src="https://s3.tradingview.com/tv.js"></script>
 </body>
 </html>
+
 
 
 
