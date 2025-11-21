@@ -28,7 +28,7 @@ td,th{padding:6px 8px;text-align:left}
 th{color:#9ca3af}
 tr:nth-child(odd){background:rgba(255,255,255,.02)}
 footer{margin-top:20px;font-size:13px;text-align:center;color:#9ca3af}
-.full-btn{float:right;background:#1e293b;border:0;color:#22d3ee;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:13px}
+.full-btn{float:right;background:#1e293b;border:0;color:#22d3ee;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:13}
 .full-btn:hover{background:#0f172a}
 .total-pnl{margin-top:10px;text-align:right;font-weight:bold;font-size:15px;color:#22d3ee;}
 </style>
@@ -99,14 +99,30 @@ footer{margin-top:20px;font-size:13px;text-align:center;color:#9ca3af}
 </div>
 
 <script>
-// --- Map TradingView ---
+// --- Maps Symboles ---
+const SYMBOL_MAP_STOOQ = {
+  SPX:"^SPX",
+  DJI:"^DJI",
+  NDX:"^NDX",
+  FTSE:"^FTSE",
+  DAX:"^GDAXI",
+  FCHI:"^FCHI",
+  NKY:"^N225",
+  "EUR/USD":"EURUSD",
+  "GBP/USD":"GBPUSD",
+  "USD/JPY":"USDJPY",
+  "AUD/USD":"AUDUSD",
+  "USD/CAD":"USDCAD",
+  "XAU/USD":"GC.F"
+};
+
 const SYMBOL_MAP_TV = {
   SPX:"INDEX:SPX",
   DJI:"INDEX:DJI",
   NDX:"INDEX:NDX",
   FTSE:"INDEX:UKX",
   DAX:"INDEX:DAX",
-  FCHI:"INDEX:PX1!", // Correct CAC 40
+  FCHI:"INDEX:PX1!",
   NKY:"INDEX:NKY",
   "EUR/USD":"FX:EURUSD",
   "GBP/USD":"FX:GBPUSD",
@@ -123,48 +139,23 @@ let positions = [];
 let currentSymbol = "SPX";
 let lastPrices = {};
 
-// --- Convertir symbole pour Stooq ---
-function convertToStooqSymbol(symbol){
-  const forexMetaux = ["EUR/USD","GBP/USD","USD/JPY","AUD/USD","USD/CAD","XAU/USD"];
-  if(forexMetaux.includes(symbol)){
-    return symbol.toLowerCase().replace(/\s+/g,'').replace(/\//g,'');
-  }
-  switch(symbol){
-    case "SPX": return "spx";
-    case "DJI": return "dji";
-    case "NDX": return "ndx";
-    case "FTSE": return "ftse";
-    case "DAX": return "dax";
-    case "FCHI": return "cac";
-    case "NKY": return "nky";
-    default: return symbol.toLowerCase();
-  }
-}
-
-// --- Récupérer prix Stooq ---
+// --- Fetch prix Stooq ---
 async function fetchStooqPrice(symbol){
   try{
-    const stooqSymbol = convertToStooqSymbol(symbol);
-    const stooqUrl = `https://stooq.com/q/l/?s=${stooqSymbol}&f=sd2t2ohlcv&h&e=csv`;
-    const url = CORS_PROXY + encodeURIComponent(stooqUrl);
-
+    const stooqSymbol = SYMBOL_MAP_STOOQ[symbol];
+    const url = CORS_PROXY + encodeURIComponent(`https://stooq.com/q/l/?s=${stooqSymbol}&f=sd2t2ohlcv&h&e=csv`);
     const res = await fetch(url);
     if(!res.ok) return null;
     const text = await res.text();
     if(text.includes("N/D")) return null;
-
     const line = text.split("\n")[1];
     if(!line) return null;
-
     const last = parseFloat(line.split(",")[6]);
     return isNaN(last)?null:last;
-  }catch(e){
-    console.error("fetchStooqPrice error:", e);
-    return null;
-  }
+  }catch(e){console.error(e);return null;}
 }
 
-// --- Mise à jour prix ---
+// --- Refresh prix ---
 async function refreshAllPrices(){
   const needed = new Set();
   needed.add(currentSymbol);
@@ -184,11 +175,10 @@ async function refreshAllPrices(){
 setInterval(refreshAllPrices,1000);
 refreshAllPrices();
 
-// --- Placer un ordre ---
+// --- Placer ordre ---
 async function placeOrder(side){
   const price = await fetchStooqPrice(currentSymbol);
   if(!price) return alert("Impossible d'obtenir le prix.");
-
   const qty = parseInt(document.getElementById("lotInput").value)||1;
   positions.push({id:Date.now(),symbol:currentSymbol,side,qty,entry:price,pnl:0});
   renderPositions();
@@ -200,7 +190,7 @@ function closePosition(id){
   renderPositions();
 }
 
-// --- Mise à jour PnL ---
+// --- Update PnL ---
 function updatePnL(){
   let total=0;
   positions.forEach(p=>{
@@ -213,7 +203,7 @@ function updatePnL(){
   renderPositions(total);
 }
 
-// --- Afficher positions ---
+// --- Render tableau ---
 function renderPositions(total=0){
   const tbody=document.querySelector("#positionsTable tbody");
   tbody.innerHTML="";
@@ -237,7 +227,7 @@ function renderPositions(total=0){
   t.style.color=total>0?"#10b981":total<0?"#ef4444":"#22d3ee";
 }
 
-// --- Changer d'actif ---
+// --- Changer actif ---
 document.getElementById("symbolSelect").addEventListener("change", e=>{
   currentSymbol=e.target.value;
   const tv=SYMBOL_MAP_TV[currentSymbol];
@@ -252,5 +242,3 @@ function toggleFullscreen(){
 </script>
 </body>
 </html>
-
-
