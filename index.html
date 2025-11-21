@@ -5,8 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Mini Broker — Graphique & Watchlist</title>
 
-  <!-- Google font -->
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
 
   <style>
     :root{
@@ -155,8 +154,7 @@
     </div>
 
     <div class="main">
-      <!-- Chart area -->
-      <div class="chart-area">
+            <div class="chart-area">
         <div class="chart-header">
           <div>
             <div class="symbol-big" id="currentSymbol">FX:EURUSD</div>
@@ -169,11 +167,9 @@
           </div>
         </div>
 
-        <!-- TradingView container -->
-        <div id="tv_chart_container"></div>
+                <div id="tv_chart_container"></div>
 
-        <!-- bottom tabs -->
-        <div class="bottom">
+                <div class="bottom">
           <div class="tabs">
             <div class="tab-btn active" data-tab="positions">Positions</div>
             <div class="tab-btn" data-tab="history">Historique de positions</div>
@@ -193,8 +189,7 @@
         </div>
       </div>
 
-      <!-- Side: Watchlist -->
-      <aside class="side">
+            <aside class="side">
         <div style="display:flex; justify-content:space-between; align-items:center;">
           <div>
             <div class="watch-title">Watchlist</div>
@@ -204,8 +199,7 @@
         </div>
 
         <div class="watchlist" id="watchlist">
-          <!-- Items injected by JS -->
-        </div>
+                  </div>
 
         <div style="margin-top:auto; display:flex;gap:8px;align-items:center;justify-content:space-between;">
           <div class="small-muted">Dernière MAJ: <span id="lastUpdate">--</span></div>
@@ -217,16 +211,18 @@
     </div>
   </div>
 
-  <!-- TradingView library -->
-  <script src="https://s3.tradingview.com/tv.js"></script>
+    <script src="https://s3.tradingview.com/tv.js"></script>
 
   <script>
     /************************************************************************
      * CONFIGURATION (modifie si besoin)
      ************************************************************************/
-    const API_KEY = 'c9140c9a72264e82bb9f5235b86b2806'; // ta clé fournie
-    const API_BASE = 'https://api.twelvedata.com'; // API TwelveData base URL
-
+    const API_KEY = 'c9140c9a72264e82bb9f5235b86b2806'; // ta clé Twelve Data
+    // >>> MODIFIÉ : Nous utilisons l'URL de base de l'API Twelve Data
+    const API_BASE = 'https://api.twelvedata.com'; 
+    // Format d'appel attendu pour Twelve Data: GET ${API_BASE}/price?symbol=EURUSD&apikey=API_KEY
+    // Réponse attendue (JSON) : { "price":"1.08871" }
+    
     // Watchlist par défaut (tu peux remplacer les symboles selon ton fournisseur)
     const WATCHLIST = [
       { id:'FX:EURUSD', label:'EURUSD' },
@@ -265,33 +261,38 @@
       return Number(n).toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: digits});
     }
 
-    // Fonction de récupération du prix via l'API TwelveData
-    async function apiGetPrice(symbol){
-      // Transformation du symbole pour TwelveData (ex: FX:EURUSD => EUR/USD)
-      let tdSymbol = symbol.replace(/^FX:|^COM:|^INDEX:/, '');
-      if(symbol.startsWith('FX:') || symbol.startsWith('COM:')) {
-        if(tdSymbol.length === 6) {
-          tdSymbol = tdSymbol.slice(0,3) + '/' + tdSymbol.slice(3);
-        }
-      }
-      // URL API TwelveData
-      const url = `${API_BASE}/quote?symbol=${encodeURIComponent(tdSymbol)}&apikey=${API_KEY}`;
-      try {
-        const resp = await fetch(url);
-        if(!resp.ok) throw new Error('HTTP ' + resp.status);
-        const json = await resp.json();
-        if(json && json.close){
-          return { price: parseFloat(json.close), timestamp: Date.now(), source: 'twelvedata' };
-        }
-        throw new Error('Réponse API invalide');
-      } catch(err) {
-        // fallback simulateur avec valeur précédente ou par défaut
-        const base = lastPrices[symbol] ?? (symbol.startsWith('FX:') ? 1.0800 : (symbol.includes('XAU') ? 1900.0 : 4000.0));
-        const jitter = (Math.random() - 0.5) * (symbol.startsWith('FX:') ? 0.0012 : 0.6);
-        const fallbackPrice = +(base * (1 + jitter)).toFixed(5);
-        console.warn('API price fetch failed for', symbol, '-> fallback', fallbackPrice, err);
-        return { price: fallbackPrice, timestamp: Date.now(), source: 'simulé' };
-      }
+    function apiGetPrice(symbol){
+      // essaie d'appeler l'API réelle (Twelve Data) ; si échec, retourne un fallback (simulateur)
+      // On construit paramètre symbol pour l'API : enlever "FX:" ou "COM:" ou "INDEX:"
+      const rawSymbol = symbol.replace(/^FX:|^COM:|^INDEX:/, '');
+      
+      // Appel de l'endpoint /price de Twelve Data
+      const url = `${API_BASE.replace(/\/$/, '')}/price?symbol=${encodeURIComponent(rawSymbol)}&apikey=${encodeURIComponent(API_KEY)}`;
+
+      // Retourne une Promise qui résout { price, timestamp, source }
+      return fetch(url, { method:'GET' })
+        .then(resp => {
+          if(!resp.ok) throw new Error('HTTP ' + resp.status);
+          return resp.json();
+        })
+        .then(json => {
+          // tenter d'extraire un champ price
+          // Twelve Data pour /price retourne { "price": "1.08871" }
+          if (json && (json.price !== undefined || json.ask !== undefined || json.last !== undefined)) {
+            const price = json.price ?? json.last ?? json.ask;
+            return { price: Number(price), timestamp: json.timestamp ?? Date.now(), source: 'api' };
+          }
+          throw new Error('Réponse API Twelve Data invalide ou incomplète');
+        })
+        .catch(err => {
+          // fallback simulateur basé sur lastPrices (ou valeur par défaut)
+          const base = lastPrices[symbol] ?? (symbol.startsWith('FX:') ? 1.0800 : (symbol.includes('XAU') ? 1900.0 : 4000.0));
+          // petite variation aléatoire
+          const jitter = (Math.random() - 0.5) * (symbol.startsWith('FX:') ? 0.0012 : 0.6);
+          const fallbackPrice = +(base * (1 + jitter)).toFixed(5);
+          console.warn('API price fetch failed for', symbol, '-> fallback', fallbackPrice, err);
+          return { price: fallbackPrice, timestamp: Date.now(), source: 'fallback' };
+        });
     }
 
     /************************************************************************
@@ -314,6 +315,7 @@
           allow_symbol_change: true,
           container_id: "tv_chart_container",
           studies_overrides: {},
+          // small tweaks to make it compact
           withdateranges: true,
           hide_side_toolbar: false,
           details: true,
@@ -321,12 +323,15 @@
           news: [],
         });
 
+        // attempt to update displayed symbol text when chart ready
         tvWidget.onChartReady && tvWidget.onChartReady(function(){
           document.getElementById('currentSymbol').textContent = symbol;
+          // try to fetch initial price for display
           updatePriceForSymbol(symbol);
         });
       } catch(e) {
         console.error('Erreur initialisation TradingView:', e);
+        // Fallback simple message
         const c = document.getElementById('tv_chart_container');
         c.innerHTML = '<div style="padding:20px;color:var(--muted)">Impossible de charger le widget TradingView (contrôle réseau ou CORS). Vérifie ta connexion.</div>';
       }
@@ -335,13 +340,16 @@
     function setChartSymbol(symbol){
       currentSymbol = symbol;
       document.getElementById('currentSymbol').textContent = symbol;
+      // Si l'API du widget permet setSymbol, on l'utilise, sinon on réinit
       try {
         if (tvWidget && tvWidget.chart) {
+          // certaines versions ont setSymbol sur activeChart()
           if (tvWidget.activeChart && typeof tvWidget.activeChart().setSymbol === 'function') {
             tvWidget.activeChart().setSymbol(symbol, '60');
           } else if (tvWidget.chart && typeof tvWidget.chart.setSymbol === 'function') {
             tvWidget.chart.setSymbol(symbol, '60');
           } else {
+            // réinit si pas supporté
             initTradingView(symbol);
           }
         } else {
@@ -351,6 +359,7 @@
         console.warn('setChartSymbol fallback -> reinit', e);
         initTradingView(symbol);
       }
+      // update price
       updatePriceForSymbol(symbol);
     }
 
@@ -386,20 +395,30 @@
 
     function escapeId(s){ return s.replace(/[^a-zA-Z0-9]/g,'_'); }
 
+    // Fonction pour récupérer le prix pour le symbole actuel affiché
+    async function updatePriceForSymbol(symbol) {
+      const res = await apiGetPrice(symbol);
+      lastPrices[symbol] = res.price;
+      document.getElementById('currentPriceSmall').textContent = 'Prix: ' + fmt(res.price, res.price > 100 ? 2 : 5) + ' (' + (res.source === 'api' ? 'API' : 'Simulé') + ')';
+    }
+
     async function refreshWatchPrices(){
       const promises = WATCHLIST.map(async (w) => {
         const res = await apiGetPrice(w.id);
         lastPrices[w.id] = res.price;
+        // update UI
         const priceEl = document.getElementById('price_' + escapeId(w.id));
         const srcEl = document.getElementById('source_' + escapeId(w.id));
         if (priceEl) priceEl.textContent = fmt(res.price, res.price > 100 ? 2 : 5);
-        if (srcEl) srcEl.textContent = res.source === 'twelvedata' ? 'twelvedata' : 'simulé';
+        if (srcEl) srcEl.textContent = res.source === 'api' ? 'api' : 'simulé';
       });
       await Promise.all(promises);
       document.getElementById('lastUpdate').textContent = nowString();
+      // if currentSymbol in list, update current price small too
       if (lastPrices[currentSymbol]) {
         document.getElementById('currentPriceSmall').textContent = 'Prix: ' + fmt(lastPrices[currentSymbol], lastPrices[currentSymbol] > 100 ? 2 : 5);
       } else {
+        // fetch current
         updatePriceForSymbol(currentSymbol);
       }
     }
@@ -421,9 +440,11 @@
       const idx = positions.findIndex(p=>p.id===posId);
       if (idx === -1) return;
       const pos = positions[idx];
+      // get latest price (synchronously from lastPrices or 0)
       const cur = lastPrices[pos.symbol] ?? pos.entryPrice;
       const pnl = computePnl(pos, cur);
       const closed = {...pos, closedAt: Date.now(), exitPrice: cur, pnl};
+      // move to history
       history.unshift(closed);
       positions.splice(idx,1);
       renderPositions();
@@ -432,7 +453,9 @@
 
     function computePnl(pos, priceNow){
       const direction = pos.side === 'BUY' ? 1 : -1;
-      return (priceNow - pos.entryPrice) * pos.qty * direction;
+      // PnL monetary: (priceNow - entryPrice) * qty * direction
+      const pnl = (priceNow - pos.entryPrice) * pos.qty * direction;
+      return pnl;
     }
 
     function renderPositions(){
@@ -443,6 +466,7 @@
         return;
       }
       positions.forEach(p => {
+        // Utilise le dernier prix connu récupéré par refreshWatchPrices (qui utilise Twelve Data)
         const cur = lastPrices[p.symbol] ?? p.entryPrice;
         const pnl = computePnl(p, cur);
         const row = document.createElement('div');
@@ -507,15 +531,27 @@
 
     async function handleOrder(side){
       const symbol = currentSymbol || 'FX:EURUSD';
+      // Prompt minimal UI pour qté (ne pas demander confirmation prolongée, faire best effort)
       const qtyStr = prompt(`Ordre ${side} - ${symbol}\nQuantité (lots / unités). Exemple: 1000`, '1000');
       const qty = Number(qtyStr);
       if (!qty || qty <= 0 || isNaN(qty)) {
         alert('Quantité invalide.');
         return;
       }
+
+      // Récupère prix via API Twelve Data (ou fallback)
       const res = await apiGetPrice(symbol);
       const price = res.price;
+      
+      if (!price || isNaN(price)) {
+        alert('Impossible de récupérer un prix valide pour l\'ordre.');
+        return;
+      }
+      
+      // Ouvre position et affiche
       openPosition({ symbol, side, qty, entryPrice: price });
+
+      // une mise à jour immédiate
       await refreshWatchPrices();
       renderPositions();
       alert(`Position ouverte: ${side} ${symbol} @ ${fmt(price, price>100?2:5)} x${qty} (${res.source})`);
@@ -523,9 +559,13 @@
 
     /************************************************************************
      * Mise à jour continue du PnL (polling)
+     * Le polling déclenche refreshWatchPrices qui utilise Twelve Data,
+    * puis renderPositions qui utilise les prix mis à jour (lastPrices) pour le PnL.
      ************************************************************************/
     async function pollPricesAndUpdate(){
+      // refresh watchlist + current symbol price (via Twelve Data)
       await refreshWatchPrices();
+      // recalc PnL (utilise les prix mis à jour)
       renderPositions();
     }
 
@@ -534,6 +574,7 @@
      ************************************************************************/
     document.getElementById('btnRefreshWatch').addEventListener('click', ()=>refreshWatchPrices());
     document.getElementById('refreshPrices').addEventListener('click', ()=>pollPricesAndUpdate());
+    // tabs
     document.querySelectorAll('.tab-btn').forEach(btn=>{
       btn.addEventListener('click', ()=>{
         document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
@@ -553,18 +594,20 @@
       await refreshWatchPrices();
       renderPositions();
       renderHistory();
+      // polling (met à jour prix et PnL toutes les 8 secondes)
       setInterval(pollPricesAndUpdate, 8000);
     }
 
+    // Expose some helpers globally for inline HTML button handlers
     window.closePosition = closePosition;
     window.focusSymbol = focusSymbol;
 
+    // start
     boot();
 
   </script>
 </body>
 </html>
-
 
 
 
