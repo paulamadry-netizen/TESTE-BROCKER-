@@ -37,227 +37,234 @@ footer{margin-top:20px;font-size:13px;text-align:center;color:#9ca3af}
 </head>
 <body>
 <div class="app">
-  <header>
-    <div class="brand">AmA <span>Broker</span></div>
-    <div class="controls">
-      <label>Actif :
-        <select id="symbolSelect">
-          <optgroup label="Indices">
-            <option value="SPX">S&P 500</option>
-            <option value="DJI">Dow Jones</option>
-            <option value="NDX">NASDAQ 100</option>
-            <option value="DAX">DAX 40</option>
-            <option value="FCHI">CAC 40</option>
-          </optgroup>
-          <optgroup label="Forex">
-            <option value="EUR/USD">EUR/USD</option>
-            <option value="GBP/USD">GBP/USD</option>
-            <option value="USD/JPY">USD/JPY</option>
-            <option value="AUD/USD">AUD/USD</option>
-            <option value="USD/CAD">USD/CAD</option>
-          </optgroup>
-        </select>
-      </label>
-      <div class="price">Prix actuel : <span id="priceDisplay">—</span></div>
-      <label>Lots :
-        <input type="number" id="lotInput" value="1" min="1" step="1" style="width:70px;text-align:center;">
-      </label>
-    </div>
-  </header>
+  <header>
+    <div class="brand">AmA <span>Broker</span></div>
+    <div class="controls">
+      <label>Actif :
+        <select id="symbolSelect">
+          <optgroup label="Indices">
+            <option value="SPX">S&P 500</option>
+            <option value="DJI">Dow Jones</option>
+            <option value="NDX">NASDAQ 100</option>
+            <option value="DAX">DAX 40</option>
+            <option value="FCHI">CAC 40</option>
+          </optgroup>
+          <optgroup label="Forex">
+            <option value="EUR/USD">EUR/USD</option>
+            <option value="GBP/USD">GBP/USD</option>
+            <option value="USD/JPY">USD/JPY</option>
+            <option value="AUD/USD">AUD/USD</option>
+            <option value="USD/CAD">USD/CAD</option>
+          </optgroup>
+        </select>
+      </label>
+      <div class="price">Prix actuel : <span id="priceDisplay">—</span></div>
+      <label>Lots :
+        <input type="number" id="lotInput" value="1" min="1" step="1" style="width:70px;text-align:center;">
+      </label>
+    </div>
+  </header>
 
-  <main class="layout">
-    <section class="chart">
-      <div style="display:flex;justify-content:space-between;align-items:center;">
-        <h3 style="margin:0;color:#22d3ee;">Graphique</h3>
-        <button class="full-btn" onclick="toggleFullscreen()">⛶ Plein écran</button>
-      </div>
-      <iframe id="tradingviewIframe"
-        src="https://s.tradingview.com/widgetembed/?symbol=OANDA:SPX500USD&interval=1&theme=dark&hide_side_toolbar=1"></iframe>
+  <main class="layout">
+    <section class="chart">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <h3 style="margin:0;color:#22d3ee;">Graphique</h3>
+        <button class="full-btn" onclick="toggleFullscreen()">⛶ Plein écran</button>
+      </div>
+      <iframe id="tradingviewIframe"
+        src="https://s.tradingview.com/widgetembed/?symbol=OANDA:SPX500USD&interval=1&theme=dark&hide_side_toolbar=1"></iframe>
 
-      <div class="tradebox">
-        <button class="buy" onclick="placeOrder('buy')">ACHETER</button>
-        <button class="sell" onclick="placeOrder('sell')">VENDRE</button>
-      </div>
+      <div class="tradebox">
+        <button class="buy" onclick="placeOrder('buy')">ACHETER</button>
+        <button class="sell" onclick="placeOrder('sell')">VENDRE</button>
+      </div>
 
-      <div class="history-panel">
-        <h3>Historique des Positions</h3>
-        <table id="historyTable">
-          <thead>
-            <tr><th>Sym</th><th>Side</th><th>Lots</th><th>Entrée</th><th>Sortie</th><th>PnL</th><th>Heure</th></tr>
-          </thead>
-          <tbody></tbody>
-        </table>
-      </div>
-    </section>
+      <div class="history-panel">
+        <h3>Historique des Positions</h3>
+        <table id="historyTable">
+          <thead>
+            <tr><th>Sym</th><th>Side</th><th>Lots</th><th>Entrée</th><th>Sortie</th><th>PnL</th><th>Heure</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
 
-    <aside class="sidebar">
-      <div class="panel">
-        <h3 style="color:#22d3ee;">Positions Ouvertes</h3>
-        <table id="positionsTable">
-          <thead><tr><th>Sym</th><th>Side</th><th>Lots</th><th>Entrée</th><th>Dernier</th><th>PnL</th><th></th></tr></thead>
-          <tbody></tbody>
-        </table>
-        <div id="totalPnl" class="total-pnl">PnL total : 0.0000</div>
-      </div>
-    </aside>
-  </main>
+    <aside class="sidebar">
+      <div class="panel">
+        <h3 style="color:#22d3ee;">Positions Ouvertes</h3>
+        <table id="positionsTable">
+          <thead><tr><th>Sym</th><th>Side</th><th>Lots</th><th>Entrée</th><th>Dernier</th><th>PnL</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+        <div id="totalPnl" class="total-pnl">PnL total : 0.0000</div>
+      </div>
+    </aside>
+  </main>
 
-  <footer>© 2025 AmA Broker • Données Twelve Data • Graphiques TradingView</footer>
+  <footer>© 2025 AmA Broker • Données Twelve Data • Graphiques TradingView</footer>
 </div>
 
 <script>
 /* ===== CONFIG ===== */
+// Laissez votre clé API ici
 const TWELVE_API_KEY = "c9140c9a72264e82bb9f5235b86b2806";
 
-/* ===== Mappage TradingView ===== */
+/* ===== Mappage TradingView (Aucune modification nécessaire ici) ===== */
 const SYMBOL_MAP_TV = {
-  SPX: "OANDA:SPX500USD",
-  DJI: "OANDA:US30USD",
-  NDX: "OANDA:NAS100USD",
-  DAX: "OANDA:DE40EUR",
-  FCHI: "OANDA:FR40EUR",
-  "EUR/USD": "FX:EURUSD",
-  "GBP/USD": "FX:GBPUSD",
-  "USD/JPY": "FX:USDJPY",
-  "AUD/USD": "FX:AUDUSD",
-  "USD/CAD": "FX:USDCAD"
+  SPX: "OANDA:SPX500USD",
+  DJI: "OANDA:US30USD",
+  NDX: "OANDA:NAS100USD",
+  DAX: "OANDA:DE40EUR",
+  FCHI: "OANDA:FR40EUR",
+  "EUR/USD": "FX:EURUSD",
+  "GBP/USD": "FX:GBPUSD",
+  "USD/JPY": "FX:USDJPY",
+  "AUD/USD": "FX:AUDUSD",
+  "USD/CAD": "FX:USDCAD"
 };
 
 let positions = [], history = [], currentSymbol = "SPX";
 let lastPrices = {}, smoothPrices = {};
 
-/* ===== FETCH TWELVE DATA ===== */
+/* ===== FETCH TWELVE DATA (Aucune modification nécessaire ici) ===== */
 async function fetchTwelveDataPrice(symbol){
-  try{
-    const url = `https://api.twelvedata.com/price?symbol=${encodeURIComponent(symbol)}&apikey=${TWELVE_API_KEY}`;
-    const res = await fetch(url);
-    if(!res.ok) return null;
-    const data = await res.json();
-    if(!data.price) return null;
-    return parseFloat(data.price);
-  }catch(e){console.error("Twelve Data error:", e);return null;}
+  try{
+    const url = `https://api.twelvedata.com/price?symbol=${encodeURIComponent(symbol)}&apikey=${TWELVE_API_KEY}`;
+    const res = await fetch(url);
+    if(!res.ok) return null;
+    const data = await res.json();
+    if(!data.price) return null;
+    return parseFloat(data.price);
+  }catch(e){console.error("Twelve Data error:", e);return null;}
 }
 
-/* ===== Routage auto corrigé pour indices ===== */
+/* * ===== CORRECTION APPLIQUÉE ICI : Routage auto corrigé pour indices ===== 
+ * Correction du mappage pour les indices : Les symboles Twelve Data sont souvent
+ * des symboles boursiers ou des noms d'indices sans préfixes spéciaux (comme le point).
+ */
 async function fetchPrice(symbol){
-  const MAP_TWELVE = {
-    SPX: ".SPX",   // S&P 500
-    DJI: ".DJI",   // Dow Jones
-    NDX: ".NDX",   // Nasdaq 100
-    DAX: "DAX",    // DAX 40
-    FCHI: "FCHI"   // CAC 40
-  };
-  const apiSymbol = MAP_TWELVE[symbol] || symbol;
-  return await fetchTwelveDataPrice(apiSymbol);
+  const MAP_TWELVE = {
+    SPX: "SPX",    // S&P 500
+    DJI: "DJI",    // Dow Jones
+    NDX: "NDX",    // Nasdaq 100
+    DAX: "GDAXI",  // DAX 40 (GDAXI est souvent plus fiable que DAX)
+    FCHI: "FCHI"   // CAC 40
+  };
+  
+  const apiSymbol = MAP_TWELVE[symbol] || symbol;
+  return await fetchTwelveDataPrice(apiSymbol);
 }
 
-/* ===== Refresh 10 s ===== */
+/* ===== Refresh 10 s (Aucune modification nécessaire ici) ===== */
 async function refreshAllPrices(){
-  const needed = new Set([currentSymbol]);
-  positions.forEach(p => needed.add(p.symbol));
-  for(const sym of needed){
-    const price = await fetchPrice(sym);
-    if(price){
-      if(!lastPrices[sym]) lastPrices[sym] = price;
-      smoothPrices[sym] = lastPrices[sym];
-      lastPrices[sym] = price;
-    }
-  }
-  if(lastPrices[currentSymbol])
-    document.getElementById("priceDisplay").innerText = lastPrices[currentSymbol].toFixed(4);
-  updatePnL();
+  const needed = new Set([currentSymbol]);
+  positions.forEach(p => needed.add(p.symbol));
+  for(const sym of needed){
+    const price = await fetchPrice(sym);
+    if(price){
+      if(!lastPrices[sym]) lastPrices[sym] = price;
+      smoothPrices[sym] = lastPrices[sym];
+      lastPrices[sym] = price;
+    }
+  }
+  if(lastPrices[currentSymbol])
+    document.getElementById("priceDisplay").innerText = lastPrices[currentSymbol].toFixed(4);
+  updatePnL();
 }
 setInterval(refreshAllPrices, 10000);
 refreshAllPrices();
 
-/* ===== Lissage fluide ===== */
+/* ===== Lissage fluide (Aucune modification nécessaire ici) ===== */
 setInterval(()=>{
-  const alpha = 0.2;
-  for(const s in lastPrices){
-    if(!smoothPrices[s]) smoothPrices[s]=lastPrices[s];
-    smoothPrices[s]+=(lastPrices[s]-smoothPrices[s])*alpha;
-  }
-  if(smoothPrices[currentSymbol])
-    document.getElementById("priceDisplay").innerText=smoothPrices[currentSymbol].toFixed(4);
-  updatePnL(true);
+  const alpha = 0.2;
+  for(const s in lastPrices){
+    if(!smoothPrices[s]) smoothPrices[s]=lastPrices[s];
+    smoothPrices[s]+=(lastPrices[s]-smoothPrices[s])*alpha;
+  }
+  if(smoothPrices[currentSymbol])
+    document.getElementById("priceDisplay").innerText=smoothPrices[currentSymbol].toFixed(4);
+  updatePnL(true);
 },200);
 
-/* ===== Trading ===== */
+/* ===== Trading (Aucune modification nécessaire ici) ===== */
 async function placeOrder(side){
-  const price=lastPrices[currentSymbol];
-  if(!price)return alert("Impossible d'obtenir le prix.");
-  const qty=parseInt(document.getElementById("lotInput").value)||1;
-  positions.push({id:Date.now(),symbol:currentSymbol,side,qty,entry:price,pnl:0});
-  renderPositions();
+  const price=lastPrices[currentSymbol];
+  if(!price)return alert("Impossible d'obtenir le prix.");
+  const qty=parseInt(document.getElementById("lotInput").value)||1;
+  positions.push({id:Date.now(),symbol:currentSymbol,side,qty,entry:price,pnl:0});
+  renderPositions();
 }
 function closePosition(id){
-  const pos=positions.find(p=>p.id===id);
-  if(!pos)return;
-  const exit=lastPrices[pos.symbol]||pos.entry;
-  const closed={...pos,exit,time:new Date().toLocaleTimeString()};
-  history.unshift(closed);
-  positions=positions.filter(p=>p.id!==id);
-  renderPositions();renderHistory();
+  const pos=positions.find(p=>p.id===id);
+  if(!pos)return;
+  const exit=lastPrices[pos.symbol]||pos.entry;
+  const dir=pos.side==="buy"?1:-1; // Recalcul du PnL final
+  const pnlFinal=(exit-pos.entry)*dir*pos.qty;
+  const closed={...pos,exit,pnl:pnlFinal,time:new Date().toLocaleTimeString()};
+  history.unshift(closed);
+  positions=positions.filter(p=>p.id!==id);
+  renderPositions();renderHistory();
 }
 
-/* ===== PnL ===== */
+/* ===== PnL (Correction mineure dans la fonction closePosition ci-dessus) ===== */
 function updatePnL(isSmooth=false){
-  let total=0;
-  positions.forEach(p=>{
-    const price=isSmooth?smoothPrices[p.symbol]:lastPrices[p.symbol];
-    if(!price)return;
-    const dir=p.side==="buy"?1:-1;
-    p.pnl=(price-p.entry)*dir*p.qty;
-    total+=p.pnl;
-  });
-  renderPositions(total);
+  let total=0;
+  positions.forEach(p=>{
+    const price=isSmooth?smoothPrices[p.symbol]:lastPrices[p.symbol];
+    if(!price)return;
+    const dir=p.side==="buy"?1:-1;
+    p.pnl=(price-p.entry)*dir*p.qty;
+    total+=p.pnl;
+  });
+  renderPositions(total);
 }
 
-/* ===== Rendu ===== */
+/* ===== Rendu (Aucune modification nécessaire ici) ===== */
 function renderPositions(total=0){
-  const tbody=document.querySelector("#positionsTable tbody");
-  tbody.innerHTML="";
-  positions.forEach(p=>{
-    const last=smoothPrices[p.symbol]??null;
-    const tr=document.createElement("tr");
-    tr.innerHTML=`
-      <td>${p.symbol}</td><td>${p.side}</td><td>${p.qty}</td>
-      <td>${p.entry.toFixed(5)}</td><td>${last?last.toFixed(5):"—"}</td>
-      <td style="color:${p.pnl>0?"#10b981":p.pnl<0?"#ef4444":"white"}">${p.pnl.toFixed(5)}</td>
-      <td><button onclick="closePosition(${p.id})"
-      style="background:#334155;color:white;border:0;padding:4px 8px;border-radius:6px;cursor:pointer;">✖</button></td>`;
-    tbody.appendChild(tr);
-  });
-  const t=document.getElementById("totalPnl");
-  t.innerText="PnL total : "+total.toFixed(5);
-  t.style.color=total>0?"#10b981":total<0?"#ef4444":"#22d3ee";
+  const tbody=document.querySelector("#positionsTable tbody");
+  tbody.innerHTML="";
+  positions.forEach(p=>{
+    const last=smoothPrices[p.symbol]??null;
+    const tr=document.createElement("tr");
+    tr.innerHTML=`
+      <td>${p.symbol}</td><td>${p.side}</td><td>${p.qty}</td>
+      <td>${p.entry.toFixed(5)}</td><td>${last?last.toFixed(5):"—"}</td>
+      <td style="color:${p.pnl>0?"#10b981":p.pnl<0?"#ef4444":"white"}">${p.pnl.toFixed(5)}</td>
+      <td><button onclick="closePosition(${p.id})"
+      style="background:#334155;color:white;border:0;padding:4px 8px;border-radius:6px;cursor:pointer;">✖</button></td>`;
+    tbody.appendChild(tr);
+  });
+  const t=document.getElementById("totalPnl");
+  t.innerText="PnL total : "+total.toFixed(5);
+  t.style.color=total>0?"#10b981":total<0?"#ef4444":"#22d3ee";
 }
 function renderHistory(){
-  const tbody=document.querySelector("#historyTable tbody");
-  tbody.innerHTML="";
-  history.forEach(h=>{
-    const tr=document.createElement("tr");
-    tr.innerHTML=`
-      <td>${h.symbol}</td><td>${h.side}</td><td>${h.qty}</td>
-      <td>${h.entry.toFixed(5)}</td><td>${h.exit.toFixed(5)}</td>
-      <td style="color:${h.pnl>0?"#10b981":h.pnl<0?"#ef4444":"white"}">${h.pnl.toFixed(5)}</td>
-      <td>${h.time}</td>`;
-    tbody.appendChild(tr);
-  });
+  const tbody=document.querySelector("#historyTable tbody");
+  tbody.innerHTML="";
+  history.forEach(h=>{
+    const tr=document.createElement("tr");
+    tr.innerHTML=`
+      <td>${h.symbol}</td><td>${h.side}</td><td>${h.qty}</td>
+      <td>${h.entry.toFixed(5)}</td><td>${h.exit.toFixed(5)}</td>
+      <td style="color:${h.pnl>0?"#10b981":h.pnl<0?"#ef4444":"white"}">${h.pnl.toFixed(5)}</td>
+      <td>${h.time}</td>`;
+    tbody.appendChild(tr);
+  });
 }
 
-/* ===== Sélection actif ===== */
+/* ===== Sélection actif (Aucune modification nécessaire ici) ===== */
 document.getElementById("symbolSelect").addEventListener("change",e=>{
-  currentSymbol=e.target.value;
-  const tv=SYMBOL_MAP_TV[currentSymbol];
-  document.getElementById("tradingviewIframe").src=
-    `https://s.tradingview.com/widgetembed/?symbol=${tv}&interval=1&theme=dark&hide_side_toolbar=1`;
-  refreshAllPrices();
+  currentSymbol=e.target.value;
+  const tv=SYMBOL_MAP_TV[currentSymbol];
+  document.getElementById("tradingviewIframe").src=
+    `https://s.tradingview.com/widgetembed/?symbol=${tv}&interval=1&theme=dark&hide_side_toolbar=1`;
+  refreshAllPrices();
 });
 
-/* ===== Plein écran ===== */
+/* ===== Plein écran (Aucune modification nécessaire ici) ===== */
 function toggleFullscreen(){
-  document.getElementById("tradingviewIframe").classList.toggle("fullscreen");
+  document.getElementById("tradingviewIframe").classList.toggle("fullscreen");
 }
 </script>
 </body>
