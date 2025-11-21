@@ -31,7 +31,6 @@ footer{margin-top:20px;font-size:13px;text-align:center;color:#9ca3af}
 .full-btn{float:right;background:#1e293b;border:0;color:#22d3ee;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:13px}
 .full-btn:hover{background:#0f172a}
 .total-pnl{margin-top:10px;text-align:right;font-weight:bold;font-size:15px;color:#22d3ee;}
-/* Historique */
 .history-panel{margin-top:16px;background:rgba(255,255,255,.05);border-radius:14px;padding:14px;backdrop-filter:blur(10px);box-shadow:0 6px 18px rgba(0,0,0,.4)}
 .history-panel h3{color:#22d3ee;margin-top:0;margin-bottom:10px}
 </style>
@@ -85,7 +84,6 @@ footer{margin-top:20px;font-size:13px;text-align:center;color:#9ca3af}
         <button class="sell" onclick="placeOrder('sell')">VENDRE</button>
       </div>
 
-      <!-- === Historique des positions fermées === -->
       <div class="history-panel">
         <h3>Historique des Positions</h3>
         <table id="historyTable">
@@ -116,7 +114,6 @@ footer{margin-top:20px;font-size:13px;text-align:center;color:#9ca3af}
 </div>
 
 <script>
-// --- MAP DES SYMBOLES TradingView ---
 const SYMBOL_MAP_TV = {
   SPX:"INDEX:SPX", DJI:"INDEX:DJI", NDX:"INDEX:NDX", FTSE:"INDEX:UKX",
   DAX:"INDEX:DAX", FCHI:"INDEX:FR40", NKY:"INDEX:NKY",
@@ -130,11 +127,15 @@ let positions = [];
 let history = [];
 let currentSymbol = "SPX";
 let lastPrices = {};
+let smoothPrices = {}; // pour lissage
+let lastUpdateTime = 0;
 
+// Conversion Stooq
 function convertToStooqSymbol(symbol){
   return symbol.toLowerCase().replace(/\s+/g,'').replace(/\//g,'');
 }
 
+// --- Fetch prix Stooq ---
 async function fetchStooqPrice(symbol){
   try {
     const stooqSymbol = convertToStooqSymbol(symbol);
@@ -154,23 +155,48 @@ async function fetchStooqPrice(symbol){
   }
 }
 
+// --- Rafraîchir toutes les secondes ---
 async function refreshAllPrices(){
   const needed = new Set();
   needed.add(currentSymbol);
   positions.forEach(p => needed.add(p.symbol));
+
   for(const sym of needed){
     const price = await fetchStooqPrice(sym);
-    if(price) lastPrices[sym] = price;
+    if(price){
+      // mettre à jour la valeur de référence
+      if(!lastPrices[sym]) lastPrices[sym] = price;
+      smoothPrices[sym] = lastPrices[sym]; // initialiser
+      lastPrices[sym] = price;
+    }
   }
+
   if(lastPrices[currentSymbol]){
     document.getElementById("priceDisplay").innerText =
       lastPrices[currentSymbol].toFixed(4);
   }
+
   updatePnL();
+  lastUpdateTime = Date.now();
 }
 setInterval(refreshAllPrices, 1000);
 refreshAllPrices();
 
+// --- Boucle fluide 5x par seconde ---
+setInterval(() => {
+  const alpha = 0.2; // facteur de lissage
+  for(const sym in lastPrices){
+    if(!smoothPrices[sym]) smoothPrices[sym] = lastPrices[sym];
+    smoothPrices[sym] += (lastPrices[sym] - smoothPrices[sym]) * alpha;
+  }
+  if(smoothPrices[currentSymbol]){
+    document.getElementById("priceDisplay").innerText =
+      smoothPrices[currentSymbol].toFixed(4);
+  }
+  updatePnL(true); // recalcul fluide
+}, 200);
+
+// --- Ordre ---
 async function placeOrder(side){
   const price = await fetchStooqPrice(currentSymbol);
   if(!price) return alert("Impossible d'obtenir le prix.");
@@ -186,6 +212,7 @@ async function placeOrder(side){
   renderPositions();
 }
 
+// --- Fermer une position ---
 function closePosition(id){
   const pos = positions.find(p=>p.id===id);
   if(!pos) return;
@@ -205,10 +232,11 @@ function closePosition(id){
   renderHistory();
 }
 
-function updatePnL(){
+// --- Mise à jour PnL ---
+function updatePnL(isSmooth=false){
   let total = 0;
   positions.forEach(p => {
-    const price = lastPrices[p.symbol];
+    const price = (isSmooth ? smoothPrices[p.symbol] : lastPrices[p.symbol]);
     if(!price) return;
     const dir = p.side==="buy"?1:-1;
     p.pnl = (price - p.entry)*dir*p.qty;
@@ -217,11 +245,12 @@ function updatePnL(){
   renderPositions(total);
 }
 
+// --- Afficher les positions ouvertes ---
 function renderPositions(total=0){
   const tbody = document.querySelector("#positionsTable tbody");
   tbody.innerHTML = "";
   positions.forEach(p=>{
-    const last = lastPrices[p.symbol]??null;
+    const last = smoothPrices[p.symbol]??null;
     const tr=document.createElement("tr");
     tr.innerHTML=`
       <td>${p.symbol}</td>
@@ -239,6 +268,7 @@ function renderPositions(total=0){
   t.style.color = total>0?"#10b981":total<0?"#ef4444":"#22d3ee";
 }
 
+// --- Historique ---
 function renderHistory(){
   const tbody = document.querySelector("#historyTable tbody");
   tbody.innerHTML = "";
@@ -256,6 +286,7 @@ function renderHistory(){
   });
 }
 
+// --- Changement d’actif ---
 document.getElementById("symbolSelect").addEventListener("change", e=>{
   currentSymbol=e.target.value;
   const tv=SYMBOL_MAP_TV[currentSymbol];
@@ -264,11 +295,11 @@ document.getElementById("symbolSelect").addEventListener("change", e=>{
   refreshAllPrices();
 });
 
+// --- Plein écran ---
 function toggleFullscreen(){
   document.getElementById("tradingviewIframe").classList.toggle("fullscreen");
 }
 </script>
 </body>
 </html>
-
 
