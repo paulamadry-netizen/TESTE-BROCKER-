@@ -46,10 +46,8 @@ footer{margin-top:20px;font-size:13px;text-align:center;color:#9ca3af}
             <option value="SPX">S&P 500</option>
             <option value="DJI">Dow Jones</option>
             <option value="NDX">NASDAQ 100</option>
-            <option value="FTSE">FTSE 100</option>
             <option value="DAX">DAX 40</option>
             <option value="FCHI">CAC 40</option>
-            <option value="NKY">Nikkei 225</option>
           </optgroup>
           <optgroup label="Forex">
             <option value="EUR/USD">EUR/USD</option>
@@ -57,9 +55,6 @@ footer{margin-top:20px;font-size:13px;text-align:center;color:#9ca3af}
             <option value="USD/JPY">USD/JPY</option>
             <option value="AUD/USD">AUD/USD</option>
             <option value="USD/CAD">USD/CAD</option>
-          </optgroup>
-          <optgroup label="Métaux">
-            <option value="XAU/USD">Or (Gold)</option>
           </optgroup>
         </select>
       </label>
@@ -77,7 +72,7 @@ footer{margin-top:20px;font-size:13px;text-align:center;color:#9ca3af}
         <button class="full-btn" onclick="toggleFullscreen()">⛶ Plein écran</button>
       </div>
       <iframe id="tradingviewIframe"
-        src="https://s.tradingview.com/widgetembed/?symbol=CME_MINI:ES1!&interval=1&theme=dark&hide_side_toolbar=1"></iframe>
+        src="https://s.tradingview.com/widgetembed/?symbol=OANDA:SPX500USD&interval=1&theme=dark&hide_side_toolbar=1"></iframe>
 
       <div class="tradebox">
         <button class="buy" onclick="placeOrder('buy')">ACHETER</button>
@@ -115,120 +110,110 @@ footer{margin-top:20px;font-size:13px;text-align:center;color:#9ca3af}
 const TWELVE_API_KEY = "c9140c9a72264e82bb9f5235b86b2806";
 const FINNHUB_API_KEY = "d4g61b9r01qm5b343fo0d4g61b9r01qm5b343fog";
 
-/* ======= Mappage TradingView (CFD/Futures accessibles) ======= */
+/* === Mappage TradingView (CFD OANDA accessibles) === */
 const SYMBOL_MAP_TV = {
-  SPX: "CME_MINI:ES1!",        // S&P 500 future
-  DJI: "CBOT_MINI:YM1!",       // Dow Jones future
-  NDX: "CME_MINI:NQ1!",        // NASDAQ 100 future
-  FTSE: "OANDA:UK100USD",      // FTSE CFD
-  DAX: "EUREX:FDAX1!",         // DAX future
-  FCHI: "OANDA:FR40EUR",       // CAC 40 CFD
-  NKY: "OANDA:JP225USD",       // Nikkei CFD
+  SPX: "OANDA:SPX500USD",
+  DJI: "OANDA:US30USD",
+  NDX: "OANDA:NAS100USD",
+  DAX: "OANDA:DE40EUR",
+  FCHI: "OANDA:FR40EUR",
   "EUR/USD": "FX:EURUSD",
   "GBP/USD": "FX:GBPUSD",
   "USD/JPY": "FX:USDJPY",
   "AUD/USD": "FX:AUDUSD",
-  "USD/CAD": "FX:USDCAD",
-  "XAU/USD": "TVC:GOLD"
+  "USD/CAD": "FX:USDCAD"
 };
 
-let positions = [];
-let history = [];
-let currentSymbol = "SPX";
-let lastPrices = {};
-let smoothPrices = {};
+let positions=[],history=[],currentSymbol="SPX",lastPrices={},smoothPrices={};
 
-/* ==================== FINNHUB INDICES ==================== */
+/* === FINNHUB (indices) === */
 async function fetchFinnhubIndexPrice(symbol){
+  const MAP_FINNHUB={
+    "SPX":"^GSPC","DJI":"^DJI","NDX":"^NDX",
+    "DAX":"^GDAXI","FCHI":"^FCHI"
+  };
   try{
-    const MAP_FINNHUB = {
-      "SPX": "^GSPC","DJI": "^DJI","NDX": "^NDX",
-      "FTSE": "^FTSE","DAX": "^GDAXI","FCHI": "^FCHI","NKY": "^N225"
-    };
-    const finnhubSym = MAP_FINNHUB[symbol] || symbol;
-    const url = `https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(finnhubSym)}&token=${FINNHUB_API_KEY}`;
-    const res = await fetch(url);
-    if(!res.ok) return null;
-    const data = await res.json();
+    const finnhubSym=MAP_FINNHUB[symbol]||symbol;
+    const url=`https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(finnhubSym)}&token=${FINNHUB_API_KEY}`;
+    const res=await fetch(url);
+    if(!res.ok)return null;
+    const data=await res.json();
     return parseFloat(data.c);
-  }catch(e){console.error("Finnhub error:", e);return null;}
+  }catch(e){console.error(e);return null;}
 }
 
-/* ==================== TWELVE DATA FOREX ==================== */
+/* === TWELVE DATA (Forex) === */
 async function fetchTwelveDataPrice(symbol){
   try{
-    const url = `https://api.twelvedata.com/price?symbol=${encodeURIComponent(symbol)}&apikey=${TWELVE_API_KEY}`;
-    const res = await fetch(url);
-    if(!res.ok) return null;
-    const data = await res.json();
-    if(!data || !data.price) return null;
+    const url=`https://api.twelvedata.com/price?symbol=${encodeURIComponent(symbol)}&apikey=${TWELVE_API_KEY}`;
+    const res=await fetch(url);
+    if(!res.ok)return null;
+    const data=await res.json();
+    if(!data.price)return null;
     return parseFloat(data.price);
-  }catch(e){console.error("Twelve error:", e);return null;}
+  }catch(e){console.error(e);return null;}
 }
 
-/* ==================== ROUTAGE AUTO ==================== */
+/* === Routage auto === */
 async function fetchPrice(symbol){
-  if(symbol.includes("/")) return await fetchTwelveDataPrice(symbol);
-  else return await fetchFinnhubIndexPrice(symbol);
+  return symbol.includes("/")?await fetchTwelveDataPrice(symbol):await fetchFinnhubIndexPrice(symbol);
 }
 
-/* ==================== RAFRAÎCHISSEMENT 10s ==================== */
+/* === Refresh (10s) === */
 async function refreshAllPrices(){
-  const needed = new Set();
-  needed.add(currentSymbol);
-  positions.forEach(p => needed.add(p.symbol));
-
+  const needed=new Set([currentSymbol]);
+  positions.forEach(p=>needed.add(p.symbol));
   for(const sym of needed){
-    const price = await fetchPrice(sym);
+    const price=await fetchPrice(sym);
     if(price){
-      if(!lastPrices[sym]) lastPrices[sym] = price;
-      smoothPrices[sym] = lastPrices[sym];
-      lastPrices[sym] = price;
+      if(!lastPrices[sym])lastPrices[sym]=price;
+      smoothPrices[sym]=lastPrices[sym];
+      lastPrices[sym]=price;
     }
   }
   if(lastPrices[currentSymbol])
-    document.getElementById("priceDisplay").innerText = lastPrices[currentSymbol].toFixed(4);
+    document.getElementById("priceDisplay").innerText=lastPrices[currentSymbol].toFixed(4);
   updatePnL();
 }
-setInterval(refreshAllPrices, 10000);
+setInterval(refreshAllPrices,10000);
 refreshAllPrices();
 
-/* ==================== LISSAGE FLUIDE ==================== */
+/* === Lissage fluide === */
 setInterval(()=>{
-  const alpha = 0.2;
-  for(const sym in lastPrices){
-    if(!smoothPrices[sym]) smoothPrices[sym]=lastPrices[sym];
-    smoothPrices[sym]+=(lastPrices[sym]-smoothPrices[sym])*alpha;
+  const alpha=0.2;
+  for(const s in lastPrices){
+    if(!smoothPrices[s])smoothPrices[s]=lastPrices[s];
+    smoothPrices[s]+=(lastPrices[s]-smoothPrices[s])*alpha;
   }
   if(smoothPrices[currentSymbol])
-    document.getElementById("priceDisplay").innerText = smoothPrices[currentSymbol].toFixed(4);
+    document.getElementById("priceDisplay").innerText=smoothPrices[currentSymbol].toFixed(4);
   updatePnL(true);
 },200);
 
-/* ==================== TRADING ==================== */
+/* === Trading logique === */
 async function placeOrder(side){
-  const price = lastPrices[currentSymbol];
-  if(!price) return alert("Impossible d'obtenir le prix.");
-  const qty = parseInt(document.getElementById("lotInput").value)||1;
+  const price=lastPrices[currentSymbol];
+  if(!price)return alert("Impossible d'obtenir le prix.");
+  const qty=parseInt(document.getElementById("lotInput").value)||1;
   positions.push({id:Date.now(),symbol:currentSymbol,side,qty,entry:price,pnl:0});
   renderPositions();
 }
 function closePosition(id){
-  const pos = positions.find(p=>p.id===id);
-  if(!pos) return;
-  const exit = lastPrices[pos.symbol]||pos.entry;
+  const pos=positions.find(p=>p.id===id);
+  if(!pos)return;
+  const exit=lastPrices[pos.symbol]||pos.entry;
   const closed={...pos,exit,time:new Date().toLocaleTimeString()};
   history.unshift(closed);
   positions=positions.filter(p=>p.id!==id);
   renderPositions();renderHistory();
 }
 
-/* ==================== PNL ==================== */
+/* === PnL === */
 function updatePnL(isSmooth=false){
   let total=0;
   positions.forEach(p=>{
-    const price=(isSmooth?smoothPrices[p.symbol]:lastPrices[p.symbol]);
-    if(!price) return;
+    const price=isSmooth?smoothPrices[p.symbol]:lastPrices[p.symbol];
+    if(!price)return;
     const dir=p.side==="buy"?1:-1;
     p.pnl=(price-p.entry)*dir*p.qty;
     total+=p.pnl;
@@ -236,7 +221,7 @@ function updatePnL(isSmooth=false){
   renderPositions(total);
 }
 
-/* ==================== RENDU ==================== */
+/* === Rendu === */
 function renderPositions(total=0){
   const tbody=document.querySelector("#positionsTable tbody");
   tbody.innerHTML="";
@@ -245,8 +230,7 @@ function renderPositions(total=0){
     const tr=document.createElement("tr");
     tr.innerHTML=`
       <td>${p.symbol}</td><td>${p.side}</td><td>${p.qty}</td>
-      <td>${p.entry.toFixed(5)}</td>
-      <td>${last?last.toFixed(5):"—"}</td>
+      <td>${p.entry.toFixed(5)}</td><td>${last?last.toFixed(5):"—"}</td>
       <td style="color:${p.pnl>0?"#10b981":p.pnl<0?"#ef4444":"white"}">${p.pnl.toFixed(5)}</td>
       <td><button onclick="closePosition(${p.id})"
       style="background:#334155;color:white;border:0;padding:4px 8px;border-radius:6px;cursor:pointer;">✖</button></td>`;
@@ -270,8 +254,8 @@ function renderHistory(){
   });
 }
 
-/* ==================== CHANGEMENT D'ACTIF ==================== */
-document.getElementById("symbolSelect").addEventListener("change", e=>{
+/* === Sélection actif === */
+document.getElementById("symbolSelect").addEventListener("change",e=>{
   currentSymbol=e.target.value;
   const tv=SYMBOL_MAP_TV[currentSymbol];
   document.getElementById("tradingviewIframe").src=
@@ -279,7 +263,7 @@ document.getElementById("symbolSelect").addEventListener("change", e=>{
   refreshAllPrices();
 });
 
-/* ==================== PLEIN ÉCRAN ==================== */
+/* === Plein écran === */
 function toggleFullscreen(){
   document.getElementById("tradingviewIframe").classList.toggle("fullscreen");
 }
