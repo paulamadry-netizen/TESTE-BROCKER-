@@ -110,7 +110,7 @@ footer{margin-top:20px;font-size:13px;text-align:center;color:#9ca3af}
     </aside>
   </main>
 
-  <footer>© 2025 AmA Broker • Données Twelve Data (WebSocket) & Stooq • Graphiques TradingView</footer>
+  <footer>© 2025 AmA Broker • Données Twelve Data & Stooq • Graphiques TradingView</footer>
 </div>
 
 <script>
@@ -122,47 +122,31 @@ const SYMBOL_MAP_TV = {
   "XAU/USD":"TVC:GOLD"
 };
 
-const TWELVE_API_KEY = "c9140c9a72264e82bb9f5235b86b2806"; 
+const TWELVE_API_KEY = "c9140c9a72264e82bb9f5235b86b2806";
 const CORS_PROXY = "https://corsproxy.io/?";
+
 let positions = [];
 let history = [];
 let currentSymbol = "SPX";
 let lastPrices = {};
 let smoothPrices = {};
-let ws = null;
 
-/* ---- Initialisation du WebSocket Forex ---- */
-function initForexWebSocket(){
-  ws = new WebSocket(`wss://ws.twelvedata.com/v1/quotes/price?apikey=${TWELVE_API_KEY}`);
-
-  ws.onopen = () => {
-    console.log("WebSocket connecté à Twelve Data");
-    const forexSymbols = "EUR/USD,GBP/USD,USD/JPY,AUD/USD,USD/CAD";
-    ws.send(JSON.stringify({
-      action: "subscribe",
-      params: { symbols: forexSymbols }
-    }));
-  };
-
-  ws.onmessage = (event) => {
-    const data = JSON.parse(event.data);
-    if(data.event === "price" && data.symbol && data.price){
-      lastPrices[data.symbol] = parseFloat(data.price);
-      updatePnL(true);
-      if(data.symbol === currentSymbol){
-        document.getElementById("priceDisplay").innerText = data.price;
-      }
-    }
-  };
-
-  ws.onclose = () => {
-    console.warn("WebSocket déconnecté, reconnexion dans 5s...");
-    setTimeout(initForexWebSocket, 5000);
-  };
-  ws.onerror = (err) => console.error("WebSocket erreur:", err);
+/* ---- Fetch depuis TwelveData pour Forex ---- */
+async function fetchTwelveDataPrice(symbol){
+  try{
+    const url = `https://api.twelvedata.com/price?symbol=${encodeURIComponent(symbol)}&apikey=${TWELVE_API_KEY}`;
+    const res = await fetch(url);
+    if(!res.ok) return null;
+    const data = await res.json();
+    if(!data || !data.price) return null;
+    return parseFloat(data.price);
+  }catch(e){
+    console.error("TwelveData fetch error:", e);
+    return null;
+  }
 }
 
-/* ---- Fallback Stooq (indices, métaux) ---- */
+/* ---- Fetch depuis Stooq pour indices/métaux ---- */
 async function fetchStooqPrice(symbol){
   try {
     const s = symbol.toLowerCase().replace(/\s+/g,'').replace(/\//g,'');
@@ -182,31 +166,52 @@ async function fetchStooqPrice(symbol){
   }
 }
 
-/* ---- Boucle indices/métaux ---- */
-async function refreshIndexPrices(){
+/* ---- Sélecteur automatique ---- */
+async function fetchPrice(symbol){
+  if(symbol.includes("/")) return await fetchTwelveDataPrice(symbol);
+  else return await fetchStooqPrice(symbol);
+}
+
+/* ---- Mise à jour toutes les 10 secondes ---- */
+async function refreshAllPrices(){
   const needed = new Set();
   needed.add(currentSymbol);
-  positions.forEach(p => {
-    if(!p.symbol.includes("/")) needed.add(p.symbol);
-  });
+  positions.forEach(p => needed.add(p.symbol));
 
   for(const sym of needed){
-    if(sym.includes("/")) continue;
-    const price = await fetchStooqPrice(sym);
+    const price = await fetchPrice(sym);
     if(price){
+      if(!lastPrices[sym]) lastPrices[sym] = price;
+      smoothPrices[sym] = lastPrices[sym];
       lastPrices[sym] = price;
-      smoothPrices[sym] = price;
     }
   }
 
   if(lastPrices[currentSymbol]){
-    document.getElementById("priceDisplay").innerText = lastPrices[currentSymbol].toFixed(4);
+    document.getElementById("priceDisplay").innerText =
+      lastPrices[currentSymbol].toFixed(5);
+  }
+
+  updatePnL();
+}
+setInterval(refreshAllPrices, 10000); // toutes les 10 secondes
+refreshAllPrices();
+
+/* ---- Animation fluide ---- */
+setInterval(() => {
+  const alpha = 0.2;
+  for(const sym in lastPrices){
+    if(!smoothPrices[sym]) smoothPrices[sym] = lastPrices[sym];
+    smoothPrices[sym] += (lastPrices[sym] - smoothPrices[sym]) * alpha;
+  }
+  if(smoothPrices[currentSymbol]){
+    document.getElementById("priceDisplay").innerText =
+      smoothPrices[currentSymbol].toFixed(5);
   }
   updatePnL(true);
-}
-setInterval(refreshIndexPrices, 5000);
+}, 200);
 
-/* ---- Fonctions trading identiques ---- */
+/* ---- Trading ---- */
 async function placeOrder(side){
   const price = lastPrices[currentSymbol];
   if(!price) return alert("Impossible d'obtenir le prix.");
@@ -241,10 +246,11 @@ function closePosition(id){
   renderHistory();
 }
 
-function updatePnL(){
+/* ---- PnL ---- */
+function updatePnL(isSmooth=false){
   let total = 0;
   positions.forEach(p => {
-    const price = lastPrices[p.symbol];
+    const price = (isSmooth ? smoothPrices[p.symbol] : lastPrices[p.symbol]);
     if(!price) return;
     const dir = p.side==="buy"?1:-1;
     p.pnl = (price - p.entry)*dir*p.qty;
@@ -253,11 +259,12 @@ function updatePnL(){
   renderPositions(total);
 }
 
+/* ---- Rendu ---- */
 function renderPositions(total=0){
   const tbody = document.querySelector("#positionsTable tbody");
   tbody.innerHTML = "";
   positions.forEach(p=>{
-    const last = lastPrices[p.symbol]??null;
+    const last = smoothPrices[p.symbol]??null;
     const tr=document.createElement("tr");
     tr.innerHTML=`
       <td>${p.symbol}</td>
@@ -298,17 +305,13 @@ document.getElementById("symbolSelect").addEventListener("change", e=>{
   const tv=SYMBOL_MAP_TV[currentSymbol];
   document.getElementById("tradingviewIframe").src=
     `https://s.tradingview.com/widgetembed/?symbol=${tv}&interval=1&theme=dark&hide_side_toolbar=1`;
-  refreshIndexPrices();
+  refreshAllPrices();
 });
 
-/* ---- Fullscreen ---- */
+/* ---- Plein écran ---- */
 function toggleFullscreen(){
   document.getElementById("tradingviewIframe").classList.toggle("fullscreen");
 }
-
-/* ---- Démarrage ---- */
-initForexWebSocket();
-refreshIndexPrices();
 </script>
 </body>
 </html>
