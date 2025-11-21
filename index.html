@@ -11,10 +11,16 @@ export default function AMABrocker() {
   const apiKey = "c9140c9a72264e82bb9f5235b86b2806";
 
   const fetchPrice = async (pair) => {
-    const res = await fetch(`https://api.twelvedata.com/price?symbol=${pair}&apikey=${apiKey}`);
-    const data = await res.json();
-    setPrice(parseFloat(data.price));
-    return parseFloat(data.price);
+    try {
+      const res = await fetch(`https://api.twelvedata.com/price?symbol=${pair}&apikey=${apiKey}`);
+      const data = await res.json();
+      if (!data || !data.price) return price;
+      const p = parseFloat(data.price);
+      setPrice(p);
+      return p;
+    } catch (e) {
+      return price;
+    }
   };
 
   const openPosition = async (side) => {
@@ -71,7 +77,7 @@ export default function AMABrocker() {
               "SPX500",
             ].map((item) => (
               <div
-                key={item}
+                key={item.replace(/TD-error.*/,'')}
                 className="py-1 cursor-pointer hover:text-green-400"
                 onClick={() => setSymbol(item)}
               >
