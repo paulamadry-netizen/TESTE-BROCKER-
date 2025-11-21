@@ -127,15 +127,15 @@ let positions = [];
 let history = [];
 let currentSymbol = "SPX";
 let lastPrices = {};
-let smoothPrices = {}; // pour lissage
+let smoothPrices = {};
 let lastUpdateTime = 0;
 
-// Conversion Stooq
+// --- Conversion Stooq
 function convertToStooqSymbol(symbol){
   return symbol.toLowerCase().replace(/\s+/g,'').replace(/\//g,'');
 }
 
-// --- Fetch prix Stooq ---
+// --- Fetch prix Stooq avec correction EUR/USD
 async function fetchStooqPrice(symbol){
   try {
     const stooqSymbol = convertToStooqSymbol(symbol);
@@ -147,7 +147,11 @@ async function fetchStooqPrice(symbol){
     if(text.includes("N/D")) return null;
     const line = text.split("\n")[1];
     if(!line) return null;
-    const last = parseFloat(line.split(",")[6]);
+    let last = parseFloat(line.split(",")[6]);
+
+    // ✅ Correction pour EUR/USD
+    if (symbol === "EUR/USD") last += 0.0062;
+
     return isNaN(last) ? null : last;
   } catch(e) {
     console.error("fetchStooqPrice error:", e);
@@ -155,7 +159,7 @@ async function fetchStooqPrice(symbol){
   }
 }
 
-// --- Rafraîchir toutes les secondes ---
+// --- Refresh toutes les 1s
 async function refreshAllPrices(){
   const needed = new Set();
   needed.add(currentSymbol);
@@ -164,9 +168,8 @@ async function refreshAllPrices(){
   for(const sym of needed){
     const price = await fetchStooqPrice(sym);
     if(price){
-      // mettre à jour la valeur de référence
       if(!lastPrices[sym]) lastPrices[sym] = price;
-      smoothPrices[sym] = lastPrices[sym]; // initialiser
+      smoothPrices[sym] = lastPrices[sym];
       lastPrices[sym] = price;
     }
   }
@@ -182,9 +185,9 @@ async function refreshAllPrices(){
 setInterval(refreshAllPrices, 1000);
 refreshAllPrices();
 
-// --- Boucle fluide 5x par seconde ---
+// --- Lissage fluide
 setInterval(() => {
-  const alpha = 0.2; // facteur de lissage
+  const alpha = 0.2;
   for(const sym in lastPrices){
     if(!smoothPrices[sym]) smoothPrices[sym] = lastPrices[sym];
     smoothPrices[sym] += (lastPrices[sym] - smoothPrices[sym]) * alpha;
@@ -193,10 +196,10 @@ setInterval(() => {
     document.getElementById("priceDisplay").innerText =
       smoothPrices[currentSymbol].toFixed(4);
   }
-  updatePnL(true); // recalcul fluide
+  updatePnL(true);
 }, 200);
 
-// --- Ordre ---
+// --- Place order
 async function placeOrder(side){
   const price = await fetchStooqPrice(currentSymbol);
   if(!price) return alert("Impossible d'obtenir le prix.");
@@ -212,7 +215,7 @@ async function placeOrder(side){
   renderPositions();
 }
 
-// --- Fermer une position ---
+// --- Close position
 function closePosition(id){
   const pos = positions.find(p=>p.id===id);
   if(!pos) return;
@@ -232,7 +235,7 @@ function closePosition(id){
   renderHistory();
 }
 
-// --- Mise à jour PnL ---
+// --- Update PnL
 function updatePnL(isSmooth=false){
   let total = 0;
   positions.forEach(p => {
@@ -245,7 +248,7 @@ function updatePnL(isSmooth=false){
   renderPositions(total);
 }
 
-// --- Afficher les positions ouvertes ---
+// --- Render positions
 function renderPositions(total=0){
   const tbody = document.querySelector("#positionsTable tbody");
   tbody.innerHTML = "";
@@ -268,7 +271,7 @@ function renderPositions(total=0){
   t.style.color = total>0?"#10b981":total<0?"#ef4444":"#22d3ee";
 }
 
-// --- Historique ---
+// --- Render history
 function renderHistory(){
   const tbody = document.querySelector("#historyTable tbody");
   tbody.innerHTML = "";
@@ -286,7 +289,7 @@ function renderHistory(){
   });
 }
 
-// --- Changement d’actif ---
+// --- Changement d’actif
 document.getElementById("symbolSelect").addEventListener("change", e=>{
   currentSymbol=e.target.value;
   const tv=SYMBOL_MAP_TV[currentSymbol];
@@ -295,11 +298,12 @@ document.getElementById("symbolSelect").addEventListener("change", e=>{
   refreshAllPrices();
 });
 
-// --- Plein écran ---
+// --- Plein écran
 function toggleFullscreen(){
   document.getElementById("tradingviewIframe").classList.toggle("fullscreen");
 }
 </script>
 </body>
 </html>
+
 
