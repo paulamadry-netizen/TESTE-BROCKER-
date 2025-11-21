@@ -150,7 +150,7 @@ async function fetchStooqPrice(symbol){
     let last = parseFloat(line.split(",")[6]);
 
     // ✅ Correction pour EUR/USD
-    if (symbol === "EUR/USD") last += 0.0062;
+    if (symbol === "EUR/USD") last += 0.0009;
 
     return isNaN(last) ? null : last;
   } catch(e) {
