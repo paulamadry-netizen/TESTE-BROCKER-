@@ -2,504 +2,418 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8" />
-<title>AmA Broker — Web Trader Demo</title>
+<title>AmA Broker — Web Trader Demo (refonté)</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
 <style>
-/* Reset & Base */
-*{
-    box-sizing: border-box;
-    margin: 0;
-    padding: 0;
+/* ---------- basic / theme ---------- */
+*{box-sizing:border-box}
+:root{
+  --bg-1:#0b1220; --bg-2:#111b2d;
+  --glass: rgba(255,255,255,.04);
+  --accent:#22d3ee; --accent-2:#10b981; --danger:#ef4444;
+  --muted:#9ca3af;
 }
-body {
-    font-family: 'Inter', Arial, sans-serif;
-    background: #1C212E; /* Darker, more neutral background */
-    color: #E0E3EB; /* Light grey for general text */
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
+body{font-family:Inter,Arial,sans-serif;margin:0;background:linear-gradient(135deg,var(--bg-1),var(--bg-2));color:#f3f4f6;min-height:100vh}
+.app{max-width:1400px;margin:0 auto;padding:16px}
+
+/* ---------- header ---------- */
+header{display:flex;justify-content:space-between;align-items:center;background:rgba(255,255,255,.05);padding:14px 20px;border-radius:14px;backdrop-filter:blur(10px);box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.brand{font-size:26px;font-weight:700;letter-spacing:1px;color:var(--accent)}
+.brand span{color:var(--accent-2)}
+header .controls{display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+select,input{padding:6px 10px;border-radius:6px;background:#1b2533;color:white;border:1px solid #334155}
+.price{font-weight:600;color:#e0e0e0}
+
+/* ---------- main layout: chart + right sidebar ---------- */
+.layout{
+  display:grid;
+  grid-template-columns:1fr 380px;
+  gap:16px;
+  margin-top:16px;
 }
 
-/* App Container */
-.app {
-    max-width: 1500px; /* Slightly wider */
-    margin: 0 auto;
-    padding: 16px;
-    flex-grow: 1;
+/* chart panel: now contains chart + right vertical TV-like watchlist inside */
+.chart{
+  background:var(--glass);
+  border-radius:14px;
+  padding:14px;
+  backdrop-filter:blur(10px);
+  box-shadow:0 6px 18px rgba(0,0,0,.4);
+  display:flex;
+  flex-direction:column;
+  gap:12px;
 }
 
-/* Header */
-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    background: #2A2F3F; /* Darker header background */
-    padding: 14px 24px;
-    border-radius: 12px; /* Slightly less rounded */
-    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.4); /* More pronounced shadow */
-    margin-bottom: 16px;
+/* top row inside chart: title and fullscreen */
+.chart-top{display:flex;justify-content:space-between;align-items:center}
+.chart-body{display:flex;gap:12px;align-items:stretch}
+/* iframe area */
+.chart-iframe-wrap{
+  flex:1;
+  border-radius:10px;
+  overflow:hidden;
+  border:1px solid rgba(255,255,255,0.03);
+  min-height:480px;
+  background:#000;
 }
-.brand {
-    font-size: 28px; /* Slightly larger */
-    font-weight: 800; /* Bolder */
-    letter-spacing: 0.5px;
-    color: #4CAF50; /* Green brand color */
-}
-.brand span {
-    color: #BBDEFB; /* Light blue accent */
-}
-header .controls {
-    display: flex;
-    gap: 18px; /* Increased gap */
-    align-items: center;
-    flex-wrap: wrap;
-}
-select, input {
-    padding: 8px 12px; /* More padding */
-    border-radius: 8px; /* Slightly more rounded inputs */
-    background: #3B4050; /* Darker input background */
-    color: #E0E3EB;
-    border: 1px solid #5A6075; /* Subtler border */
-    font-size: 15px;
-    transition: all 0.2s ease;
-}
-select:focus, input:focus {
-    border-color: #4CAF50; /* Highlight on focus */
-    outline: none;
-    box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.3);
-}
-.price {
-    font-weight: 700;
-    color: #BBDEFB; /* Light blue for price */
-    font-size: 17px;
-}
-.price span {
-    color: #4CAF50; /* Green for actual price value */
-}
-label {
-    color: #A9B1C2; /* Lighter label text */
-    font-size: 15px;
-}
+.chart iframe{width:100%;height:100%;border:0;display:block}
 
-/* Layout */
-.layout {
-    display: grid;
-    grid-template-columns: 1fr 400px; /* Slightly wider sidebar */
-    gap: 18px; /* Increased gap between sections */
-    flex-grow: 1;
+/* tradingview-like vertical watchlist inside chart panel */
+.tv-watchlist{
+  width:220px;
+  border-radius:10px;
+  background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+  border:1px solid rgba(255,255,255,0.03);
+  padding:8px;
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  overflow:auto;
 }
+.tv-watchlist .title{font-weight:700;color:var(--accent);font-size:13px;padding:6px 8px}
+.tv-symbol{
+  display:flex;justify-content:space-between;align-items:center;padding:8px;border-radius:8px;cursor:pointer;
+  transition:transform .12s ease, background .12s ease;
+  gap:8px;
+}
+.tv-symbol:hover{transform:translateY(-3px);background:rgba(255,255,255,0.01)}
+.tv-symbol .sym{font-weight:700;color:var(--accent)}
+.tv-symbol .price{font-weight:700}
 
-/* Chart & Panel Base Styles */
-.chart, .sidebar .panel {
-    background: #2A2F3F; /* Darker panel background */
-    border-radius: 12px;
-    padding: 18px; /* More padding */
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45); /* Stronger shadow */
-    border: 1px solid #3B4050; /* Subtle border for panels */
-}
+/* tradebox (buy/sell) */
+.tradebox{display:flex;gap:10px;margin-top:6px}
+button.buy,button.sell{flex:1;font-weight:bold;border:none;padding:12px 20px;border-radius:10px;cursor:pointer;transition:all .2s;font-size:16px}
+button.buy{background:var(--accent-2);color:#021}
+button.sell{background:var(--danger);color:white}
+button.buy:hover{filter:brightness(.95)}
+button.sell:hover{filter:brightness(.95)}
 
-/* Chart Specifics */
-.chart h3 {
-    margin: 0 0 10px 0;
-    color: #BBDEFB; /* Light blue heading */
-    font-size: 20px;
-    font-weight: 600;
-}
-.chart iframe {
-    width: 100%;
-    height: 520px; /* Taller chart */
-    border: 0;
-    border-radius: 10px;
-    background: #1C212E; /* Ensure iframe background matches overall dark theme */
-}
-.fullscreen {
-    position: fixed !important;
-    top: 0;
-    left: 0;
-    width: 100vw !important;
-    height: 100vh !important;
-    z-index: 9999; /* Higher z-index */
-    background: #1C212E;
-    border-radius: 0 !important;
-    padding: 0 !important; /* Remove padding in fullscreen */
-}
-.full-btn {
-    float: right;
-    background: #3B4050;
-    border: 1px solid #5A6075;
-    color: #BBDEFB;
-    padding: 8px 14px;
-    border-radius: 8px;
-    cursor: pointer;
-    font-size: 14px;
-    transition: all 0.2s ease;
-}
-.full-btn:hover {
-    background: #4A4F60;
-    color: #FFF;
-}
+/* sidebar (positions open) */
+.sidebar .panel{background:var(--glass);border-radius:14px;padding:14px;backdrop-filter:blur(10px);box-shadow:0 6px 18px rgba(0,0,0,.4)}
+.sidebar h3{color:var(--accent);margin:0 0 8px 0}
+table{width:100%;border-collapse:collapse;font-size:14px}
+td,th{padding:6px 8px;text-align:left}
+th{color:var(--muted)}
+tr:nth-child(odd){background:rgba(255,255,255,.02)}
+.total-pnl{margin-top:10px;text-align:right;font-weight:bold;font-size:15px;color:var(--accent)}
 
-/* Trade Box Buttons */
-.tradebox {
-    display: flex;
-    gap: 12px; /* Slightly increased gap */
-    margin-top: 20px; /* More space above buttons */
+/* ---------- history (full width, under the grid) ---------- */
+.history{
+  margin-top:16px;
+  background:var(--glass);
+  border-radius:12px;
+  padding:12px;
+  box-shadow:0 6px 18px rgba(0,0,0,.4);
+  border:1px solid rgba(255,255,255,0.03);
 }
-button.buy, button.sell {
-    flex: 1;
-    font-weight: bold;
-    border: none;
-    padding: 14px 22px; /* More padding */
-    border-radius: 10px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    font-size: 17px;
-    letter-spacing: 0.5px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-}
-button.buy {
-    background: #4CAF50; /* Green buy button */
-    color: white;
-}
-button.sell {
-    background: #F44336; /* Red sell button */
-    color: white;
-}
-button.buy:hover {
-    background: #5CB85C; /* Lighter green on hover */
-    box-shadow: 0 4px 12px rgba(76, 175, 80, 0.4);
-}
-button.sell:hover {
-    background: #EF5350; /* Lighter red on hover */
-    box-shadow: 0 4px 12px rgba(244, 67, 54, 0.4);
-}
+.history h3{margin:0 0 8px 0;color:var(--accent)}
+.history table{width:100%;border-collapse:collapse;font-size:13px}
+.history th, .history td{padding:8px;text-align:left;border-bottom:1px dashed rgba(255,255,255,0.03)}
+.pnl-positive{color:var(--accent-2);font-weight:700}
+.pnl-negative{color:var(--danger);font-weight:700}
 
-/* Sidebar & Positions Table */
-.sidebar h3 {
-    color: #BBDEFB;
-    margin: 0 0 15px 0;
-    font-size: 20px;
-    font-weight: 600;
+/* small screens */
+@media (max-width:1100px){
+  .layout{grid-template-columns:1fr}
+  .chart-body{flex-direction:column}
+  .tv-watchlist{width:100%;flex-direction:row;overflow:auto;padding:6px;gap:6px}
+  .tv-symbol{min-width:120px;justify-content:center}
 }
-table {
-    width: 100%;
-    border-collapse: separate; /* Use separate to allow border-radius on cells */
-    border-spacing: 0; /* Remove default spacing */
-    font-size: 14px;
-    background: #3B4050; /* Darker table background */
-    border-radius: 8px;
-    overflow: hidden; /* Ensures rounded corners are visible */
-}
-th, td {
-    padding: 10px 12px; /* More padding in table cells */
-    text-align: left;
-    border-bottom: 1px solid #4A4F60; /* Subtle row separator */
-    color: #E0E3EB;
-}
-th {
-    background: #3B4050; /* Slightly different header background */
-    color: #A9B1C2;
-    font-weight: 600;
-    text-transform: uppercase;
-    font-size: 13px;
-}
-tr:nth-child(even) { /* Changed to even for better contrast on dark theme */
-    background: #303542; /* Slightly different row background */
-}
-tr:last-child td {
-    border-bottom: none; /* No border on last row */
-}
-/* Specific styles for PnL column */
-td:nth-child(6) {
-    font-weight: 600;
-}
-
-/* Close Position Button */
-td button {
-    background: #5A6075;
-    color: #E0E3EB;
-    border: none;
-    padding: 6px 10px;
-    border-radius: 6px;
-    cursor: pointer;
-    transition: background 0.2s ease;
-    font-size: 13px;
-    line-height: 1;
-}
-td button:hover {
-    background: #6D748A;
-}
-
-/* Total PnL */
-.total-pnl {
-    margin-top: 15px;
-    text-align: right;
-    font-weight: 700;
-    font-size: 18px; /* Larger total PnL */
-    color: #BBDEFB;
-    padding-top: 10px;
-    border-top: 1px solid #3B4050; /* Separator for total PnL */
-}
-/* These styles ensure the colors from the JS PnL update are correct */
-.total-pnl[style*="color: rgb(16, 185, 129)"] {
-    color: #4CAF50 !important;
-}
-.total-pnl[style*="color: rgb(239, 68, 68)"] {
-    color: #F44336 !important;
-}
-
-/* Footer */
-footer {
-    margin-top: 25px;
-    font-size: 13px;
-    text-align: center;
-    color: #7B879C; /* Softer footer text */
-    padding: 10px 0;
-}
-
-/* Scrollbar Styles (for modern look) */
-::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
-}
-::-webkit-scrollbar-track {
-    background: #2A2F3F;
-    border-radius: 10px;
-}
-::-webkit-scrollbar-thumb {
-    background: #5A6075;
-    border-radius: 10px;
-    border: 2px solid #2A2F3F;
-}
-::-webkit-scrollbar-thumb:hover {
-    background: #6D748A;
-}
-
 </style>
 </head>
 <body>
 <div class="app">
-  <header>
-    <div class="brand">AmA <span>Broker</span></div>
-    <div class="controls">
-      <label>Actif :
-        <select id="symbolSelect">
-          <optgroup label="Indices">
-            <option value="SPX">S&P 500</option>
-            <option value="DJI">Dow Jones</option>
-            <option value="NDX">NASDAQ 100</option>
-            <option value="FTSE">FTSE 100</option>
-            <option value="DAX">DAX 40</option>
-            <option value="FCHI">CAC 40</option>
-            <option value="NKY">Nikkei 225</option>
-          </optgroup>
-          <optgroup label="Forex">
-            <option value="EUR/USD">EUR/USD</option>
-            <option value="GBP/USD">GBP/USD</option>
-            <option value="USD/JPY">USD/JPY</option>
-            <option value="AUD/USD">AUD/USD</option>
-            <option value="USD/CAD">USD/CAD</option>
-          </optgroup>
-          <optgroup label="Métaux">
-            <option value="XAU/USD">Or (Gold)</option>
-          </optgroup>
-        </select>
-      </label>
-      <div class="price">Prix actuel : <span id="priceDisplay">—</span></div>
-      <label>Lots :
-        <input type="number" id="lotInput" value="1" min="1" step="1" style="width:70px;text-align:center;">
-      </label>
-    </div>
-  </header>
+  <header>
+    <div class="brand">AmA <span>Broker</span></div>
+    <div class="controls">
+      <label>Actif :
+        <select id="symbolSelect">
+          <optgroup label="Indices">
+            <option value="SPX">S&P 500</option>
+            <option value="DJI">Dow Jones</option>
+            <option value="NDX">NASDAQ 100</option>
+            <option value="FTSE">FTSE 100</option>
+            <option value="DAX">DAX 40</option>
+            <option value="FCHI">CAC 40</option>
+            <option value="NKY">Nikkei 225</option>
+          </optgroup>
+          <optgroup label="Forex">
+            <option value="EUR/USD">EUR/USD</option>
+            <option value="GBP/USD">GBP/USD</option>
+            <option value="USD/JPY">USD/JPY</option>
+            <option value="AUD/USD">AUD/USD</option>
+            <option value="USD/CAD">USD/CAD</option>
+          </optgroup>
+          <optgroup label="Métaux">
+            <option value="XAU/USD">Or (Gold)</option>
+          </optgroup>
+        </select>
+      </label>
+      <div class="price">Prix actuel : <span id="priceDisplay">—</span></div>
+      <label>Lots :
+        <input type="number" id="lotInput" value="1" min="1" step="1" style="width:70px;text-align:center;">
+      </label>
+    </div>
+  </header>
 
-  <main class="layout">
-    <section class="chart">
-      <div style="display:flex;justify-content:space-between;align-items:center;">
-        <h3>Graphique</h3>
-        <button class="full-btn" onclick="toggleFullscreen()">⛶ Plein écran</button>
-      </div>
-      <iframe id="tradingviewIframe"
-        src="https://s.tradingview.com/widgetembed/?symbol=INDEX:SPX&interval=1&theme=dark&hide_side_toolbar=1"></iframe>
+  <main>
+    <div class="layout">
+      <!-- Chart area (left) -->
+      <section class="chart">
+        <div class="chart-top">
+          <h3 style="margin:0;color:var(--accent)">Graphique</h3>
+          <div>
+            <button class="full-btn" onclick="toggleFullscreen()" style="background:#1e293b;border:0;color:var(--accent);padding:6px 12px;border-radius:6px;cursor:pointer;font-size:13px">⛶ Plein écran</button>
+          </div>
+        </div>
 
-      <div class="tradebox">
-        <button class="buy" onclick="placeOrder('buy')">ACHETER</button>
-        <button class="sell" onclick="placeOrder('sell')">VENDRE</button>
-      </div>
-    </section>
+        <div class="chart-body">
+          <div class="chart-iframe-wrap" id="chartFrame">
+            <iframe id="tradingviewIframe"
+              src="https://s.tradingview.com/widgetembed/?symbol=INDEX:SPX&interval=1&theme=dark&hide_side_toolbar=1"></iframe>
+          </div>
 
-    <aside class="sidebar">
-      <div class="panel">
-        <h3>Positions Ouvertes</h3>
-        <table id="positionsTable">
-          <thead><tr><th>Sym</th><th>Side</th><th>Lots</th><th>Entrée</th><th>Dernier</th><th>PnL</th><th></th></tr></thead>
-          <tbody></tbody>
-        </table>
-        <div id="totalPnl" class="total-pnl">PnL total : 0.0000</div>
-      </div>
-    </aside>
-  </main>
+          <!-- TradingView-like vertical watchlist -->
+          <div class="tv-watchlist" id="tvWatchlist">
+            <div class="title">Watchlist</div>
+            <!-- symbols will be injected here -->
+          </div>
+        </div>
 
-  <footer>© 2025 AmA Broker • Données Stooq • Graphiques TradingView</footer>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px">
+          <div style="display:flex;gap:8px;align-items:center">
+            <input id="orderType" class="" type="hidden" value="market">
+            <!-- kept simple: market orders by default -->
+          </div>
+          <div style="display:flex;gap:8px;flex:0 0 360px">
+            <button class="buy" onclick="placeOrder('buy')">ACHETER</button>
+            <button class="sell" onclick="placeOrder('sell')">VENDRE</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Right sidebar: Positions ouvertes -->
+      <aside class="sidebar">
+        <div class="panel">
+          <h3>Positions Ouvertes</h3>
+          <table id="positionsTable">
+            <thead><tr><th>Sym</th><th>Side</th><th>Lots</th><th>Entrée</th><th>Dernier</th><th>PnL</th><th></th></tr></thead>
+            <tbody></tbody>
+          </table>
+          <div id="totalPnl" class="total-pnl">PnL total : 0.0000</div>
+        </div>
+      </aside>
+    </div>
+
+    <!-- History (full width under layout) -->
+    <section class="history" id="historyPanel">
+      <h3>Historique des Positions (fermées)</h3>
+      <table id="historyTable">
+        <thead>
+          <tr>
+            <th>Date / Heure</th>
+            <th>Symbole</th>
+            <th>Side</th>
+            <th>Lots</th>
+            <th>Entrée</th>
+            <th>Sortie</th>
+            <th>PnL</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <footer style="margin-top:14px;font-size:13px;text-align:center;color:var(--muted)">© 2025 AmA Broker • Données Stooq • Graphiques TradingView</footer>
+  </main>
 </div>
 
 <script>
 // --- MAP DES SYMBOLES TradingView ---
 const SYMBOL_MAP_TV = {
-  SPX:"INDEX:SPX", DJI:"INDEX:DJI", NDX:"INDEX:NDX", FTSE:"INDEX:UKX",
-  DAX:"INDEX:DAX", FCHI:"INDEX:FR40", NKY:"INDEX:NKY",
-  "EUR/USD":"FX:EURUSD", "GBP/USD":"FX:GBPUSD", "USD/JPY":"FX:USDJPY",
-  "AUD/USD":"FX:AUDUSD", "USD/CAD":"FX:USDCAD",
-  "XAU/USD":"TVC:GOLD"
+  SPX:"INDEX:SPX", DJI:"INDEX:DJI", NDX:"INDEX:NDX", FTSE:"INDEX:UKX",
+  DAX:"INDEX:DAX", FCHI:"INDEX:FR40", NKY:"INDEX:NKY",
+  "EUR/USD":"FX:EURUSD", "GBP/USD":"FX:GBPUSD", "USD/JPY":"FX:USDJPY",
+  "AUD/USD":"FX:AUDUSD", "USD/CAD":"FX:USDCAD",
+  "XAU/USD":"TVC:GOLD"
 };
 
-// --- CORS Proxy pour Render / Stooq ---
+// --- CORS Proxy pour Stooq ---
 const CORS_PROXY = "https://corsproxy.io/?";
 
-let positions = [];
-let currentSymbol = "SPX";
-let lastPrices = {};
+// state
+let positions = JSON.parse(localStorage.getItem('ama_positions')||'[]');     // open positions
+let history = JSON.parse(localStorage.getItem('ama_history')||'[]');        // closed trades history
+let currentSymbol = localStorage.getItem('ama_currentSymbol') || "SPX";
+let lastPrices = JSON.parse(localStorage.getItem('ama_lastPrices')||'{}');
+let refreshIntervalMs = 1500;
+let refreshTimer = null;
 
-// --- Conversion symboles lisibles → Stooq ---
+// ------------ utilities ------------
 function convertToStooqSymbol(symbol){
-  return symbol.toLowerCase().replace(/\s+/g,'').replace(/\//g,'');
+  return symbol.toLowerCase().replace(/\s+/g,'').replace(/\//g,'');
 }
 
-// --- Récupérer prix Stooq via proxy ---
 async function fetchStooqPrice(symbol){
-  try {
-    const stooqSymbol = convertToStooqSymbol(symbol);
-    const stooqUrl = `https://stooq.com/q/l/?s=${stooqSymbol}&f=sd2t2ohlcv&h&e=csv`;
-    const url = CORS_PROXY + encodeURIComponent(stooqUrl);
+  try {
+    const stooqSymbol = convertToStooqSymbol(symbol);
+    const stooqUrl = `https://stooq.com/q/l/?s=${stooqSymbol}&f=sd2t2ohlcv&h&e=csv`;
+    const url = CORS_PROXY + encodeURIComponent(stooqUrl);
 
-    const res = await fetch(url);
-    if (!res.ok) return null;
+    const res = await fetch(url);
+    if (!res.ok) return null;
 
-    const text = await res.text();
-    if(text.includes("N/D")) return null;
+    const text = await res.text();
+    if(!text) return null;
+    if(text.includes("N/D")) return null;
 
-    const line = text.split("\n")[1];
-    if(!line) return null;
+    const line = text.split("\n")[1];
+    if(!line) return null;
 
-    const last = parseFloat(line.split(",")[6]);
-    return isNaN(last) ? null : last;
-  } catch(e) {
-    console.error("fetchStooqPrice error:", e);
-    return null;
-  }
+    const last = parseFloat(line.split(",")[6]);
+    return isNaN(last) ? null : last;
+  } catch(e) {
+    console.error("fetchStooqPrice error:", e);
+    return null;
+  }
 }
 
-// --- Mise à jour prix toutes les secondes ---
+// refresh prices for watchlist, current and positions
 async function refreshAllPrices(){
-  const needed = new Set();
-  needed.add(currentSymbol);
-  positions.forEach(p => needed.add(p.symbol));
+  // build set of needed symbols: watchlist symbols + open positions + current
+  const needed = new Set();
+  // gather from select options (watchlist)
+  const sel = document.getElementById('symbolSelect');
+  for(const opt of sel.querySelectorAll('option')) needed.add(opt.value);
 
-  for(const sym of needed){
-    const price = await fetchStooqPrice(sym);
-    if(price) lastPrices[sym] = price;
-  }
+  needed.add(currentSymbol);
+  positions.forEach(p => needed.add(p.symbol));
+  history.forEach(h => needed.add(h.symbol));
 
-  if(lastPrices[currentSymbol]){
-    // Remove the inline style on priceDisplay to let the new CSS take over
-    document.getElementById("priceDisplay").innerText =
-      lastPrices[currentSymbol].toFixed(4);
-  }
+  // fetch in parallel (limited by network; keep as-is)
+  const arr = Array.from(needed);
+  await Promise.all(arr.map(async sym=>{
+    const price = await fetchStooqPrice(sym);
+    if(price!==null) lastPrices[sym] = price;
+  }));
 
-  updatePnL();
+  // persist
+  localStorage.setItem('ama_lastPrices', JSON.stringify(lastPrices));
+  // update UI
+  if(lastPrices[currentSymbol]){
+    document.getElementById("priceDisplay").innerText = lastPrices[currentSymbol].toFixed(4);
+  } else {
+    document.getElementById("priceDisplay").innerText = "—";
+  }
+  document.getElementById('lastUpdate')?.remove?.(); // noop if not exist
+  updatePnL(); renderWatchlist(); renderHistory(); renderPositions();
 }
-setInterval(refreshAllPrices, 1000);
-refreshAllPrices();
 
-// --- Placer un ordre ---
+// ------------ order flow ------------
 async function placeOrder(side){
-  const price = await fetchStooqPrice(currentSymbol);
-  if(!price) return alert("Impossible d'obtenir le prix.");
+  // use most recent price if available, else fetch
+  let price = lastPrices[currentSymbol] ?? await fetchStooqPrice(currentSymbol);
+  if(!price) return alert("Impossible d'obtenir le prix.");
 
-  const qty = parseInt(document.getElementById("lotInput").value)||1;
+  const qty = parseInt(document.getElementById("lotInput").value) || 1;
 
-  positions.push({
-    id: Date.now(),
-    symbol: currentSymbol,
-    side,
-    qty,
-    entry: price,
-    pnl: 0
-  });
+  const pos = {
+    id: Date.now() + Math.floor(Math.random()*1000),
+    symbol: currentSymbol,
+    side,
+    qty,
+    entry: price,
+    createdAt: new Date().toISOString(),
+    pnl: 0
+  };
 
-  renderPositions();
+  positions.push(pos);
+  localStorage.setItem('ama_positions', JSON.stringify(positions));
+  renderPositions();
 }
 
-// --- Fermer une position ---
-function closePosition(id){
-  positions = positions.filter(p => p.id !== id);
-  renderPositions();
+// closing: get current price, move to history with exit price and time, remove from positions
+async function closePosition(id){
+  const pos = positions.find(p=>p.id === id);
+  if(!pos) return;
+  // get latest price for the symbol
+  let exitPrice = lastPrices[pos.symbol] ?? await fetchStooqPrice(pos.symbol);
+  if(exitPrice===null) exitPrice = pos.entry; // fallback
+  // compute pnl
+  const dir = pos.side === "buy" ? 1 : -1;
+  const pnl = (exitPrice - pos.entry) * dir * pos.qty;
+
+  // push to history
+  const hist = {
+    id: Date.now() + Math.floor(Math.random()*1000),
+    symbol: pos.symbol,
+    side: pos.side,
+    qty: pos.qty,
+    entry: pos.entry,
+    exit: exitPrice,
+    pnl,
+    closedAt: new Date().toISOString()
+  };
+  history.unshift(hist); // newest first
+  // keep history reasonable (optional): keep last 1000
+  if(history.length > 2000) history = history.slice(0,2000);
+
+  // remove position
+  positions = positions.filter(p=>p.id !== id);
+
+  // persist
+  localStorage.setItem('ama_positions', JSON.stringify(positions));
+  localStorage.setItem('ama_history', JSON.stringify(history));
+  renderPositions();
+  renderHistory();
+  updatePnL();
 }
 
-// --- Mise à jour PnL ---
+// ------------ PnL and rendering ------------
 function updatePnL(){
-  let total = 0;
-  positions.forEach(p => {
-    const price = lastPrices[p.symbol];
-    if(!price) return;
-    const dir = p.side==="buy"?1:-1;
-    p.pnl = (price - p.entry)*dir*p.qty;
-    total += p.pnl;
-  });
-  renderPositions(total);
+  let total = 0;
+  positions.forEach(p => {
+    const price = lastPrices[p.symbol];
+    if(price===undefined) return;
+    const dir = p.side==="buy"?1:-1;
+    p.pnl = (price - p.entry)*dir*p.qty;
+    total += p.pnl;
+  });
+  // update display
+  const t = document.getElementById("totalPnl");
+  t.innerText = "PnL total : " + total.toFixed(4);
+  t.style.color = total>0?"var(--accent-2)": total<0?"var(--danger)":"var(--accent)";
+  // persist positions with updated pnl
+  localStorage.setItem('ama_positions', JSON.stringify(positions));
+  renderPositions(); // ensure table refreshed
 }
 
-// --- Afficher le tableau ---
-function renderPositions(total=0){
-  const tbody = document.querySelector("#positionsTable tbody");
-  tbody.innerHTML = "";
-
-  positions.forEach(p=>{
-    const last = lastPrices[p.symbol]??null;
-    const tr=document.createElement("tr");
-    // NOTE: The style below is necessary because it is used by the CSS selectors in the <style> block above to change the PnL color.
-    const pnlColor = p.pnl>0?"#10b981":p.pnl<0?"#ef4444":"white";
-    
-    tr.innerHTML=`
-      <td>${p.symbol}</td>
-      <td>${p.side}</td>
-      <td>${p.qty}</td>
-      <td>${p.entry.toFixed(4)}</td>
-      <td>${last?last.toFixed(4):"—"}</td>
-      <td style="color:${pnlColor}">${p.pnl.toFixed(4)}</td>
-      <td>
-        <button onclick="closePosition(${p.id})">✖</button>
-      </td>
-    `;
-    tbody.appendChild(tr);
-  });
-
-  const t=document.getElementById("totalPnl");
-  t.innerText="PnL total : "+total.toFixed(4);
-  // NOTE: The inline style below is necessary because it is used by the CSS selectors in the <style> block above to change the Total PnL color.
-  t.style.color = total>0?"#10b981":total<0?"#ef4444":"#22d3ee";
+// render positions (right sidebar)
+function renderPositions(){
+  const tbody = document.querySelector("#positionsTable tbody");
+  tbody.innerHTML = "";
+  positions.forEach(p=>{
+    const last = lastPrices[p.symbol] ?? null;
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${p.symbol}</td>
+      <td>${p.side}</td>
+      <td>${p.qty}</td>
+      <td>${p.entry.toFixed(4)}</td>
+      <td>${last?last.toFixed(4):"—"}</td>
+      <td style="color:${p.pnl>0?"#10b981":p.pnl<0?"#ef4444":"white"}">${p.pnl.toFixed(4)}</td>
+      <td><button onclick="closePosition(${p.id})" style="background:#334155;color:white;border:0;padding:4px 8px;border-radius:6px;cursor:pointer;">✖</button></td>
+    `;
+    tbody.appendChild(tr);
+  });
 }
 
-// --- Changer d'actif ---
-document.getElementById("symbolSelect").addEventListener("change", e=>{
-  currentSymbol=e.target.value;
-  const tv=SYMBOL_MAP_TV[currentSymbol];
-  document.getElementById("tradingviewIframe").src=
-    `https://s.tradingview.com/widgetembed/?symbol=${tv}&interval=1&theme=dark&hide_side_toolbar=1`;
-  refreshAllPrices();
-});
+// render history below chart
+function renderHistory(){
+  const tbody = document.querySelector("#historyTable tbody");
+  tbody.innerHTML = "";
+  history.forEach(h=>{
+    const tr = document.createElement("tr");
+    const dt = new Date(h.closedAt).toLocaleString();
+    const pnlClass = h.pnl >= 0 ? "pnl-positive" : "pnl-negative";
 
-// --- Plein écran ---
-function toggleFullscreen(){
-  document.getElementById("tradingviewIframe").classList.toggle("fullscreen");
-}
-
-// Initial call to ensure the correct theme is applied to the chart iframe on load
-document.addEventListener('DOMContentLoaded', () => {
-    // Re-check the iframe source to ensure it has the theme=dark parameter
-    const iframe = document.getElementById("tradingviewIframe");
-    if (!iframe.src.includes('theme=dark')) {
-        iframe.src = iframe.src.replace(/theme=[^&]*/, 'theme=dark');
-    }
-});
-</script>
-</body>
-</html>
