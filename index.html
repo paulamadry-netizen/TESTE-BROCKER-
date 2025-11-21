@@ -4,33 +4,7 @@
 <meta charset="UTF-8" />
 <title>AmA Broker — Web Trader Demo</title>
 <style>
-*{box-sizing:border-box}
-body{font-family:Inter,Arial,sans-serif;margin:0;background:linear-gradient(135deg,#0b1220,#111b2d);color:#f3f4f6;min-height:100vh}
-.app{max-width:1400px;margin:0 auto;padding:16px}
-header{display:flex;justify-content:space-between;align-items:center;background:rgba(255,255,255,.05);padding:14px 20px;border-radius:14px;backdrop-filter:blur(10px);box-shadow:0 4px 12px rgba(0,0,0,.4)}
-.brand{font-size:26px;font-weight:700;letter-spacing:1px;color:#22d3ee}
-.brand span{color:#10b981}
-header .controls{display:flex;gap:14px;align-items:center;flex-wrap:wrap}
-select,input{padding:6px 10px;border-radius:6px;background:#1b2533;color:white;border:1px solid #334155}
-.price{font-weight:600;color:#e0e0e0}
-.layout{display:grid;grid-template-columns:1fr 380px;gap:16px;margin-top:16px}
-.chart,.sidebar .panel{background:rgba(255,255,255,.05);border-radius:14px;padding:14px;backdrop-filter:blur(10px);box-shadow:0 6px 18px rgba(0,0,0,.4)}
-.chart iframe{width:100%;height:480px;border:0;border-radius:10px}
-.fullscreen{position:fixed!important;top:0;left:0;width:100vw!important;height:100vh!important;z-index:999;background:#000;border-radius:0!important}
-.tradebox{display:flex;gap:10px;margin-top:14px}
-button.buy,button.sell{flex:1;font-weight:bold;border:none;padding:12px 20px;border-radius:10px;cursor:pointer;transition:all .2s;font-size:16px}
-button.buy{background:#10b981;color:white}
-button.sell{background:#ef4444;color:white}
-button.buy:hover{background:#059669}
-button.sell:hover{background:#dc2626}
-table{width:100%;border-collapse:collapse;font-size:14px}
-td,th{padding:6px 8px;text-align:left}
-th{color:#9ca3af}
-tr:nth-child(odd){background:rgba(255,255,255,.02)}
-footer{margin-top:20px;font-size:13px;text-align:center;color:#9ca3af}
-.full-btn{float:right;background:#1e293b;border:0;color:#22d3ee;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:13}
-.full-btn:hover{background:#0f172a}
-.total-pnl{margin-top:10px;text-align:right;font-weight:bold;font-size:15px;color:#22d3ee;}
+/* ... Reste inchangé ... */
 </style>
 </head>
 <body>
@@ -99,7 +73,6 @@ footer{margin-top:20px;font-size:13px;text-align:center;color:#9ca3af}
 </div>
 
 <script>
-// --- Maps Symboles ---
 const SYMBOL_MAP_STOOQ = {
   SPX:"^SPX",
   DJI:"^DJI",
@@ -116,15 +89,14 @@ const SYMBOL_MAP_STOOQ = {
   "XAU/USD":"GC.F"
 };
 
-// --- !!! CORRECT MAPPING POUR TRADINGVIEW !!! ---
 const SYMBOL_MAP_TV = {
-  SPX: "INDEX:SPX",
-  DJI: "INDEX:DJI",
-  NDX: "INDEX:NDX",
-  FTSE: "INDEX:UKX",
-  DAX: "XETR:DAX40",
-  FCHI: "EURONEXT:FCHI",
-  NKY: "INDEX:NKY",
+  SPX: "INDEX:SPX",             // S&P 500 [finance:S&P 500]
+  DJI: "INDEX:DJI",             // Dow Jones [finance:Dow Jones Industrial Average]
+  NDX: "INDEX:NDX",             // NASDAQ 100 [finance:NASDAQ 100]
+  FTSE: "INDEX:UKX",            // FTSE 100 [finance:FTSE 100]
+  DAX: "XETR:DAX40",            // DAX 40 [finance:DAX]
+  FCHI: "EURONEXT:FCHI",        // CAC 40 [finance:CAC 40]
+  NKY: "INDEX:NKY",             // Nikkei 225 [finance:Nikkei 225]
   "EUR/USD": "FX:EURUSD",
   "GBP/USD": "FX:GBPUSD",
   "USD/JPY": "FX:USDJPY",
@@ -139,7 +111,6 @@ let positions = [];
 let currentSymbol = "SPX";
 let lastPrices = {};
 
-// --- Fetch prix Stooq ---
 async function fetchStooqPrice(symbol){
   try{
     const stooqSymbol = SYMBOL_MAP_STOOQ[symbol];
@@ -155,7 +126,6 @@ async function fetchStooqPrice(symbol){
   }catch(e){console.error(e);return null;}
 }
 
-// --- Refresh prix ---
 async function refreshAllPrices(){
   const needed = new Set();
   needed.add(currentSymbol);
@@ -175,7 +145,6 @@ async function refreshAllPrices(){
 setInterval(refreshAllPrices,1000);
 refreshAllPrices();
 
-// --- Placer ordre ---
 async function placeOrder(side){
   const price = await fetchStooqPrice(currentSymbol);
   if(!price) return alert("Impossible d'obtenir le prix.");
@@ -184,13 +153,11 @@ async function placeOrder(side){
   renderPositions();
 }
 
-// --- Fermer position ---
 function closePosition(id){
   positions = positions.filter(p=>p.id!==id);
   renderPositions();
 }
 
-// --- Update PnL ---
 function updatePnL(){
   let total=0;
   positions.forEach(p=>{
@@ -203,7 +170,6 @@ function updatePnL(){
   renderPositions(total);
 }
 
-// --- Render tableau ---
 function renderPositions(total=0){
   const tbody=document.querySelector("#positionsTable tbody");
   tbody.innerHTML="";
@@ -227,7 +193,6 @@ function renderPositions(total=0){
   t.style.color=total>0?"#10b981":total<0?"#ef4444":"#22d3ee";
 }
 
-// --- Changer actif ---
 document.getElementById("symbolSelect").addEventListener("change", e=>{
   currentSymbol=e.target.value;
   const tv=SYMBOL_MAP_TV[currentSymbol];
@@ -235,7 +200,6 @@ document.getElementById("symbolSelect").addEventListener("change", e=>{
   refreshAllPrices();
 });
 
-// --- Plein écran ---
 function toggleFullscreen(){
   document.getElementById("tradingviewIframe").classList.toggle("fullscreen");
 }
