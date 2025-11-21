@@ -14,7 +14,11 @@ export default function AMABrocker() {
     try {
       const res = await fetch(`https://api.twelvedata.com/price?symbol=${pair}&apikey=${apiKey}`);
       const data = await res.json();
-      if (!data || !data.price) return price;
+
+      if (!data || !data.price || isNaN(parseFloat(data.price))) {
+        return price;
+      }
+
       const p = parseFloat(data.price);
       setPrice(p);
       return p;
@@ -25,13 +29,20 @@ export default function AMABrocker() {
 
   const openPosition = async (side) => {
     const entry = await fetchPrice(symbol);
-    const pos = { id: Date.now(), symbol, side, entry, pnl: 0 };
-    setPositions((p) => [...p, pos]);
+    const newPosition = {
+      id: Date.now(),
+      symbol,
+      side,
+      entry,
+      pnl: 0,
+    };
+    setPositions((prev) => [...prev, newPosition]);
   };
 
   useEffect(() => {
     const interval = setInterval(async () => {
       const latest = await fetchPrice(symbol);
+
       setPositions((prev) =>
         prev.map((pos) => ({
           ...pos,
@@ -39,19 +50,34 @@ export default function AMABrocker() {
         }))
       );
     }, 3000);
+
     return () => clearInterval(interval);
   }, [symbol]);
 
   const closePosition = (id) => {
     const pos = positions.find((p) => p.id === id);
     if (!pos) return;
-    setHistory((h) => [...h, pos]);
-    setPositions((p) => p.filter((x) => x.id !== id));
+
+    setHistory((prev) => [...prev, pos]);
+    setPositions((prev) => prev.filter((p) => p.id !== id));
   };
+
+  const watchlist = [
+    "EURUSD",
+    "GBPUSD",
+    "USDJPY",
+    "AUDUSD",
+    "USDCAD",
+    "US500",
+    "NAS100",
+    "DAX40",
+    "FTSE100",
+    "SPX500",
+  ];
 
   return (
     <div className="grid grid-cols-4 h-screen p-4 gap-4 bg-gray-950 text-white">
-      {/* TradingView Chart */}
+      {/* CHART */}
       <div className="col-span-3 rounded-2xl shadow-xl">
         <iframe
           src={`https://s.tradingview.com/widgetembed/?symbol=${symbol}&interval=5&theme=dark`}
@@ -59,25 +85,14 @@ export default function AMABrocker() {
         ></iframe>
       </div>
 
-      {/* Watchlist */}
+      {/* WATCHLIST */}
       <div className="flex flex-col gap-4">
         <Card className="bg-gray-900">
           <CardContent>
             <h2 className="text-xl mb-2">Watchlist</h2>
-            {[
-              "EURUSD",
-              "GBPUSD",
-              "USDJPY",
-              "AUDUSD",
-              "USDCAD",
-              "US500",
-              "NAS100",
-              "DAX40",
-              "FTSE100",
-              "SPX500",
-            ].map((item) => (
+            {watchlist.map((item) => (
               <div
-                key={item.replace(/TD-error.*/,'')}
+                key={item}
                 className="py-1 cursor-pointer hover:text-green-400"
                 onClick={() => setSymbol(item)}
               >
@@ -88,12 +103,12 @@ export default function AMABrocker() {
         </Card>
 
         <div className="grid grid-cols-2 gap-2">
-          <Button onClick={() => openPosition("BUY")}>Acheter</Button>
-          <Button onClick={() => openPosition("SELL")}>Vendre</Button>
+          <Button onClick={() => openPosition("BUY")} className="bg-green-700">Acheter</Button>
+          <Button onClick={() => openPosition("SELL")} className="bg-red-700">Vendre</Button>
         </div>
       </div>
 
-      {/* Positions & History */}
+      {/* POSITIONS + HISTORY */}
       <div className="col-span-4 grid grid-cols-2 gap-4 mt-4">
         <Card className="bg-gray-900">
           <CardContent>
@@ -102,7 +117,7 @@ export default function AMABrocker() {
               <div key={p.id} className="flex justify-between py-2 border-b border-gray-700">
                 <span>{p.symbol} ({p.side})</span>
                 <span>PnL: {p.pnl.toFixed(5)}</span>
-                <Button onClick={() => closePosition(p.id)}>Fermer</Button>
+                <Button onClick={() => closePosition(p.id)} className="bg-blue-700">Fermer</Button>
               </div>
             ))}
           </CardContent>
@@ -123,7 +138,6 @@ export default function AMABrocker() {
     </div>
   );
 }
-
 
 
 
