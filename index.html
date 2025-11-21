@@ -99,37 +99,57 @@ footer{margin-top:20px;font-size:13px;text-align:center;color:#9ca3af}
 </div>
 
 <script>
-// --- MAP DES SYMBOLES TradingView ---
+// --- Map TradingView ---
 const SYMBOL_MAP_TV = {
-  SPX:"INDEX:SPX", DJI:"INDEX:DJI", NDX:"INDEX:NDX", FTSE:"INDEX:UKX",
-  DAX:"INDEX:DAX", FCHI:"INDEX:FR40", NKY:"INDEX:NKY",
-  "EUR/USD":"FX:EURUSD", "GBP/USD":"FX:GBPUSD", "USD/JPY":"FX:USDJPY",
-  "AUD/USD":"FX:AUDUSD", "USD/CAD":"FX:USDCAD",
+  SPX:"INDEX:SPX",
+  DJI:"INDEX:DJI",
+  NDX:"INDEX:NDX",
+  FTSE:"INDEX:UKX",
+  DAX:"INDEX:DAX",
+  FCHI:"INDEX:PX1!", // Correct CAC 40
+  NKY:"INDEX:NKY",
+  "EUR/USD":"FX:EURUSD",
+  "GBP/USD":"FX:GBPUSD",
+  "USD/JPY":"FX:USDJPY",
+  "AUD/USD":"FX:AUDUSD",
+  "USD/CAD":"FX:USDCAD",
   "XAU/USD":"TVC:GOLD"
 };
 
-// --- CORS Proxy pour Render / Stooq ---
+// --- Proxy CORS ---
 const CORS_PROXY = "https://corsproxy.io/?";
 
 let positions = [];
 let currentSymbol = "SPX";
 let lastPrices = {};
 
-// --- Conversion symboles lisibles → Stooq ---
+// --- Convertir symbole pour Stooq ---
 function convertToStooqSymbol(symbol){
-  return symbol.toLowerCase().replace(/\s+/g,'').replace(/\//g,'');
+  const forexMetaux = ["EUR/USD","GBP/USD","USD/JPY","AUD/USD","USD/CAD","XAU/USD"];
+  if(forexMetaux.includes(symbol)){
+    return symbol.toLowerCase().replace(/\s+/g,'').replace(/\//g,'');
+  }
+  switch(symbol){
+    case "SPX": return "spx";
+    case "DJI": return "dji";
+    case "NDX": return "ndx";
+    case "FTSE": return "ftse";
+    case "DAX": return "dax";
+    case "FCHI": return "cac";
+    case "NKY": return "nky";
+    default: return symbol.toLowerCase();
+  }
 }
 
-// --- Récupérer prix Stooq via proxy ---
+// --- Récupérer prix Stooq ---
 async function fetchStooqPrice(symbol){
-  try {
+  try{
     const stooqSymbol = convertToStooqSymbol(symbol);
     const stooqUrl = `https://stooq.com/q/l/?s=${stooqSymbol}&f=sd2t2ohlcv&h&e=csv`;
     const url = CORS_PROXY + encodeURIComponent(stooqUrl);
 
     const res = await fetch(url);
-    if (!res.ok) return null;
-
+    if(!res.ok) return null;
     const text = await res.text();
     if(text.includes("N/D")) return null;
 
@@ -137,32 +157,31 @@ async function fetchStooqPrice(symbol){
     if(!line) return null;
 
     const last = parseFloat(line.split(",")[6]);
-    return isNaN(last) ? null : last;
-  } catch(e) {
+    return isNaN(last)?null:last;
+  }catch(e){
     console.error("fetchStooqPrice error:", e);
     return null;
   }
 }
 
-// --- Mise à jour prix toutes les secondes ---
+// --- Mise à jour prix ---
 async function refreshAllPrices(){
   const needed = new Set();
   needed.add(currentSymbol);
-  positions.forEach(p => needed.add(p.symbol));
+  positions.forEach(p=>needed.add(p.symbol));
 
   for(const sym of needed){
     const price = await fetchStooqPrice(sym);
-    if(price) lastPrices[sym] = price;
+    if(price) lastPrices[sym]=price;
   }
 
   if(lastPrices[currentSymbol]){
-    document.getElementById("priceDisplay").innerText =
-      lastPrices[currentSymbol].toFixed(4);
+    document.getElementById("priceDisplay").innerText = lastPrices[currentSymbol].toFixed(4);
   }
 
   updatePnL();
 }
-setInterval(refreshAllPrices, 1000);
+setInterval(refreshAllPrices,1000);
 refreshAllPrices();
 
 // --- Placer un ordre ---
@@ -171,43 +190,33 @@ async function placeOrder(side){
   if(!price) return alert("Impossible d'obtenir le prix.");
 
   const qty = parseInt(document.getElementById("lotInput").value)||1;
-
-  positions.push({
-    id: Date.now(),
-    symbol: currentSymbol,
-    side,
-    qty,
-    entry: price,
-    pnl: 0
-  });
-
+  positions.push({id:Date.now(),symbol:currentSymbol,side,qty,entry:price,pnl:0});
   renderPositions();
 }
 
-// --- Fermer une position ---
+// --- Fermer position ---
 function closePosition(id){
-  positions = positions.filter(p => p.id !== id);
+  positions = positions.filter(p=>p.id!==id);
   renderPositions();
 }
 
 // --- Mise à jour PnL ---
 function updatePnL(){
-  let total = 0;
-  positions.forEach(p => {
+  let total=0;
+  positions.forEach(p=>{
     const price = lastPrices[p.symbol];
     if(!price) return;
     const dir = p.side==="buy"?1:-1;
-    p.pnl = (price - p.entry)*dir*p.qty;
-    total += p.pnl;
+    p.pnl = (price-p.entry)*dir*p.qty;
+    total+=p.pnl;
   });
   renderPositions(total);
 }
 
-// --- Afficher le tableau ---
+// --- Afficher positions ---
 function renderPositions(total=0){
-  const tbody = document.querySelector("#positionsTable tbody");
-  tbody.innerHTML = "";
-
+  const tbody=document.querySelector("#positionsTable tbody");
+  tbody.innerHTML="";
   positions.forEach(p=>{
     const last = lastPrices[p.symbol]??null;
     const tr=document.createElement("tr");
@@ -218,25 +227,21 @@ function renderPositions(total=0){
       <td>${p.entry.toFixed(4)}</td>
       <td>${last?last.toFixed(4):"—"}</td>
       <td style="color:${p.pnl>0?"#10b981":p.pnl<0?"#ef4444":"white"}">${p.pnl.toFixed(4)}</td>
-      <td>
-        <button onclick="closePosition(${p.id})"
-        style="background:#334155;color:white;border:0;padding:4px 8px;border-radius:6px;cursor:pointer;">✖</button>
-      </td>
+      <td><button onclick="closePosition(${p.id})" style="background:#334155;color:white;border:0;padding:4px 8px;border-radius:6px;cursor:pointer;">✖</button></td>
     `;
     tbody.appendChild(tr);
   });
 
   const t=document.getElementById("totalPnl");
   t.innerText="PnL total : "+total.toFixed(4);
-  t.style.color = total>0?"#10b981":total<0?"#ef4444":"#22d3ee";
+  t.style.color=total>0?"#10b981":total<0?"#ef4444":"#22d3ee";
 }
 
 // --- Changer d'actif ---
 document.getElementById("symbolSelect").addEventListener("change", e=>{
   currentSymbol=e.target.value;
   const tv=SYMBOL_MAP_TV[currentSymbol];
-  document.getElementById("tradingviewIframe").src=
-    `https://s.tradingview.com/widgetembed/?symbol=${tv}&interval=1&theme=dark&hide_side_toolbar=1`;
+  document.getElementById("tradingviewIframe").src=`https://s.tradingview.com/widgetembed/?symbol=${tv}&interval=1&theme=dark&hide_side_toolbar=1`;
   refreshAllPrices();
 });
 
@@ -247,4 +252,5 @@ function toggleFullscreen(){
 </script>
 </body>
 </html>
+
 
