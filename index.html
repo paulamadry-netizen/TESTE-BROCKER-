@@ -91,6 +91,16 @@ footer{margin-top:20px;font-size:13px;text-align:center;color:#9ca3af}
         </table>
         <div id="totalPnl" class="total-pnl">PnL total : 0.0000</div>
       </div>
+
+      <div class="panel" style="margin-top:20px;">
+        <h3 style="color:#22d3ee;">Historique des Positions Fermées</h3>
+        <table id="historyTable">
+          <thead>
+            <tr><th>Sym</th><th>Type</th><th>Lots</th><th>Entrée</th><th>Sortie</th><th>PnL Réalisé</th><th>Date fermeture</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
     </aside>
   </main>
 
@@ -113,15 +123,14 @@ const SYMBOL_MAP_STOOQ = {
   "USD/CAD":"USDCAD",
   "XAU/USD":"GC.F"
 };
-// Mapping TradingView embeddable symbols for indices and other assets
 const SYMBOL_MAP_TV = {
-  SPX: "INDEX:SPX",          // S&P 500 [finance:S&P 500]
-  DJI: "INDEX:DJI",          // Dow Jones [finance:Dow Jones Industrial Average]
-  NDX: "INDEX:NDX",          // NASDAQ 100 [finance:NASDAQ 100]
-  FTSE: "OANDA:UK100GBP",    // FTSE 100 (OANDA CFD) as widget free embed alternative
-  DAX: "XETR:DAX",           // DAX 40 [finance:DAX]
-  FCHI: "EURONEXT:PX1",      // CAC 40 [finance:CAC 40]
-  NKY: "INDEX:NKY",          // Nikkei 225 [finance:Nikkei 225]
+  SPX: "INDEX:SPX",
+  DJI: "INDEX:DJI",
+  NDX: "INDEX:NDX",
+  FTSE: "OANDA:UK100GBP",
+  DAX: "XETR:DAX",
+  FCHI: "EURONEXT:PX1",
+  NKY: "INDEX:NKY",
   "EUR/USD": "FX:EURUSD",
   "GBP/USD": "FX:GBPUSD",
   "USD/JPY": "FX:USDJPY",
@@ -131,8 +140,8 @@ const SYMBOL_MAP_TV = {
 };
 
 const CORS_PROXY = "https://corsproxy.io/?";
-
 let positions = [];
+let positionsClosed = [];
 let currentSymbol = "SPX";
 let lastPrices = {};
 
@@ -164,7 +173,6 @@ async function refreshAllPrices(){
   }
   updatePnL();
 }
-
 setInterval(refreshAllPrices,1000);
 refreshAllPrices();
 
@@ -177,8 +185,27 @@ async function placeOrder(side){
 }
 
 function closePosition(id){
-  positions = positions.filter(p=>p.id!==id);
+  const posIdx = positions.findIndex(p => p.id === id);
+  if(posIdx === -1) return;
+
+  const pos = positions[posIdx];
+  const exitPrice = lastPrices[pos.symbol] || pos.entry;
+  const pnlRealized = (exitPrice - pos.entry) * (pos.side === "buy" ? 1 : -1) * pos.qty;
+  const closedAt = new Date().toLocaleString();
+
+  positionsClosed.push({
+    symbol: pos.symbol,
+    side: pos.side,
+    qty: pos.qty,
+    entry: pos.entry,
+    exit: exitPrice,
+    pnl: pnlRealized,
+    closedAt
+  });
+
+  positions.splice(posIdx, 1);
   renderPositions();
+  renderHistory();
 }
 
 function updatePnL(){
@@ -216,7 +243,21 @@ function renderPositions(total=0){
   t.style.color=total>0?"#10b981":total<0?"#ef4444":"#22d3ee";
 }
 
-// Changement du graphique à la sélection
+function renderHistory(){
+  const tbody = document.querySelector("#historyTable tbody");
+  tbody.innerHTML = "";
+  positionsClosed.forEach(h => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${h.symbol}</td><td>${h.side}</td><td>${h.qty}</td>
+      <td>${h.entry.toFixed(4)}</td><td>${h.exit.toFixed(4)}</td>
+      <td style="color:${h.pnl>0?"#10b981":h.pnl<0?"#ef4444":"white"}">${h.pnl.toFixed(4)}</td>
+      <td>${h.closedAt}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
 document.getElementById("symbolSelect").addEventListener("change", e=>{
   currentSymbol = e.target.value;
   const tv = SYMBOL_MAP_TV[currentSymbol];
