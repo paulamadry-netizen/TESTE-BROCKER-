@@ -102,15 +102,14 @@ footer{margin-top:20px;font-size:13px;text-align:center;color:#9ca3af}
     </aside>
   </main>
 
-  <footer>© 2025 AmA Broker • Forex Twelve Data • Indices Finnhub • Graphiques TradingView</footer>
+  <footer>© 2025 AmA Broker • Données Twelve Data • Graphiques TradingView</footer>
 </div>
 
 <script>
-/* ==================== CONFIG ==================== */
+/* ===== CONFIG ===== */
 const TWELVE_API_KEY = "c9140c9a72264e82bb9f5235b86b2806";
-const FINNHUB_API_KEY = "d4g61b9r01qm5b343fo0d4g61b9r01qm5b343fog";
 
-/* === Mappage TradingView (CFD OANDA accessibles) === */
+/* ===== Mappage TradingView ===== */
 const SYMBOL_MAP_TV = {
   SPX: "OANDA:SPX500USD",
   DJI: "OANDA:US30USD",
@@ -124,91 +123,88 @@ const SYMBOL_MAP_TV = {
   "USD/CAD": "FX:USDCAD"
 };
 
-let positions=[],history=[],currentSymbol="SPX",lastPrices={},smoothPrices={};
+let positions = [];
+let history = [];
+let currentSymbol = "SPX";
+let lastPrices = {};
+let smoothPrices = {};
 
-/* === FINNHUB (indices) === */
-async function fetchFinnhubIndexPrice(symbol){
-  const MAP_FINNHUB={
-    "SPX":"^GSPC","DJI":"^DJI","NDX":"^NDX",
-    "DAX":"^GDAXI","FCHI":"^FCHI"
-  };
-  try{
-    const finnhubSym=MAP_FINNHUB[symbol]||symbol;
-    const url=`https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(finnhubSym)}&token=${FINNHUB_API_KEY}`;
-    const res=await fetch(url);
-    if(!res.ok)return null;
-    const data=await res.json();
-    return parseFloat(data.c);
-  }catch(e){console.error(e);return null;}
-}
-
-/* === TWELVE DATA (Forex) === */
+/* ===== FETCH TWELVE DATA ===== */
 async function fetchTwelveDataPrice(symbol){
   try{
-    const url=`https://api.twelvedata.com/price?symbol=${encodeURIComponent(symbol)}&apikey=${TWELVE_API_KEY}`;
-    const res=await fetch(url);
-    if(!res.ok)return null;
-    const data=await res.json();
-    if(!data.price)return null;
+    const url = `https://api.twelvedata.com/price?symbol=${encodeURIComponent(symbol)}&apikey=${TWELVE_API_KEY}`;
+    const res = await fetch(url);
+    if(!res.ok) return null;
+    const data = await res.json();
+    if(!data.price) return null;
     return parseFloat(data.price);
-  }catch(e){console.error(e);return null;}
+  }catch(e){console.error("Twelve Data error:", e);return null;}
 }
 
-/* === Routage auto === */
+/* ===== Routage auto ===== */
 async function fetchPrice(symbol){
-  return symbol.includes("/")?await fetchTwelveDataPrice(symbol):await fetchFinnhubIndexPrice(symbol);
+  // Conversion indices → symboles Twelve Data
+  const MAP_TWELVE = {
+    SPX: "US500",
+    DJI: "US30",
+    NDX: "NAS100",
+    DAX: "DE40",
+    FCHI: "FR40"
+  };
+  const apiSymbol = MAP_TWELVE[symbol] || symbol;
+  return await fetchTwelveDataPrice(apiSymbol);
 }
 
-/* === Refresh (10s) === */
+/* ===== Refresh 10 s ===== */
 async function refreshAllPrices(){
-  const needed=new Set([currentSymbol]);
-  positions.forEach(p=>needed.add(p.symbol));
+  const needed = new Set([currentSymbol]);
+  positions.forEach(p => needed.add(p.symbol));
   for(const sym of needed){
-    const price=await fetchPrice(sym);
+    const price = await fetchPrice(sym);
     if(price){
-      if(!lastPrices[sym])lastPrices[sym]=price;
-      smoothPrices[sym]=lastPrices[sym];
-      lastPrices[sym]=price;
+      if(!lastPrices[sym]) lastPrices[sym] = price;
+      smoothPrices[sym] = lastPrices[sym];
+      lastPrices[sym] = price;
     }
   }
   if(lastPrices[currentSymbol])
-    document.getElementById("priceDisplay").innerText=lastPrices[currentSymbol].toFixed(4);
+    document.getElementById("priceDisplay").innerText = lastPrices[currentSymbol].toFixed(4);
   updatePnL();
 }
-setInterval(refreshAllPrices,10000);
+setInterval(refreshAllPrices, 10000);
 refreshAllPrices();
 
-/* === Lissage fluide === */
+/* ===== Lissage fluide ===== */
 setInterval(()=>{
-  const alpha=0.2;
+  const alpha = 0.2;
   for(const s in lastPrices){
-    if(!smoothPrices[s])smoothPrices[s]=lastPrices[s];
+    if(!smoothPrices[s]) smoothPrices[s]=lastPrices[s];
     smoothPrices[s]+=(lastPrices[s]-smoothPrices[s])*alpha;
   }
   if(smoothPrices[currentSymbol])
-    document.getElementById("priceDisplay").innerText=smoothPrices[currentSymbol].toFixed(4);
+    document.getElementById("priceDisplay").innerText = smoothPrices[currentSymbol].toFixed(4);
   updatePnL(true);
 },200);
 
-/* === Trading logique === */
+/* ===== Trading ===== */
 async function placeOrder(side){
-  const price=lastPrices[currentSymbol];
-  if(!price)return alert("Impossible d'obtenir le prix.");
-  const qty=parseInt(document.getElementById("lotInput").value)||1;
+  const price = lastPrices[currentSymbol];
+  if(!price) return alert("Impossible d'obtenir le prix.");
+  const qty = parseInt(document.getElementById("lotInput").value)||1;
   positions.push({id:Date.now(),symbol:currentSymbol,side,qty,entry:price,pnl:0});
   renderPositions();
 }
 function closePosition(id){
-  const pos=positions.find(p=>p.id===id);
-  if(!pos)return;
-  const exit=lastPrices[pos.symbol]||pos.entry;
+  const pos = positions.find(p=>p.id===id);
+  if(!pos) return;
+  const exit = lastPrices[pos.symbol]||pos.entry;
   const closed={...pos,exit,time:new Date().toLocaleTimeString()};
   history.unshift(closed);
   positions=positions.filter(p=>p.id!==id);
   renderPositions();renderHistory();
 }
 
-/* === PnL === */
+/* ===== PnL ===== */
 function updatePnL(isSmooth=false){
   let total=0;
   positions.forEach(p=>{
@@ -221,7 +217,7 @@ function updatePnL(isSmooth=false){
   renderPositions(total);
 }
 
-/* === Rendu === */
+/* ===== Rendu ===== */
 function renderPositions(total=0){
   const tbody=document.querySelector("#positionsTable tbody");
   tbody.innerHTML="";
@@ -254,7 +250,7 @@ function renderHistory(){
   });
 }
 
-/* === Sélection actif === */
+/* ===== Sélection actif ===== */
 document.getElementById("symbolSelect").addEventListener("change",e=>{
   currentSymbol=e.target.value;
   const tv=SYMBOL_MAP_TV[currentSymbol];
@@ -263,13 +259,14 @@ document.getElementById("symbolSelect").addEventListener("change",e=>{
   refreshAllPrices();
 });
 
-/* === Plein écran === */
+/* ===== Plein écran ===== */
 function toggleFullscreen(){
   document.getElementById("tradingviewIframe").classList.toggle("fullscreen");
 }
 </script>
 </body>
 </html>
+
 
 
 
