@@ -2,54 +2,41 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8" />
-<title>AmA Broker — Plateforme de Trading Pro (Centrage V3 & Fonctions Réparées)</title>
+<title>AmA Broker — Plateforme de Trading Pro</title>
 <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;600;700&family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
 /* --- Variables et Reset de Base --- */
 :root {
-    --color-bg-primary: #0A111F;
-    --color-bg-secondary: #172132;
-    --color-text-light: #e2e8f0;
-    --color-brand-accent: #06b6d4;
-    --color-brand-green: #10b981;
-    --color-brand-red: #ef4444;
-    --color-border: #334155;
-    --color-control-bg: #1e293b;
+    --color-bg-primary: #121212;
+    --color-bg-secondary: #1e1e1e;
+    --color-text-light: #ffffff;
+    --color-brand-accent: #00bcd4; /* Cyan */
+    --color-brand-green: #4caf50; /* Vert */
+    --color-brand-red: #f44336; /* Rouge */
+    --color-border: #333333;
+    --color-control-bg: #2b2b2b;
     --font-primary: 'Inter', sans-serif;
     --font-mono: 'Roboto Mono', monospace;
-    --shadow-pro: 0 8px 25px rgba(0, 0, 0, 0.6);
+    --shadow-pro: 0 4px 15px rgba(0, 0, 0, 0.4);
 }
 
-/* --- FORÇAGE DU CENTRAGE AU NIVEAU BODY (Flexbox pour la robustesse) --- */
-html, body {
+/* --- Base et Centrage --- */
+body {
+    font-family: var(--font-primary);
     margin: 0;
-    padding: 0;
-    width: 100%;
-    min-height: 100vh;
     background: var(--color-bg-primary);
     color: var(--color-text-light);
-    font-family: var(--font-primary);
-    box-sizing: border-box;
-    /* Utilisation de Flexbox pour le centrage horizontal du contenu */
-    display: flex;
-    justify-content: center; /* Centrer le contenu .app */
-}
-
-/* Le padding-top doit être sur le main ou wrapper si le header est fixe */
-body {
+    min-height: 100vh;
     padding-top: 60px; /* Espace pour le header fixe */
 }
 
-
 .app {
-    /* Largeur maximale pour que l'app utilise l'espace sans être collée */
-    max-width: 1800px; 
-    width: 96%; /* Prend 96% de l'espace disponible */
-    margin: 0; /* Plus besoin de auto car Flexbox gère le centrage sur le body */
-    padding: 0; 
+    max-width: 1500px; /* Largeur du conteneur principal */
+    margin: 0 auto; /* Centrage */
+    padding: 0 10px;
 }
 
-/* --- Header & Branding (Fixe et Épuré) --- */
+/* --- Header & Branding (Fixe) --- */
 header {
     position: fixed;
     top: 0;
@@ -60,135 +47,117 @@ header {
     justify-content: space-between;
     align-items: center;
     background: var(--color-bg-primary); 
-    padding: 12px 20px; /* Padding simple et efficace */
+    padding: 10px 20px;
     border-bottom: 1px solid var(--color-border);
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.5);
 }
-/* Le Header fixe doit prendre toute la largeur du viewport */
 
 .brand {
-    font-size: 24px;
-    font-weight: 800;
-    letter-spacing: 1px;
-    color: var(--color-text-light);
-}
-.brand span {
+    font-size: 20px;
+    font-weight: 700;
     color: var(--color-brand-accent);
 }
 
 header .controls {
     display: flex;
-    gap: 25px;
+    gap: 15px;
     align-items: center;
 }
 
 /* --- Contrôles (Select/Input) --- */
 select, input {
-    padding: 8px 12px;
-    border-radius: 6px;
+    padding: 6px 10px;
+    border-radius: 4px;
     background: var(--color-control-bg);
     color: var(--color-text-light);
     border: 1px solid var(--color-border);
-    transition: all 0.2s;
     font-family: var(--font-primary);
     font-size: 14px;
 }
-select:hover, input:hover { border-color: #5b687f; }
-select:focus, input:focus {
-    border-color: var(--color-brand-accent);
-    box-shadow: 0 0 0 2px rgba(6, 182, 212, 0.2);
-    outline: none;
-}
 
 label {
-    color: #94a3b8;
-    font-size: 13px;
+    color: var(--color-text-light);
+    font-size: 14px;
     font-weight: 600;
-    white-space: nowrap;
 }
 
+/* --- Prix Actuel --- */
 .price {
     font-weight: 700;
-    font-size: 20px;
-    color: var(--color-text-light);
+    font-size: 18px;
+    color: var(--color-brand-green);
     font-family: var(--font-mono);
-    white-space: nowrap;
-}
-.price span {
-    color: var(--color-brand-accent);
-    letter-spacing: 1px;
 }
 
-/* --- Layout Principal (Grille) --- */
+/* --- Layout Principal --- */
 .layout {
     display: grid;
-    grid-template-columns: 1fr 420px; 
-    gap: 20px;
-    margin-top: 20px;
+    grid-template-columns: 1fr 350px; /* Chart et Sidebar */
+    gap: 15px;
+    margin-top: 15px;
 }
 
 .chart, .sidebar .panel {
     background: var(--color-bg-secondary);
-    border-radius: 12px;
-    padding: 20px;
+    border-radius: 8px;
+    padding: 15px;
     box-shadow: var(--shadow-pro);
-    border: 1px solid #1f3044;
-    overflow: hidden; 
 }
 
 /* --- Section Graphique --- */
 .chart h3, .sidebar h3 {
     margin-top: 0;
-    margin-bottom: 15px;
-    color: var(--color-brand-accent);
-    padding-bottom: 8px;
-    font-size: 18px;
-    font-weight: 600;
+    margin-bottom: 10px;
+    color: var(--color-text-light);
+    padding-bottom: 5px;
     border-bottom: 1px solid var(--color-border);
+    font-size: 16px;
+    font-weight: 600;
 }
 
 .chart iframe {
     width: 100%;
-    height: 650px;
-    border: 1px solid var(--color-border);
-    border-radius: 8px;
+    height: 500px;
+    border: none;
+    border-radius: 4px;
+}
+
+/* Plein écran (inclus) */
+.fullscreen {
+    position: fixed!important; top: 0; left: 0; width: 100vw!important; height: 100vh!important; z-index: 9999; background: var(--color-bg-primary); border-radius: 0!important;
 }
 
 .full-btn {
     float: right;
     background: var(--color-control-bg);
-    border: 1px solid var(--color-border);
-    color: var(--color-brand-accent);
-    padding: 6px 14px;
-    border-radius: 6px;
+    color: var(--color-text-light);
+    border: none;
+    padding: 5px 10px;
+    border-radius: 4px;
     cursor: pointer;
-    font-size: 14px;
-    transition: background 0.2s, border-color 0.2s;
+    font-size: 12px;
 }
 .full-btn:hover {
-    background: #334155;
-    border-color: var(--color-brand-accent);
+    background: #444444;
 }
+
 
 /* --- Boutons d'Ordre (Tradebox) --- */
 .tradebox {
     display: flex;
-    gap: 15px;
-    margin-top: 20px;
+    gap: 10px;
+    margin-top: 15px;
 }
 
 button.buy, button.sell {
     flex: 1;
-    font-weight: 700;
+    font-weight: 600;
     border: none;
-    padding: 16px 20px;
-    border-radius: 8px;
+    padding: 12px;
+    border-radius: 6px;
     cursor: pointer;
-    transition: all 0.2s;
-    font-size: 18px;
-    letter-spacing: 1px;
-    text-transform: uppercase;
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
+    transition: background 0.2s;
+    font-size: 16px;
 }
 
 button.buy {
@@ -199,38 +168,26 @@ button.sell {
     background: var(--color-brand-red);
     color: var(--color-text-light);
 }
-button.buy:hover { background: #059669; }
-button.sell:hover { background: #dc2626; }
+button.buy:hover { background: #43a047; }
+button.sell:hover { background: #e53935; }
+
 
 /* --- Tableaux (Positions & Historique) --- */
 table {
     width: 100%;
     border-collapse: separate;
-    border-spacing: 0 6px;
-    font-size: 13px;
+    border-spacing: 0 4px;
+    font-size: 12px;
     font-family: var(--font-mono);
-    table-layout: fixed; 
 }
 
 thead th {
-    color: #94a3b8;
-    padding: 8px 10px;
+    color: #aaaaaa;
+    padding: 5px;
     text-align: left;
-    font-weight: 600;
-    font-size: 12px;
+    font-weight: 400;
     text-transform: uppercase;
-    background: #1f3044;
 }
-
-/* Largeur des colonnes pour les positions ouvertes (RÉPARÉ) */
-#positionsTable th:nth-child(1), #positionsTable td:nth-child(1) { width: 15%; } /* SYM */
-#positionsTable th:nth-child(2), #positionsTable td:nth-child(2) { width: 12%; } /* SIDE */
-#positionsTable th:nth-child(3), #positionsTable td:nth-child(3) { width: 10%; } /* LOTS */
-#positionsTable th:nth-child(4), #positionsTable td:nth-child(4) { width: 20%; } /* ENTRÉE */
-#positionsTable th:nth-child(5), #positionsTable td:nth-child(5) { width: 20%; } /* DERNIER */
-#positionsTable th:nth-child(6), #positionsTable td:nth-child(6) { width: 15%; } /* PNL */
-#positionsTable th:nth-child(7), #positionsTable td:nth-child(7) { width: 8%; text-align: right;} /* FERMER */
-
 
 tbody tr {
     background: var(--color-control-bg);
@@ -238,81 +195,65 @@ tbody tr {
     border-radius: 4px;
 }
 
-tbody tr:hover { background: #28374d; }
+tbody tr:hover { background: #3c3c3c; }
 
-td { 
-    padding: 10px; 
-    overflow: hidden; 
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
+td { padding: 8px; }
 
-/* Styles pour PnL (Visibilité du gain/perte) */
-.pnl-pos { color: var(--color-brand-green); font-weight: 700; }
-.pnl-neg { color: var(--color-brand-red); font-weight: 700; }
+/* Styles pour PnL */
+.pnl-pos { color: var(--color-brand-green); font-weight: 600; }
+.pnl-neg { color: var(--color-brand-red); font-weight: 600; }
 .pnl-zero { color: var(--color-text-light); }
 
-/* Bouton Fermer (✖) (RÉPARÉ) */
+/* Bouton Fermer (✖) */
 #positionsTable button {
-    /* Styles pour le bouton de fermeture */
-    background: var(--color-brand-red); /* Toujours rouge pour la fermeture */
+    background: var(--color-brand-red);
     color: var(--color-text-light);
     border: 0;
-    padding: 2px 6px; /* Bouton plus petit */
+    padding: 2px 6px;
     border-radius: 4px;
     cursor: pointer;
+    transition: background 0.2s;
     font-family: var(--font-primary);
-    font-size: 14px;
-    line-height: 1;
+    font-size: 12px;
 }
 #positionsTable button:hover {
-    background: #a80036; 
+    background: #d32f2f;
 }
 
 /* Total PnL */
 .total-pnl {
-    margin-top: 15px;
-    padding-top: 15px;
+    margin-top: 10px;
+    padding-top: 10px;
     border-top: 1px solid var(--color-border);
     text-align: right;
     font-weight: 700;
-    font-size: 17px;
+    font-size: 15px;
     font-family: var(--font-mono);
-    letter-spacing: 0.5px;
-    color: var(--color-brand-accent);
 }
-.total-pnl.pnl-pos { color: var(--color-brand-green); }
-.total-pnl.pnl-neg { color: var(--color-brand-red); }
 
 /* --- Footer --- */
 footer {
-    margin-top: 40px;
-    margin-bottom: 20px;
-    font-size: 12px;
+    margin-top: 30px;
+    margin-bottom: 10px;
+    font-size: 10px;
     text-align: center;
-    color: #64748b;
-    padding: 10px 0;
+    color: #666666;
+    padding: 5px 0;
 }
 
 /* Responsive */
-@media (max-width: 1200px) {
-    .app {
-        width: 100%;
-        padding: 0 10px;
-        box-sizing: border-box;
-    }
+@media (max-width: 900px) {
     .layout {
         grid-template-columns: 1fr;
     }
     header {
         position: static;
-        padding: 15px 20px;
         flex-direction: column;
         align-items: flex-start;
         gap: 10px;
     }
-    .chart iframe {
-        height: 400px;
+    .app {
+        padding-top: 0;
     }
 }
 </style>
@@ -320,7 +261,7 @@ footer {
 <body>
 <div class="app">
   <header>
-    <div class="brand">AmA <span>Broker</span></div>
+    <div class="brand">AmA Broker</div>
     <div class="controls">
       <label>ACTIF:
         <select id="symbolSelect">
@@ -334,7 +275,7 @@ footer {
             <option value="NKY">Nikkei 225</option>
           </optgroup>
           <optgroup label="Forex">
-            <option value="EUR/USD" selected>EUR/USD</option>
+            <option value="EUR/USD">EUR/USD</option>
             <option value="GBP/USD">GBP/USD</option>
             <option value="USD/JPY">USD/JPY</option>
             <option value="AUD/USD">AUD/USD</option>
@@ -347,7 +288,7 @@ footer {
       </label>
       <div class="price">PRIX ACTUEL: <span id="priceDisplay">—</span></div>
       <label>LOTS:
-        <input type="number" id="lotInput" value="1" min="1" step="1" style="width:70px;text-align:center;">
+        <input type="number" id="lotInput" value="1" min="1" step="1" style="width:50px;text-align:center;">
       </label>
     </div>
   </header>
@@ -355,11 +296,11 @@ footer {
   <main class="layout">
     <section class="chart">
       <div style="display:flex;justify-content:space-between;align-items:center;">
-        <h3>📊 GRAPHIQUE ACTIF</h3>
-        <button class="full-btn" onclick="toggleFullscreen()">⛶ PLEIN ÉCRAN</button>
+        <h3>GRAPHIQUE ACTIF</h3>
+        <button class="full-btn" onclick="toggleFullscreen()">PLEIN ÉCRAN</button>
       </div>
       <iframe id="tradingviewIframe"
-        src="https://s.tradingview.com/widgetembed/?symbol=FX:EURUSD&interval=1&theme=dark&hide_side_toolbar=1"></iframe>
+        src="https://s.tradingview.com/widgetembed/?symbol=INDEX:SPX&interval=1&theme=dark&hide_side_toolbar=1"></iframe>
 
       <div class="tradebox">
         <button class="buy" onclick="placeOrder('buy')">ACHETER / LONG</button>
@@ -369,7 +310,7 @@ footer {
 
     <aside class="sidebar">
       <div class="panel">
-        <h3>💰 POSITIONS OUVERTES</h3>
+        <h3>POSITIONS OUVERTES</h3>
         <table id="positionsTable">
           <thead><tr><th>SYM</th><th>SIDE</th><th>LOTS</th><th>ENTRÉE</th><th>DERNIER</th><th>PNL</th><th></th></tr></thead>
           <tbody></tbody>
@@ -377,8 +318,8 @@ footer {
         <div id="totalPnl" class="total-pnl">PnL total : 0.0000</div>
       </div>
 
-      <div class="panel" style="margin-top:20px;">
-        <h3>📜 HISTORIQUE DES TRANSACTIONS</h3>
+      <div class="panel" style="margin-top:15px;">
+        <h3>HISTORIQUE DES TRANSACTIONS</h3>
         <table id="historyTable">
           <thead>
             <tr><th>SYM</th><th>TYPE</th><th>LOTS</th><th>ENTRÉE</th><th>SORTIE</th><th>PNL RÉALISÉ</th><th>DATE</th></tr>
@@ -389,11 +330,10 @@ footer {
     </aside>
   </main>
 
-  <footer>© 2025 AmA Broker • Données Stooq • Graphiques TradingView • Design Centré et Fonctionnel</footer>
+  <footer>© 2024 AmA Broker • Données Stooq • Graphiques TradingView</footer>
 </div>
 
 <script>
-// --- LOGIQUE JAVASCRIPT : RETOUR À LA LOGIQUE ORIGINALE ET VÉRIFIÉE ---
 const SYMBOL_MAP_STOOQ = {
   SPX:"^SPX", DJI:"^DJI", NDX:"^NDX", FTSE:"^FTSE", DAX:"^GDAXI", FCHI:"^FCHI", NKY:"^N225", "EUR/USD":"EURUSD", "GBP/USD":"GBPUSD", "USD/JPY":"USDJPY", "AUD/USD":"AUDUSD", "USD/CAD":"USDCAD", "XAU/USD":"GC.F"
 };
@@ -404,7 +344,7 @@ const SYMBOL_MAP_TV = {
 const CORS_PROXY = "https://corsproxy.io/?";
 let positions = [];
 let positionsClosed = [];
-let currentSymbol = "EUR/USD";
+let currentSymbol = "SPX";
 let lastPrices = {};
 
 async function fetchStooqPrice(symbol){
@@ -532,7 +472,6 @@ document.getElementById("symbolSelect").addEventListener("change", e=>{
 function toggleFullscreen(){
   document.getElementById("tradingviewIframe").classList.toggle("fullscreen");
 }
-// --- FIN LOGIQUE JAVASCRIPT : RETOUR À LA LOGIQUE ORIGINALE ET VÉRIFIÉE ---
 </script>
 </body>
 </html>
