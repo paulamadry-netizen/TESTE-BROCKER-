@@ -108,24 +108,35 @@ const SYMBOL_MAP = {
   GOLD:{stooq:"GC.F",tv:"TVC:GOLD"}
 };
 
+// ----------------------------
+// CORS Proxy
+// ----------------------------
+const CORS_PROXY = "https://api.allorigins.win/raw?url=";
+
 let positions = [];
 let currentSymbol = "SPX";
 let lastPrices = {};
 
 // ----------------------------
-// 📌 Récupérer prix Stooq
+// 📌 Récupérer prix via proxy CORS
 // ----------------------------
 async function fetchStooqPrice(symbol){
   try{
-    const url=`https://stooq.com/q/l/?s=${symbol}&f=sd2t2ohlcv&h&e=csv`;
-    const res=await fetch(url);
-    const text=await res.text();
-    const line=text.split("\n")[1];
+    const stooqUrl = `https://stooq.com/q/l/?s=${symbol}&f=sd2t2ohlcv&h&e=csv`;
+    const proxied = CORS_PROXY + encodeURIComponent(stooqUrl);
+
+    const res = await fetch(proxied);
+    if(!res.ok) return null;
+
+    const text = await res.text();
+    const line = text.split("\n")[1];
     if(!line) return null;
-    const parts=line.split(",");
-    const last=parseFloat(parts[6]);
-    return isNaN(last)?null:last;
+
+    const parts = line.split(",");
+    const last = parseFloat(parts[6]);
+    return isNaN(last) ? null : last;
   }catch(e){
+    console.error("fetchStooqPrice error:", e);
     return null;
   }
 }
