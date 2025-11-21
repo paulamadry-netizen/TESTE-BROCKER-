@@ -1,3 +1,8 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<title>AmA Broker — Web Trader Demo</title>
 <style>
 /* Reset & Base */
 *{
@@ -234,10 +239,11 @@ td button:hover {
     padding-top: 10px;
     border-top: 1px solid #3B4050; /* Separator for total PnL */
 }
-.total-pnl[style*="color: rgb(16, 185, 129)"] { /* Green for positive */
+/* These styles ensure the colors from the JS PnL update are correct */
+.total-pnl[style*="color: rgb(16, 185, 129)"] {
     color: #4CAF50 !important;
 }
-.total-pnl[style*="color: rgb(239, 68, 68)"] { /* Red for negative */
+.total-pnl[style*="color: rgb(239, 68, 68)"] {
     color: #F44336 !important;
 }
 
@@ -269,3 +275,231 @@ footer {
 }
 
 </style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="brand">AmA <span>Broker</span></div>
+    <div class="controls">
+      <label>Actif :
+        <select id="symbolSelect">
+          <optgroup label="Indices">
+            <option value="SPX">S&P 500</option>
+            <option value="DJI">Dow Jones</option>
+            <option value="NDX">NASDAQ 100</option>
+            <option value="FTSE">FTSE 100</option>
+            <option value="DAX">DAX 40</option>
+            <option value="FCHI">CAC 40</option>
+            <option value="NKY">Nikkei 225</option>
+          </optgroup>
+          <optgroup label="Forex">
+            <option value="EUR/USD">EUR/USD</option>
+            <option value="GBP/USD">GBP/USD</option>
+            <option value="USD/JPY">USD/JPY</option>
+            <option value="AUD/USD">AUD/USD</option>
+            <option value="USD/CAD">USD/CAD</option>
+          </optgroup>
+          <optgroup label="Métaux">
+            <option value="XAU/USD">Or (Gold)</option>
+          </optgroup>
+        </select>
+      </label>
+      <div class="price">Prix actuel : <span id="priceDisplay">—</span></div>
+      <label>Lots :
+        <input type="number" id="lotInput" value="1" min="1" step="1" style="width:70px;text-align:center;">
+      </label>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="chart">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <h3>Graphique</h3>
+        <button class="full-btn" onclick="toggleFullscreen()">⛶ Plein écran</button>
+      </div>
+      <iframe id="tradingviewIframe"
+        src="https://s.tradingview.com/widgetembed/?symbol=INDEX:SPX&interval=1&theme=dark&hide_side_toolbar=1"></iframe>
+
+      <div class="tradebox">
+        <button class="buy" onclick="placeOrder('buy')">ACHETER</button>
+        <button class="sell" onclick="placeOrder('sell')">VENDRE</button>
+      </div>
+    </section>
+
+    <aside class="sidebar">
+      <div class="panel">
+        <h3>Positions Ouvertes</h3>
+        <table id="positionsTable">
+          <thead><tr><th>Sym</th><th>Side</th><th>Lots</th><th>Entrée</th><th>Dernier</th><th>PnL</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+        <div id="totalPnl" class="total-pnl">PnL total : 0.0000</div>
+      </div>
+    </aside>
+  </main>
+
+  <footer>© 2025 AmA Broker • Données Stooq • Graphiques TradingView</footer>
+</div>
+
+<script>
+// --- MAP DES SYMBOLES TradingView ---
+const SYMBOL_MAP_TV = {
+  SPX:"INDEX:SPX", DJI:"INDEX:DJI", NDX:"INDEX:NDX", FTSE:"INDEX:UKX",
+  DAX:"INDEX:DAX", FCHI:"INDEX:FR40", NKY:"INDEX:NKY",
+  "EUR/USD":"FX:EURUSD", "GBP/USD":"FX:GBPUSD", "USD/JPY":"FX:USDJPY",
+  "AUD/USD":"FX:AUDUSD", "USD/CAD":"FX:USDCAD",
+  "XAU/USD":"TVC:GOLD"
+};
+
+// --- CORS Proxy pour Render / Stooq ---
+const CORS_PROXY = "https://corsproxy.io/?";
+
+let positions = [];
+let currentSymbol = "SPX";
+let lastPrices = {};
+
+// --- Conversion symboles lisibles → Stooq ---
+function convertToStooqSymbol(symbol){
+  return symbol.toLowerCase().replace(/\s+/g,'').replace(/\//g,'');
+}
+
+// --- Récupérer prix Stooq via proxy ---
+async function fetchStooqPrice(symbol){
+  try {
+    const stooqSymbol = convertToStooqSymbol(symbol);
+    const stooqUrl = `https://stooq.com/q/l/?s=${stooqSymbol}&f=sd2t2ohlcv&h&e=csv`;
+    const url = CORS_PROXY + encodeURIComponent(stooqUrl);
+
+    const res = await fetch(url);
+    if (!res.ok) return null;
+
+    const text = await res.text();
+    if(text.includes("N/D")) return null;
+
+    const line = text.split("\n")[1];
+    if(!line) return null;
+
+    const last = parseFloat(line.split(",")[6]);
+    return isNaN(last) ? null : last;
+  } catch(e) {
+    console.error("fetchStooqPrice error:", e);
+    return null;
+  }
+}
+
+// --- Mise à jour prix toutes les secondes ---
+async function refreshAllPrices(){
+  const needed = new Set();
+  needed.add(currentSymbol);
+  positions.forEach(p => needed.add(p.symbol));
+
+  for(const sym of needed){
+    const price = await fetchStooqPrice(sym);
+    if(price) lastPrices[sym] = price;
+  }
+
+  if(lastPrices[currentSymbol]){
+    // Remove the inline style on priceDisplay to let the new CSS take over
+    document.getElementById("priceDisplay").innerText =
+      lastPrices[currentSymbol].toFixed(4);
+  }
+
+  updatePnL();
+}
+setInterval(refreshAllPrices, 1000);
+refreshAllPrices();
+
+// --- Placer un ordre ---
+async function placeOrder(side){
+  const price = await fetchStooqPrice(currentSymbol);
+  if(!price) return alert("Impossible d'obtenir le prix.");
+
+  const qty = parseInt(document.getElementById("lotInput").value)||1;
+
+  positions.push({
+    id: Date.now(),
+    symbol: currentSymbol,
+    side,
+    qty,
+    entry: price,
+    pnl: 0
+  });
+
+  renderPositions();
+}
+
+// --- Fermer une position ---
+function closePosition(id){
+  positions = positions.filter(p => p.id !== id);
+  renderPositions();
+}
+
+// --- Mise à jour PnL ---
+function updatePnL(){
+  let total = 0;
+  positions.forEach(p => {
+    const price = lastPrices[p.symbol];
+    if(!price) return;
+    const dir = p.side==="buy"?1:-1;
+    p.pnl = (price - p.entry)*dir*p.qty;
+    total += p.pnl;
+  });
+  renderPositions(total);
+}
+
+// --- Afficher le tableau ---
+function renderPositions(total=0){
+  const tbody = document.querySelector("#positionsTable tbody");
+  tbody.innerHTML = "";
+
+  positions.forEach(p=>{
+    const last = lastPrices[p.symbol]??null;
+    const tr=document.createElement("tr");
+    // NOTE: The style below is necessary because it is used by the CSS selectors in the <style> block above to change the PnL color.
+    const pnlColor = p.pnl>0?"#10b981":p.pnl<0?"#ef4444":"white";
+    
+    tr.innerHTML=`
+      <td>${p.symbol}</td>
+      <td>${p.side}</td>
+      <td>${p.qty}</td>
+      <td>${p.entry.toFixed(4)}</td>
+      <td>${last?last.toFixed(4):"—"}</td>
+      <td style="color:${pnlColor}">${p.pnl.toFixed(4)}</td>
+      <td>
+        <button onclick="closePosition(${p.id})">✖</button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  const t=document.getElementById("totalPnl");
+  t.innerText="PnL total : "+total.toFixed(4);
+  // NOTE: The inline style below is necessary because it is used by the CSS selectors in the <style> block above to change the Total PnL color.
+  t.style.color = total>0?"#10b981":total<0?"#ef4444":"#22d3ee";
+}
+
+// --- Changer d'actif ---
+document.getElementById("symbolSelect").addEventListener("change", e=>{
+  currentSymbol=e.target.value;
+  const tv=SYMBOL_MAP_TV[currentSymbol];
+  document.getElementById("tradingviewIframe").src=
+    `https://s.tradingview.com/widgetembed/?symbol=${tv}&interval=1&theme=dark&hide_side_toolbar=1`;
+  refreshAllPrices();
+});
+
+// --- Plein écran ---
+function toggleFullscreen(){
+  document.getElementById("tradingviewIframe").classList.toggle("fullscreen");
+}
+
+// Initial call to ensure the correct theme is applied to the chart iframe on load
+document.addEventListener('DOMContentLoaded', () => {
+    // Re-check the iframe source to ensure it has the theme=dark parameter
+    const iframe = document.getElementById("tradingviewIframe");
+    if (!iframe.src.includes('theme=dark')) {
+        iframe.src = iframe.src.replace(/theme=[^&]*/, 'theme=dark');
+    }
+});
+</script>
+</body>
+</html>
