@@ -1,172 +1,274 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="fr">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Modern Broker UI</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      font-family: Arial, sans-serif;
-      background: #0e0f12;
-      color: #fff;
-      display: flex;
-      height: 100vh;
-      overflow: hidden;
-    }
-    .sidebar {
-      width: 260px;
-      background: #131417;
-      padding: 20px;
-      border-right: 1px solid #25262b;
-    }
-    .sidebar h2 {
-      margin-bottom: 20px;
-      font-size: 22px;
-      color: #4ea1ff;
-    }
-    .sidebar button {
-      width: 100%;
-      padding: 12px;
-      background: #1c1d21;
-      border: 1px solid #2f3035;
-      color: #fff;
-      margin-bottom: 12px;
-      border-radius: 8px;
-      cursor: pointer;
-      transition: 0.2s;
-    }
-    .sidebar button:hover {
-      background: #4ea1ff;
-      color: #000;
-    }
-
-    .main {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      padding: 20px;
-      overflow: auto;
-    }
-
-    .card {
-      background: #15161a;
-      border: 1px solid #2a2b30;
-      padding: 18px;
-      border-radius: 12px;
-      margin-bottom: 20px;
-    }
-
-    #chart {
-      height: 320px;
-      background: #101114;
-      border-radius: 12px;
-      border: 1px solid #2a2b30;
-    }
-
-    input, select {
-      padding: 10px;
-      background: #1b1c20;
-      border: 1px solid #2d2e33;
-      border-radius: 8px;
-      color: #fff;
-      width: 100%;
-      margin: 5px 0;
-    }
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 10px;
-    }
-    th, td {
-      padding: 10px;
-      border-bottom: 1px solid #2a2b30;
-      text-align: left;
-    }
-    th { color: #4ea1ff; }
-
-    .btn-buy { background: #38ff87; color: #000; }
-    .btn-sell { background: #ff4e4e; color: #000; }
-  </style>
+<meta charset="UTF-8" />
+<title>AmA Broker — Web Trader Demo</title>
+<style>
+*{box-sizing:border-box}
+body{font-family:Inter,Arial,sans-serif;margin:0;background:linear-gradient(135deg,#0b1220,#111b2d);color:#f3f4f6;min-height:100vh}
+.app{max-width:1400px;margin:0 auto;padding:16px}
+header{display:flex;justify-content:space-between;align-items:center;background:rgba(255,255,255,.05);padding:14px 20px;border-radius:14px;backdrop-filter:blur(10px);box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.brand{font-size:26px;font-weight:700;letter-spacing:1px;color:#22d3ee}
+.brand span{color:#10b981}
+header .controls{display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+select,input{padding:6px 10px;border-radius:6px;background:#1b2533;color:white;border:1px solid #334155}
+.price{font-weight:600;color:#e0e0e0}
+.layout{display:grid;grid-template-columns:1fr 380px;gap:16px;margin-top:16px}
+.chart,.sidebar .panel{background:rgba(255,255,255,.05);border-radius:14px;padding:14px;backdrop-filter:blur(10px);box-shadow:0 6px 18px rgba(0,0,0,.4)}
+.chart iframe{width:100%;height:480px;border:0;border-radius:10px}
+.fullscreen{position:fixed!important;top:0;left:0;width:100vw!important;height:100vh!important;z-index:999;background:#000;border-radius:0!important}
+.tradebox{display:flex;gap:10px;margin-top:14px}
+button.buy,button.sell{flex:1;font-weight:bold;border:none;padding:12px 20px;border-radius:10px;cursor:pointer;transition:all .2s;font-size:16px}
+button.buy{background:#10b981;color:white}
+button.sell{background:#ef4444;color:white}
+button.buy:hover{background:#059669}
+button.sell:hover{background:#dc2626}
+table{width:100%;border-collapse:collapse;font-size:14px}
+td,th{padding:6px 8px;text-align:left}
+th{color:#9ca3af}
+tr:nth-child(odd){background:rgba(255,255,255,.02)}
+footer{margin-top:20px;font-size:13px;text-align:center;color:#9ca3af}
+.full-btn{float:right;background:#1e293b;border:0;color:#22d3ee;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:13px}
+.full-btn:hover{background:#0f172a}
+.total-pnl{margin-top:10px;text-align:right;font-weight:bold;font-size:15px;color:#22d3ee;}
+/* Historique */
+.history-panel{margin-top:16px;background:rgba(255,255,255,.05);border-radius:14px;padding:14px;backdrop-filter:blur(10px);box-shadow:0 6px 18px rgba(0,0,0,.4)}
+.history-panel h3{color:#22d3ee;margin-top:0;margin-bottom:10px}
+</style>
 </head>
 <body>
-
-  <div class="sidebar">
-
-    <!-- TradingView Watchlist Added -->
-    <div class="card" style="background:#0f1013;border:1px solid #2a2b30;padding:0;margin-bottom:20px;height:300px;overflow:hidden;border-radius:10px;">
-      <iframe
-        src="https://s.tradingview.com/embed-widget/market-quotes/?locale=fr#%7B%22width%22%3A%22240%22%2C%22height%22%3A%22280%22%2C%22symbolsGroups%22%3A%5B%7B%22name%22%3A%22Indices%22%2C%22symbols%22%3A%5B%7B%22name%22%3A%22FOREXCOM%3ASPXUSD%22%7D%2C%7B%22name%22%3A%22FOREXCOM%3ANDXUSD%22%7D%2C%7B%22name%22%3A%22INDEX%3ADJI%22%7D%5D%7D%2C%7B%22name%22%3A%22Crypto%22%2C%22symbols%22%3A%5B%7B%22name%22%3A%22BINANCE%3ABTCUSDT%22%7D%2C%7B%22name%22%3A%22BINANCE%3AETHUSDT%22%7D%5D%7D%5D%2C%22colorTheme%22%3A%22dark%22%2C%22isTransparent%22%3Afalse%2C%22showSymbolLogo%22%3Atrue%7D"
-        width="100%" height="100%" frameborder="0"></iframe>
+<div class="app">
+  <header>
+    <div class="brand">AmA <span>Broker</span></div>
+    <div class="controls">
+      <label>Actif :
+        <select id="symbolSelect">
+          <optgroup label="Indices">
+            <option value="SPX">S&P 500</option>
+            <option value="DJI">Dow Jones</option>
+            <option value="NDX">NASDAQ 100</option>
+            <option value="FTSE">FTSE 100</option>
+            <option value="DAX">DAX 40</option>
+            <option value="FCHI">CAC 40</option>
+            <option value="NKY">Nikkei 225</option>
+          </optgroup>
+          <optgroup label="Forex">
+            <option value="EUR/USD">EUR/USD</option>
+            <option value="GBP/USD">GBP/USD</option>
+            <option value="USD/JPY">USD/JPY</option>
+            <option value="AUD/USD">AUD/USD</option>
+            <option value="USD/CAD">USD/CAD</option>
+          </optgroup>
+          <optgroup label="Métaux">
+            <option value="XAU/USD">Or (Gold)</option>
+          </optgroup>
+        </select>
+      </label>
+      <div class="price">Prix actuel : <span id="priceDisplay">—</span></div>
+      <label>Lots :
+        <input type="number" id="lotInput" value="1" min="1" step="1" style="width:70px;text-align:center;">
+      </label>
     </div>
+  </header>
 
-    <h2>Broker Pro</h2>
-    <button onclick="executeBuy()">Buy</button>
-    <button onclick="executeSell()">Sell</button>
-    <button onclick="updateChart()">Update Chart</button>
-  </div>
+  <main class="layout">
+    <section class="chart">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <h3 style="margin:0;color:#22d3ee;">Graphique</h3>
+        <button class="full-btn" onclick="toggleFullscreen()">⛶ Plein écran</button>
+      </div>
+      <iframe id="tradingviewIframe"
+        src="https://s.tradingview.com/widgetembed/?symbol=INDEX:SPX&interval=1&theme=dark&hide_side_toolbar=1"></iframe>
 
-  <div class="main">
+      <div class="tradebox">
+        <button class="buy" onclick="placeOrder('buy')">ACHETER</button>
+        <button class="sell" onclick="placeOrder('sell')">VENDRE</button>
+      </div>
 
-    <div class="card">
-      <h2>Trade Settings</h2>
-      <label>Symbol</label>
-      <input id="symbol" value="BTCUSDT" />
+      <!-- === Historique des positions fermées === -->
+      <div class="history-panel">
+        <h3>Historique des Positions</h3>
+        <table id="historyTable">
+          <thead>
+            <tr>
+              <th>Sym</th><th>Side</th><th>Lots</th><th>Entrée</th>
+              <th>Sortie</th><th>PnL</th><th>Heure</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
 
-      <label>Amount</label>
-      <input id="amount" type="number" placeholder="Amount" />
+    <aside class="sidebar">
+      <div class="panel">
+        <h3 style="color:#22d3ee;">Positions Ouvertes</h3>
+        <table id="positionsTable">
+          <thead><tr><th>Sym</th><th>Side</th><th>Lots</th><th>Entrée</th><th>Dernier</th><th>PnL</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+        <div id="totalPnl" class="total-pnl">PnL total : 0.0000</div>
+      </div>
+    </aside>
+  </main>
 
-      <label>Order Type</label>
-      <select id="orderType">
-        <option value="market">Market</option>
-        <option value="limit">Limit</option>
-      </select>
-
-      <label>Limit Price (if limit)</label>
-      <input id="limitPrice" type="number" />
-
-      <button onclick="placeOrder()">Place Order</button>
-    </div>
-
-    <div class="card">
-      <h2>Live Chart</h2>
-      <div id="chart"></div>
-    </div>
-
-    <div class="card">
-      <h2>Orders</h2>
-      <table>
-        <thead>
-          <tr>
-            <th>Type</th>
-            <th>Symbol</th>
-            <th>Amount</th>
-            <th>Price</th>
-          </tr>
-        </thead>
-        <tbody id="orderTable"></tbody>
-      </table>
-    </div>
-
-  </div>
+  <footer>© 2025 AmA Broker • Données Stooq • Graphiques TradingView</footer>
+</div>
 
 <script>
-function placeOrder() {
-  const symbol = document.getElementById("symbol").value;
-  const amount = document.getElementById("amount").value;
-  const type = document.getElementById("orderType").value;
-  const price = type === "limit" ? document.getElementById("limitPrice").value : "Market";
+// --- MAP DES SYMBOLES TradingView ---
+const SYMBOL_MAP_TV = {
+  SPX:"INDEX:SPX", DJI:"INDEX:DJI", NDX:"INDEX:NDX", FTSE:"INDEX:UKX",
+  DAX:"INDEX:DAX", FCHI:"INDEX:FR40", NKY:"INDEX:NKY",
+  "EUR/USD":"FX:EURUSD", "GBP/USD":"FX:GBPUSD", "USD/JPY":"FX:USDJPY",
+  "AUD/USD":"FX:AUDUSD", "USD/CAD":"FX:USDCAD",
+  "XAU/USD":"TVC:GOLD"
+};
 
-  const row = `<tr><td>${type}</td><td>${symbol}</td><td>${amount}</td><td>${price}</td></tr>`;
-  document.getElementById("orderTable").innerHTML += row;
+const CORS_PROXY = "https://corsproxy.io/?";
+let positions = [];
+let history = [];
+let currentSymbol = "SPX";
+let lastPrices = {};
+
+function convertToStooqSymbol(symbol){
+  return symbol.toLowerCase().replace(/\s+/g,'').replace(/\//g,'');
 }
 
-function executeBuy() { alert("Buy executed!"); }
-function executeSell() { alert("Sell executed!"); }
-function updateChart() { alert("Chart updated (placeholder)"); }
-</script>
+async function fetchStooqPrice(symbol){
+  try {
+    const stooqSymbol = convertToStooqSymbol(symbol);
+    const stooqUrl = `https://stooq.com/q/l/?s=${stooqSymbol}&f=sd2t2ohlcv&h&e=csv`;
+    const url = CORS_PROXY + encodeURIComponent(stooqUrl);
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const text = await res.text();
+    if(text.includes("N/D")) return null;
+    const line = text.split("\n")[1];
+    if(!line) return null;
+    const last = parseFloat(line.split(",")[6]);
+    return isNaN(last) ? null : last;
+  } catch(e) {
+    console.error("fetchStooqPrice error:", e);
+    return null;
+  }
+}
 
+async function refreshAllPrices(){
+  const needed = new Set();
+  needed.add(currentSymbol);
+  positions.forEach(p => needed.add(p.symbol));
+  for(const sym of needed){
+    const price = await fetchStooqPrice(sym);
+    if(price) lastPrices[sym] = price;
+  }
+  if(lastPrices[currentSymbol]){
+    document.getElementById("priceDisplay").innerText =
+      lastPrices[currentSymbol].toFixed(4);
+  }
+  updatePnL();
+}
+setInterval(refreshAllPrices, 1000);
+refreshAllPrices();
+
+async function placeOrder(side){
+  const price = await fetchStooqPrice(currentSymbol);
+  if(!price) return alert("Impossible d'obtenir le prix.");
+  const qty = parseInt(document.getElementById("lotInput").value)||1;
+  positions.push({
+    id: Date.now(),
+    symbol: currentSymbol,
+    side,
+    qty,
+    entry: price,
+    pnl: 0
+  });
+  renderPositions();
+}
+
+function closePosition(id){
+  const pos = positions.find(p=>p.id===id);
+  if(!pos) return;
+  const exit = lastPrices[pos.symbol] || pos.entry;
+  const closed = {
+    symbol: pos.symbol,
+    side: pos.side,
+    qty: pos.qty,
+    entry: pos.entry,
+    exit,
+    pnl: pos.pnl,
+    time: new Date().toLocaleTimeString()
+  };
+  history.unshift(closed);
+  positions = positions.filter(p => p.id !== id);
+  renderPositions();
+  renderHistory();
+}
+
+function updatePnL(){
+  let total = 0;
+  positions.forEach(p => {
+    const price = lastPrices[p.symbol];
+    if(!price) return;
+    const dir = p.side==="buy"?1:-1;
+    p.pnl = (price - p.entry)*dir*p.qty;
+    total += p.pnl;
+  });
+  renderPositions(total);
+}
+
+function renderPositions(total=0){
+  const tbody = document.querySelector("#positionsTable tbody");
+  tbody.innerHTML = "";
+  positions.forEach(p=>{
+    const last = lastPrices[p.symbol]??null;
+    const tr=document.createElement("tr");
+    tr.innerHTML=`
+      <td>${p.symbol}</td>
+      <td>${p.side}</td>
+      <td>${p.qty}</td>
+      <td>${p.entry.toFixed(4)}</td>
+      <td>${last?last.toFixed(4):"—"}</td>
+      <td style="color:${p.pnl>0?"#10b981":p.pnl<0?"#ef4444":"white"}">${p.pnl.toFixed(4)}</td>
+      <td><button onclick="closePosition(${p.id})"
+        style="background:#334155;color:white;border:0;padding:4px 8px;border-radius:6px;cursor:pointer;">✖</button></td>`;
+    tbody.appendChild(tr);
+  });
+  const t=document.getElementById("totalPnl");
+  t.innerText="PnL total : "+total.toFixed(4);
+  t.style.color = total>0?"#10b981":total<0?"#ef4444":"#22d3ee";
+}
+
+function renderHistory(){
+  const tbody = document.querySelector("#historyTable tbody");
+  tbody.innerHTML = "";
+  history.forEach(h=>{
+    const tr=document.createElement("tr");
+    tr.innerHTML=`
+      <td>${h.symbol}</td>
+      <td>${h.side}</td>
+      <td>${h.qty}</td>
+      <td>${h.entry.toFixed(4)}</td>
+      <td>${h.exit.toFixed(4)}</td>
+      <td style="color:${h.pnl>0?"#10b981":h.pnl<0?"#ef4444":"white"}">${h.pnl.toFixed(4)}</td>
+      <td>${h.time}</td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+document.getElementById("symbolSelect").addEventListener("change", e=>{
+  currentSymbol=e.target.value;
+  const tv=SYMBOL_MAP_TV[currentSymbol];
+  document.getElementById("tradingviewIframe").src=
+    `https://s.tradingview.com/widgetembed/?symbol=${tv}&interval=1&theme=dark&hide_side_toolbar=1`;
+  refreshAllPrices();
+});
+
+function toggleFullscreen(){
+  document.getElementById("tradingviewIframe").classList.toggle("fullscreen");
+}
+</script>
 </body>
 </html>
+
 
