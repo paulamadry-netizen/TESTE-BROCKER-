@@ -1,274 +1,601 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="fr">
 <head>
-<meta charset="UTF-8" />
-<title>AmA Broker — Web Trader Demo</title>
-<style>
-*{box-sizing:border-box}
-body{font-family:Inter,Arial,sans-serif;margin:0;background:linear-gradient(135deg,#0b1220,#111b2d);color:#f3f4f6;min-height:100vh}
-.app{max-width:1400px;margin:0 auto;padding:16px}
-header{display:flex;justify-content:space-between;align-items:center;background:rgba(255,255,255,.05);padding:14px 20px;border-radius:14px;backdrop-filter:blur(10px);box-shadow:0 4px 12px rgba(0,0,0,.4)}
-.brand{font-size:26px;font-weight:700;letter-spacing:1px;color:#22d3ee}
-.brand span{color:#10b981}
-header .controls{display:flex;gap:14px;align-items:center;flex-wrap:wrap}
-select,input{padding:6px 10px;border-radius:6px;background:#1b2533;color:white;border:1px solid #334155}
-.price{font-weight:600;color:#e0e0e0}
-.layout{display:grid;grid-template-columns:1fr 380px;gap:16px;margin-top:16px}
-.chart,.sidebar .panel{background:rgba(255,255,255,.05);border-radius:14px;padding:14px;backdrop-filter:blur(10px);box-shadow:0 6px 18px rgba(0,0,0,.4)}
-.chart iframe{width:100%;height:480px;border:0;border-radius:10px}
-.fullscreen{position:fixed!important;top:0;left:0;width:100vw!important;height:100vh!important;z-index:999;background:#000;border-radius:0!important}
-.tradebox{display:flex;gap:10px;margin-top:14px}
-button.buy,button.sell{flex:1;font-weight:bold;border:none;padding:12px 20px;border-radius:10px;cursor:pointer;transition:all .2s;font-size:16px}
-button.buy{background:#10b981;color:white}
-button.sell{background:#ef4444;color:white}
-button.buy:hover{background:#059669}
-button.sell:hover{background:#dc2626}
-table{width:100%;border-collapse:collapse;font-size:14px}
-td,th{padding:6px 8px;text-align:left}
-th{color:#9ca3af}
-tr:nth-child(odd){background:rgba(255,255,255,.02)}
-footer{margin-top:20px;font-size:13px;text-align:center;color:#9ca3af}
-.full-btn{float:right;background:#1e293b;border:0;color:#22d3ee;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:13px}
-.full-btn:hover{background:#0f172a}
-.total-pnl{margin-top:10px;text-align:right;font-weight:bold;font-size:15px;color:#22d3ee;}
-.history-panel{margin-top:16px;background:rgba(255,255,255,.05);border-radius:14px;padding:14px;backdrop-filter:blur(10px);box-shadow:0 6px 18px rgba(0,0,0,.4)}
-.history-panel h3{color:#22d3ee;margin-top:0;margin-bottom:10px}
-</style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Mini Broker — Graphique & Watchlist</title>
+
+  <!-- Google font -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+
+  <style>
+    :root{
+      --bg:#0f1724;
+      --card:#0b1220;
+      --muted:#9aa6bf;
+      --accent:#2dd4bf;
+      --danger:#ff6b6b;
+      --glass: rgba(255,255,255,0.03);
+      --glass-2: rgba(255,255,255,0.02);
+      --text:#e6eef8;
+    }
+    html,body{height:100%; margin:0; font-family:Inter,system-ui,Arial; background: linear-gradient(180deg,#071025 0%, #071427 100%); color:var(--text); -webkit-font-smoothing:antialiased;}
+    .app {
+      display:flex;
+      flex-direction:column;
+      height:100vh;
+      gap:12px;
+      padding:14px;
+      box-sizing:border-box;
+    }
+
+    /* Top bar */
+    .topbar{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+    }
+    .brand{
+      display:flex; gap:12px; align-items:center;
+    }
+    .logo{
+      width:44px; height:44px; border-radius:10px; background:linear-gradient(135deg,var(--accent),#60a5fa); display:flex;align-items:center;justify-content:center;font-weight:700;color:#042; box-shadow:0 6px 18px rgba(45,212,191,0.08);
+    }
+    .title{ font-weight:600; font-size:18px; }
+    .subtitle{ font-size:13px; color:var(--muted); margin-top:2px; }
+
+    /* Main layout */
+    .main {
+      display:flex;
+      gap:14px;
+      flex:1;
+      min-height:0;
+    }
+    .chart-area {
+      flex:1.6;
+      background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+      border-radius:12px;
+      padding:12px;
+      box-shadow: 0 6px 24px rgba(2,6,23,0.6);
+      display:flex;
+      flex-direction:column;
+      min-width:0;
+    }
+    .side {
+      width:320px;
+      max-width:36%;
+      min-width:240px;
+      background:var(--card);
+      border-radius:12px;
+      padding:12px;
+      box-shadow: 0 6px 20px rgba(2,6,23,0.6);
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+    }
+
+    /* Chart header */
+    .chart-header { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px; }
+    .symbol-big{ font-size:16px; font-weight:700; }
+    .controls{ display:flex; gap:8px; align-items:center; }
+
+    .btn{
+      padding:8px 12px; border-radius:8px; background:var(--glass); border:1px solid rgba(255,255,255,0.03); color:var(--text); cursor:pointer; font-weight:600;
+    }
+    .btn.primary{ background: linear-gradient(90deg,#0ea5a7,#60a5fa); color:#042; border:none; }
+    .btn.buy{ background: linear-gradient(90deg,#10b981,#34d399); color:#042; border:none; }
+    .btn.sell{ background: linear-gradient(90deg,#ef4444,#fb7185); color:white; border:none; }
+    .btn.ghost{ background:transparent; border:1px solid rgba(255,255,255,0.04); color:var(--muted); }
+
+    /* tv container */
+    #tv_chart_container { flex:1; min-height:380px; border-radius:10px; overflow:hidden; background:var(--glass-2); }
+
+    /* Watchlist */
+    .watch-title{ font-weight:700; font-size:14px; margin-bottom:6px; }
+    .watchlist { display:flex; flex-direction:column; gap:8px; overflow:auto; padding-right:6px; }
+    .watch-item {
+      display:flex; justify-content:space-between; align-items:center; padding:8px; border-radius:8px; cursor:pointer;
+      transition:all .12s; background:transparent;
+    }
+    .watch-item:hover{ transform:translateY(-3px); background:linear-gradient(90deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); }
+    .watch-left{ display:flex; gap:8px; align-items:center; }
+    .chip { padding:6px 8px; border-radius:8px; font-size:12px; background:rgba(255,255,255,0.03); color:var(--muted); min-width:70px; text-align:center; }
+    .price-small { font-weight:600; font-size:13px; }
+
+    /* bottom tabs */
+    .bottom {
+      margin-top:12px;
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+    }
+    .tabs { display:flex; gap:8px; align-items:center; }
+    .tab-btn { padding:8px 12px; border-radius:10px; cursor:pointer; background:transparent; color:var(--muted); border:1px solid transparent; font-weight:600;}
+    .tab-btn.active { background:linear-gradient(90deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); color:var(--text); border:1px solid rgba(255,255,255,0.03); }
+
+    .panel {
+      background: linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.00));
+      border-radius:10px;
+      padding:12px;
+      min-height:120px;
+      overflow:auto;
+    }
+
+    /* positions list */
+    .pos-row { display:flex; gap:10px; align-items:center; justify-content:space-between; padding:10px; border-radius:8px; background:rgba(255,255,255,0.01); margin-bottom:8px; }
+    .pos-left { display:flex; gap:12px; align-items:center; }
+    .pos-symbol { font-weight:700; }
+    .pnl { font-weight:700; }
+
+    .small-muted{ color:var(--muted); font-size:13px; }
+
+    /* responsive */
+    @media (max-width:960px){
+      .main{ flex-direction:column; }
+      .side{ width:100%; max-width:100%; order:2; }
+      .chart-area{ order:1; min-height:420px; }
+    }
+  </style>
 </head>
 <body>
-<div class="app">
-  <header>
-    <div class="brand">AmA <span>Broker</span></div>
-    <div class="controls">
-      <label>Actif :
-        <select id="symbolSelect">
-          <optgroup label="Indices">
-            <option value="SPX">S&P 500</option>
-            <option value="DJI">Dow Jones</option>
-            <option value="NDX">NASDAQ 100</option>
-            <option value="DAX">DAX 40</option>
-            <option value="FCHI">CAC 40</option>
-          </optgroup>
-          <optgroup label="Forex">
-            <option value="EUR/USD">EUR/USD</option>
-            <option value="GBP/USD">GBP/USD</option>
-            <option value="USD/JPY">USD/JPY</option>
-            <option value="AUD/USD">AUD/USD</option>
-            <option value="USD/CAD">USD/CAD</option>
-          </optgroup>
-        </select>
-      </label>
-      <div class="price">Prix actuel : <span id="priceDisplay">—</span></div>
-      <label>Lots :
-        <input type="number" id="lotInput" value="1" min="1" step="1" style="width:70px;text-align:center;">
-      </label>
-    </div>
-  </header>
+  <div class="app">
+    <div class="topbar">
+      <div class="brand">
+        <div class="logo">MB</div>
+        <div>
+          <div class="title">Mini Broker</div>
+          <div class="subtitle">Graphique · Watchlist · Positions</div>
+        </div>
+      </div>
+      <div class="controls">
+        <div class="small-muted">Clé API intégrée (dev)</div>
+        <button class="btn ghost" id="refreshPrices">Refresh prix</button>
+      </div>
+    </div>
 
-  <main class="layout">
-    <section class="chart">
-      <div style="display:flex;justify-content:space-between;align-items:center;">
-        <h3 style="margin:0;color:#22d3ee;">Graphique</h3>
-        <button class="full-btn" onclick="toggleFullscreen()">⛶ Plein écran</button>
-      </div>
-      <iframe id="tradingviewIframe"
-        src="https://s.tradingview.com/widgetembed/?symbol=OANDA:SPX500USD&interval=1&theme=dark&hide_side_toolbar=1"></iframe>
+    <div class="main">
+      <!-- Chart area -->
+      <div class="chart-area">
+        <div class="chart-header">
+          <div>
+            <div class="symbol-big" id="currentSymbol">FX:EURUSD</div>
+            <div class="small-muted" id="currentPriceSmall">Prix: --</div>
+          </div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn buy" id="btnBuy">Acheter</button>
+            <button class="btn sell" id="btnSell">Vendre</button>
+            <button class="btn" id="btnToggleLegend">Toggle Legend</button>
+          </div>
+        </div>
 
-      <div class="tradebox">
-        <button class="buy" onclick="placeOrder('buy')">ACHETER</button>
-        <button class="sell" onclick="placeOrder('sell')">VENDRE</button>
-      </div>
+        <!-- TradingView container -->
+        <div id="tv_chart_container"></div>
 
-      <div class="history-panel">
-        <h3>Historique des Positions</h3>
-        <table id="historyTable">
-          <thead>
-            <tr><th>Sym</th><th>Side</th><th>Lots</th><th>Entrée</th><th>Sortie</th><th>PnL</th><th>Heure</th></tr>
-          </thead>
-          <tbody></tbody>
-        </table>
-      </div>
-    </section>
+        <!-- bottom tabs -->
+        <div class="bottom">
+          <div class="tabs">
+            <div class="tab-btn active" data-tab="positions">Positions</div>
+            <div class="tab-btn" data-tab="history">Historique de positions</div>
+          </div>
 
-    <aside class="sidebar">
-      <div class="panel">
-        <h3 style="color:#22d3ee;">Positions Ouvertes</h3>
-        <table id="positionsTable">
-          <thead><tr><th>Sym</th><th>Side</th><th>Lots</th><th>Entrée</th><th>Dernier</th><th>PnL</th><th></th></tr></thead>
-          <tbody></tbody>
-        </table>
-        <div id="totalPnl" class="total-pnl">PnL total : 0.0000</div>
-      </div>
-    </aside>
-  </main>
+          <div class="panel" id="panelPositions">
+            <div id="positionsList">
+              <div class="small-muted">Aucune position ouverte.</div>
+            </div>
+          </div>
 
-  <footer>© 2025 AmA Broker • Données Twelve Data • Graphiques TradingView</footer>
-</div>
+          <div class="panel" id="panelHistory" style="display:none;">
+            <div id="historyList">
+              <div class="small-muted">Aucun historique.</div>
+            </div>
+          </div>
+        </div>
+      </div>
 
-<script>
-/* ===== CONFIG ===== */
-// Laissez votre clé API ici
-const TWELVE_API_KEY = "c9140c9a72264e82bb9f5235b86b2806";
+      <!-- Side: Watchlist -->
+      <aside class="side">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div>
+            <div class="watch-title">Watchlist</div>
+            <div class="small-muted">5 paires · 5 indices · Or</div>
+          </div>
+          <div class="small-muted">Temps réel</div>
+        </div>
 
-/* ===== Mappage TradingView (Aucune modification nécessaire ici) ===== */
-const SYMBOL_MAP_TV = {
-  SPX: "OANDA:SPX500USD",
-  DJI: "OANDA:US30USD",
-  NDX: "OANDA:NAS100USD",
-  DAX: "OANDA:DE40EUR",
-  FCHI: "OANDA:FR40EUR",
-  "EUR/USD": "FX:EURUSD",
-  "GBP/USD": "FX:GBPUSD",
-  "USD/JPY": "FX:USDJPY",
-  "AUD/USD": "FX:AUDUSD",
-  "USD/CAD": "FX:USDCAD"
-};
+        <div class="watchlist" id="watchlist">
+          <!-- Items injected by JS -->
+        </div>
 
-let positions = [], history = [], currentSymbol = "SPX";
-let lastPrices = {}, smoothPrices = {};
+        <div style="margin-top:auto; display:flex;gap:8px;align-items:center;justify-content:space-between;">
+          <div class="small-muted">Dernière MAJ: <span id="lastUpdate">--</span></div>
+          <div>
+            <button class="btn" id="btnRefreshWatch">Refresh</button>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </div>
 
-/* ===== FETCH TWELVE DATA (Aucune modification nécessaire ici) ===== */
-async function fetchTwelveDataPrice(symbol){
-  try{
-    const url = `https://api.twelvedata.com/price?symbol=${encodeURIComponent(symbol)}&apikey=${TWELVE_API_KEY}`;
-    const res = await fetch(url);
-    if(!res.ok) return null;
-    const data = await res.json();
-    if(!data.price) return null;
-    return parseFloat(data.price);
-  }catch(e){console.error("Twelve Data error:", e);return null;}
-}
+  <!-- TradingView library -->
+  <script src="https://s3.tradingview.com/tv.js"></script>
 
-/* * ===== CORRECTION APPLIQUÉE ICI : Routage auto corrigé pour indices ===== 
- * Correction du mappage pour les indices : Les symboles Twelve Data sont souvent
- * des symboles boursiers ou des noms d'indices sans préfixes spéciaux (comme le point).
- */
-async function fetchPrice(symbol){
-  const MAP_TWELVE = {
-    SPX: "SPX",    // S&P 500
-    DJI: "DJI",    // Dow Jones
-    NDX: "NDX",    // Nasdaq 100
-    DAX: "GDAXI",  // DAX 40 (GDAXI est souvent plus fiable que DAX)
-    FCHI: "FCHI"   // CAC 40
-  };
-  
-  const apiSymbol = MAP_TWELVE[symbol] || symbol;
-  return await fetchTwelveDataPrice(apiSymbol);
-}
+  <script>
+    /************************************************************************
+     * CONFIGURATION (modifie si besoin)
+     ************************************************************************/
+    const API_KEY = 'c9140c9a72264e82bb9f5235b86b2806'; // ta clé fournie
+    const API_BASE = 'https://api.yourbroker.com'; // <-- remplace par l'URL réelle de l'API backend si tu en as une
+    // Format attendu : GET ${API_BASE}/price?symbol=EURUSD&apikey=API_KEY
+    // Réponse attendue (JSON) : { "symbol":"EURUSD","price":1.08871, "timestamp": 1234567890 }
 
-/* ===== Refresh 10 s (Aucune modification nécessaire ici) ===== */
-async function refreshAllPrices(){
-  const needed = new Set([currentSymbol]);
-  positions.forEach(p => needed.add(p.symbol));
-  for(const sym of needed){
-    const price = await fetchPrice(sym);
-    if(price){
-      if(!lastPrices[sym]) lastPrices[sym] = price;
-      smoothPrices[sym] = lastPrices[sym];
-      lastPrices[sym] = price;
-    }
-  }
-  if(lastPrices[currentSymbol])
-    document.getElementById("priceDisplay").innerText = lastPrices[currentSymbol].toFixed(4);
-  updatePnL();
-}
-setInterval(refreshAllPrices, 10000);
-refreshAllPrices();
+    // Watchlist par défaut (tu peux remplacer les symboles selon ton fournisseur)
+    const WATCHLIST = [
+      { id:'FX:EURUSD', label:'EURUSD' },
+      { id:'FX:USDJPY', label:'USDJPY' },
+      { id:'FX:GBPUSD', label:'GBPUSD' },
+      { id:'FX:AUDUSD', label:'AUDUSD' },
+      { id:'FX:USDCAD', label:'USDCAD' },
 
-/* ===== Lissage fluide (Aucune modification nécessaire ici) ===== */
-setInterval(()=>{
-  const alpha = 0.2;
-  for(const s in lastPrices){
-    if(!smoothPrices[s]) smoothPrices[s]=lastPrices[s];
-    smoothPrices[s]+=(lastPrices[s]-smoothPrices[s])*alpha;
-  }
-  if(smoothPrices[currentSymbol])
-    document.getElementById("priceDisplay").innerText=smoothPrices[currentSymbol].toFixed(4);
-  updatePnL(true);
-},200);
+      { id:'INDEX:SPX', label:'S&P 500' },
+      { id:'INDEX:NDX', label:'NASDAQ' },
+      { id:'INDEX:DJI', label:'DOW JONES' },
+      { id:'INDEX:DAX', label:'DAX' },
+      { id:'INDEX:FTSE', label:'FTSE 100' },
 
-/* ===== Trading (Aucune modification nécessaire ici) ===== */
-async function placeOrder(side){
-  const price=lastPrices[currentSymbol];
-  if(!price)return alert("Impossible d'obtenir le prix.");
-  const qty=parseInt(document.getElementById("lotInput").value)||1;
-  positions.push({id:Date.now(),symbol:currentSymbol,side,qty,entry:price,pnl:0});
-  renderPositions();
-}
-function closePosition(id){
-  const pos=positions.find(p=>p.id===id);
-  if(!pos)return;
-  const exit=lastPrices[pos.symbol]||pos.entry;
-  const dir=pos.side==="buy"?1:-1; // Recalcul du PnL final
-  const pnlFinal=(exit-pos.entry)*dir*pos.qty;
-  const closed={...pos,exit,pnl:pnlFinal,time:new Date().toLocaleTimeString()};
-  history.unshift(closed);
-  positions=positions.filter(p=>p.id!==id);
-  renderPositions();renderHistory();
-}
+      { id:'COM:XAUUSD', label:'OR (XAUUSD)' },
+    ];
 
-/* ===== PnL (Correction mineure dans la fonction closePosition ci-dessus) ===== */
-function updatePnL(isSmooth=false){
-  let total=0;
-  positions.forEach(p=>{
-    const price=isSmooth?smoothPrices[p.symbol]:lastPrices[p.symbol];
-    if(!price)return;
-    const dir=p.side==="buy"?1:-1;
-    p.pnl=(price-p.entry)*dir*p.qty;
-    total+=p.pnl;
-  });
-  renderPositions(total);
-}
+    /************************************************************************
+     * ÉTAT
+     ************************************************************************/
+    let tvWidget = null;
+    let currentSymbol = 'FX:EURUSD';
+    let lastPrices = {}; // map symbol -> last price
+    let positions = []; // open positions
+    let history = []; // closed positions
 
-/* ===== Rendu (Aucune modification nécessaire ici) ===== */
-function renderPositions(total=0){
-  const tbody=document.querySelector("#positionsTable tbody");
-  tbody.innerHTML="";
-  positions.forEach(p=>{
-    const last=smoothPrices[p.symbol]??null;
-    const tr=document.createElement("tr");
-    tr.innerHTML=`
-      <td>${p.symbol}</td><td>${p.side}</td><td>${p.qty}</td>
-      <td>${p.entry.toFixed(5)}</td><td>${last?last.toFixed(5):"—"}</td>
-      <td style="color:${p.pnl>0?"#10b981":p.pnl<0?"#ef4444":"white"}">${p.pnl.toFixed(5)}</td>
-      <td><button onclick="closePosition(${p.id})"
-      style="background:#334155;color:white;border:0;padding:4px 8px;border-radius:6px;cursor:pointer;">✖</button></td>`;
-    tbody.appendChild(tr);
-  });
-  const t=document.getElementById("totalPnl");
-  t.innerText="PnL total : "+total.toFixed(5);
-  t.style.color=total>0?"#10b981":total<0?"#ef4444":"#22d3ee";
-}
-function renderHistory(){
-  const tbody=document.querySelector("#historyTable tbody");
-  tbody.innerHTML="";
-  history.forEach(h=>{
-    const tr=document.createElement("tr");
-    tr.innerHTML=`
-      <td>${h.symbol}</td><td>${h.side}</td><td>${h.qty}</td>
-      <td>${h.entry.toFixed(5)}</td><td>${h.exit.toFixed(5)}</td>
-      <td style="color:${h.pnl>0?"#10b981":h.pnl<0?"#ef4444":"white"}">${h.pnl.toFixed(5)}</td>
-      <td>${h.time}</td>`;
-    tbody.appendChild(tr);
-  });
-}
+    /************************************************************************
+     * UTILITAIRES
+     ************************************************************************/
+    function nowString(){
+      return new Date().toLocaleString('fr-FR');
+    }
 
-/* ===== Sélection actif (Aucune modification nécessaire ici) ===== */
-document.getElementById("symbolSelect").addEventListener("change",e=>{
-  currentSymbol=e.target.value;
-  const tv=SYMBOL_MAP_TV[currentSymbol];
-  document.getElementById("tradingviewIframe").src=
-    `https://s.tradingview.com/widgetembed/?symbol=${tv}&interval=1&theme=dark&hide_side_toolbar=1`;
-  refreshAllPrices();
-});
+    function fmt(n, digits=5){
+      if (n === null || n === undefined) return '--';
+      return Number(n).toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: digits});
+    }
 
-/* ===== Plein écran (Aucune modification nécessaire ici) ===== */
-function toggleFullscreen(){
-  document.getElementById("tradingviewIframe").classList.toggle("fullscreen");
-}
-</script>
+    function apiGetPrice(symbol){
+      // essaie d'appeler l'API réelle ; si échec, retourne un fallback (simulateur)
+      // On construit paramètre symbol pour l'API : enlever "FX:" ou "COM:" ou "INDEX:" si besoin
+      const rawSymbol = symbol.replace(/^FX:|^COM:|^INDEX:/, '');
+      const url = `${API_BASE.replace(/\/$/, '')}/price?symbol=${encodeURIComponent(rawSymbol)}&apikey=${encodeURIComponent(API_KEY)}`;
+
+      // Retourne une Promise qui résout { price, timestamp, source }
+      return fetch(url, { method:'GET' })
+        .then(resp => {
+          if(!resp.ok) throw new Error('HTTP ' + resp.status);
+          return resp.json();
+        })
+        .then(json => {
+          // tenter d'extraire un champ price
+          if (json && (json.price !== undefined || json.ask !== undefined || json.last !== undefined)) {
+            const price = json.price ?? json.last ?? json.ask;
+            return { price: Number(price), timestamp: json.timestamp ?? Date.now(), source: 'api' };
+          }
+          throw new Error('Réponse API invalide');
+        })
+        .catch(err => {
+          // fallback simulateur basé sur lastPrices (ou valeur par défaut)
+          const base = lastPrices[symbol] ?? (symbol.startsWith('FX:') ? 1.0800 : (symbol.includes('XAU') ? 1900.0 : 4000.0));
+          // petite variation aléatoire
+          const jitter = (Math.random() - 0.5) * (symbol.startsWith('FX:') ? 0.0012 : 0.6);
+          const fallbackPrice = +(base * (1 + jitter)).toFixed(5);
+          console.warn('API price fetch failed for', symbol, '-> fallback', fallbackPrice, err);
+          return { price: fallbackPrice, timestamp: Date.now(), source: 'fallback' };
+        });
+    }
+
+    /************************************************************************
+     * TRADINGVIEW WIDGET
+     ************************************************************************/
+    function initTradingView(symbol) {
+      // clean previous
+      document.getElementById('tv_chart_container').innerHTML = '';
+      try {
+        tvWidget = new TradingView.widget({
+          autosize: true,
+          symbol: symbol,
+          interval: "60",
+          timezone: "Etc/UTC",
+          theme: "dark",
+          style: "1",
+          locale: "fr",
+          toolbar_bg: "#0b1220",
+          enable_publishing: false,
+          allow_symbol_change: true,
+          container_id: "tv_chart_container",
+          studies_overrides: {},
+          // small tweaks to make it compact
+          withdateranges: true,
+          hide_side_toolbar: false,
+          details: true,
+          hotlist: false,
+          news: [],
+        });
+
+        // attempt to update displayed symbol text when chart ready
+        tvWidget.onChartReady && tvWidget.onChartReady(function(){
+          document.getElementById('currentSymbol').textContent = symbol;
+          // try to fetch initial price for display
+          updatePriceForSymbol(symbol);
+        });
+      } catch(e) {
+        console.error('Erreur initialisation TradingView:', e);
+        // Fallback simple message
+        const c = document.getElementById('tv_chart_container');
+        c.innerHTML = '<div style="padding:20px;color:var(--muted)">Impossible de charger le widget TradingView (contrôle réseau ou CORS). Vérifie ta connexion.</div>';
+      }
+    }
+
+    function setChartSymbol(symbol){
+      currentSymbol = symbol;
+      document.getElementById('currentSymbol').textContent = symbol;
+      // Si l'API du widget permet setSymbol, on l'utilise, sinon on réinit
+      try {
+        if (tvWidget && tvWidget.chart) {
+          // certaines versions ont setSymbol sur activeChart()
+          if (tvWidget.activeChart && typeof tvWidget.activeChart().setSymbol === 'function') {
+            tvWidget.activeChart().setSymbol(symbol, '60');
+          } else if (tvWidget.chart && typeof tvWidget.chart.setSymbol === 'function') {
+            tvWidget.chart.setSymbol(symbol, '60');
+          } else {
+            // réinit si pas supporté
+            initTradingView(symbol);
+          }
+        } else {
+          initTradingView(symbol);
+        }
+      } catch(e) {
+        console.warn('setChartSymbol fallback -> reinit', e);
+        initTradingView(symbol);
+      }
+      // update price
+      updatePriceForSymbol(symbol);
+    }
+
+    /************************************************************************
+     * WATCHLIST UI
+     ************************************************************************/
+    function renderWatchlist(){
+      const container = document.getElementById('watchlist');
+      container.innerHTML = '';
+      WATCHLIST.forEach(w => {
+        const item = document.createElement('div');
+        item.className = 'watch-item';
+        item.dataset.symbol = w.id;
+
+        item.innerHTML = `
+          <div class="watch-left">
+            <div style="display:flex;flex-direction:column;">
+              <div style="font-weight:700">${w.label}</div>
+              <div class="small-muted" style="font-size:12px">${w.id}</div>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;">
+            <div class="price-small" id="price_${escapeId(w.id)}">--</div>
+            <div class="small-muted" id="source_${escapeId(w.id)}">--</div>
+          </div>
+        `;
+        item.addEventListener('click', () => {
+          setChartSymbol(w.id);
+        });
+        container.appendChild(item);
+      });
+    }
+
+    function escapeId(s){ return s.replace(/[^a-zA-Z0-9]/g,'_'); }
+
+    async function refreshWatchPrices(){
+      const promises = WATCHLIST.map(async (w) => {
+        const res = await apiGetPrice(w.id);
+        lastPrices[w.id] = res.price;
+        // update UI
+        const priceEl = document.getElementById('price_' + escapeId(w.id));
+        const srcEl = document.getElementById('source_' + escapeId(w.id));
+        if (priceEl) priceEl.textContent = fmt(res.price, res.price > 100 ? 2 : 5);
+        if (srcEl) srcEl.textContent = res.source === 'api' ? 'api' : 'simulé';
+      });
+      await Promise.all(promises);
+      document.getElementById('lastUpdate').textContent = nowString();
+      // if currentSymbol in list, update current price small too
+      if (lastPrices[currentSymbol]) {
+        document.getElementById('currentPriceSmall').textContent = 'Prix: ' + fmt(lastPrices[currentSymbol], lastPrices[currentSymbol] > 100 ? 2 : 5);
+      } else {
+        // fetch current
+        updatePriceForSymbol(currentSymbol);
+      }
+    }
+
+    /************************************************************************
+     * POSITIONS - TRADING LOGIC (simplifié pour démo)
+     ************************************************************************/
+    function openPosition({symbol, side, qty, entryPrice}){
+      const pos = {
+        id: 'pos_' + Date.now() + '_' + Math.floor(Math.random()*1000),
+        symbol, side, qty: Number(qty), entryPrice: Number(entryPrice),
+        openedAt: Date.now(),
+      };
+      positions.push(pos);
+      renderPositions();
+    }
+
+    function closePosition(posId){
+      const idx = positions.findIndex(p=>p.id===posId);
+      if (idx === -1) return;
+      const pos = positions[idx];
+      // get latest price (synchronously from lastPrices or 0)
+      const cur = lastPrices[pos.symbol] ?? pos.entryPrice;
+      const pnl = computePnl(pos, cur);
+      const closed = {...pos, closedAt: Date.now(), exitPrice: cur, pnl};
+      // move to history
+      history.unshift(closed);
+      positions.splice(idx,1);
+      renderPositions();
+      renderHistory();
+    }
+
+    function computePnl(pos, priceNow){
+      const direction = pos.side === 'BUY' ? 1 : -1;
+      // PnL monetary: (priceNow - entryPrice) * qty * direction
+      const pnl = (priceNow - pos.entryPrice) * pos.qty * direction;
+      return pnl;
+    }
+
+    function renderPositions(){
+      const list = document.getElementById('positionsList');
+      list.innerHTML = '';
+      if (positions.length === 0) {
+        list.innerHTML = '<div class="small-muted">Aucune position ouverte.</div>';
+        return;
+      }
+      positions.forEach(p => {
+        const cur = lastPrices[p.symbol] ?? p.entryPrice;
+        const pnl = computePnl(p, cur);
+        const row = document.createElement('div');
+        row.className = 'pos-row';
+        row.innerHTML = `
+          <div style="display:flex;flex-direction:column;min-width:0;">
+            <div style="display:flex;gap:8px;align-items:center;">
+              <div class="pos-symbol">${p.symbol}</div>
+              <div class="small-muted">x${p.qty}</div>
+            </div>
+            <div class="small-muted">Entrée: ${fmt(p.entryPrice, p.entryPrice>100?2:5)} · Actuel: ${fmt(cur, cur>100?2:5)}</div>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;">
+            <div class="pnl" style="color:${pnl>=0 ? '#34d399' : '#fb7185'}">${pnl>=0?'+':''}${fmt(pnl,2)}</div>
+            <div style="display:flex;gap:6px;margin-top:8px;">
+              <button class="btn ghost" onclick="closePosition('${p.id}')">Fermer</button>
+              <button class="btn" onclick="focusSymbol('${p.symbol}')">Voir</button>
+            </div>
+          </div>
+        `;
+        list.appendChild(row);
+      });
+    }
+
+    function renderHistory(){
+      const list = document.getElementById('historyList');
+      list.innerHTML = '';
+      if (history.length === 0) {
+        list.innerHTML = '<div class="small-muted">Aucun historique.</div>';
+        return;
+      }
+      history.forEach(h => {
+        const row = document.createElement('div');
+        row.className = 'pos-row';
+        row.innerHTML = `
+          <div style="display:flex;flex-direction:column;">
+            <div style="display:flex;gap:8px;align-items:center;">
+              <div class="pos-symbol">${h.symbol}</div>
+              <div class="small-muted">x${h.qty}</div>
+            </div>
+            <div class="small-muted">Entrée: ${fmt(h.entryPrice,5)} · Sortie: ${fmt(h.exitPrice,5)}</div>
+            <div class="small-muted">Ouvert: ${new Date(h.openedAt).toLocaleString('fr-FR')} · Fermé: ${new Date(h.closedAt).toLocaleString('fr-FR')}</div>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;">
+            <div class="pnl" style="color:${h.pnl>=0? '#34d399':'#fb7185'}">${h.pnl>=0?'+':''}${fmt(h.pnl,2)}</div>
+            <div class="small-muted" style="font-size:12px">${h.side}</div>
+          </div>
+        `;
+        list.appendChild(row);
+      });
+    }
+
+    function focusSymbol(sym){
+      setChartSymbol(sym);
+    }
+
+    /************************************************************************
+     * INTERACTIONS: ACHETER / VENDRE
+     ************************************************************************/
+    document.getElementById('btnBuy').addEventListener('click', () => handleOrder('BUY'));
+    document.getElementById('btnSell').addEventListener('click', () => handleOrder('SELL'));
+
+    async function handleOrder(side){
+      const symbol = currentSymbol || 'FX:EURUSD';
+      // Prompt minimal UI pour qté (ne pas demander confirmation prolongée, faire best effort)
+      const qtyStr = prompt(`Ordre ${side} - ${symbol}\nQuantité (lots / unités). Exemple: 1000`, '1000');
+      const qty = Number(qtyStr);
+      if (!qty || qty <= 0 || isNaN(qty)) {
+        alert('Quantité invalide.');
+        return;
+      }
+
+      // Récupère prix via API (ou fallback)
+      const res = await apiGetPrice(symbol);
+      const price = res.price;
+      // Ouvre position et affiche
+      openPosition({ symbol, side, qty, entryPrice: price });
+
+      // une mise à jour immédiate
+      await refreshWatchPrices();
+      renderPositions();
+      alert(`Position ouverte: ${side} ${symbol} @ ${fmt(price, price>100?2:5)} x${qty} (${res.source})`);
+    }
+
+    /************************************************************************
+     * Mise à jour continue du PnL (polling)
+     ************************************************************************/
+    async function pollPricesAndUpdate(){
+      // refresh watchlist + current symbol price
+      await refreshWatchPrices();
+      // recalc PnL
+      renderPositions();
+    }
+
+    /************************************************************************
+     * UI EVENTS
+     ************************************************************************/
+    document.getElementById('btnRefreshWatch').addEventListener('click', ()=>refreshWatchPrices());
+    document.getElementById('refreshPrices').addEventListener('click', ()=>pollPricesAndUpdate());
+    // tabs
+    document.querySelectorAll('.tab-btn').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+        btn.classList.add('active');
+        const tab = btn.dataset.tab;
+        document.getElementById('panelPositions').style.display = tab === 'positions' ? 'block' : 'none';
+        document.getElementById('panelHistory').style.display = tab === 'history' ? 'block' : 'none';
+      });
+    });
+
+    /************************************************************************
+     * INITIALISATION
+     ************************************************************************/
+    async function boot(){
+      renderWatchlist();
+      initTradingView(currentSymbol);
+      await refreshWatchPrices();
+      renderPositions();
+      renderHistory();
+      // polling (met à jour prix et PnL toutes les 8 secondes)
+      setInterval(pollPricesAndUpdate, 8000);
+    }
+
+    // Expose some helpers globally for inline HTML button handlers
+    window.closePosition = closePosition;
+    window.focusSymbol = focusSymbol;
+
+    // start
+    boot();
+
+  </script>
 </body>
 </html>
+
 
 
 
