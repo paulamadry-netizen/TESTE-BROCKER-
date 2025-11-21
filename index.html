@@ -107,10 +107,9 @@ footer{margin-top:20px;font-size:13px;text-align:center;color:#9ca3af}
 
 <script>
 /* ===== CONFIG ===== */
-// Laissez votre clé API ici
 const TWELVE_API_KEY = "c9140c9a72264e82bb9f5235b86b2806";
 
-/* ===== Mappage TradingView (Aucune modification nécessaire ici) ===== */
+/* ===== Mappage TradingView ===== */
 const SYMBOL_MAP_TV = {
   SPX: "OANDA:SPX500USD",
   DJI: "OANDA:US30USD",
@@ -127,7 +126,7 @@ const SYMBOL_MAP_TV = {
 let positions = [], history = [], currentSymbol = "SPX";
 let lastPrices = {}, smoothPrices = {};
 
-/* ===== FETCH TWELVE DATA (Aucune modification nécessaire ici) ===== */
+/* ===== FETCH TWELVE DATA ===== */
 async function fetchTwelveDataPrice(symbol){
   try{
     const url = `https://api.twelvedata.com/price?symbol=${encodeURIComponent(symbol)}&apikey=${TWELVE_API_KEY}`;
@@ -139,24 +138,32 @@ async function fetchTwelveDataPrice(symbol){
   }catch(e){console.error("Twelve Data error:", e);return null;}
 }
 
-/* * ===== CORRECTION APPLIQUÉE ICI : Routage auto corrigé pour indices ===== 
- * Correction du mappage pour les indices : Les symboles Twelve Data sont souvent
- * des symboles boursiers ou des noms d'indices sans préfixes spéciaux (comme le point).
- */
+/* ******************************************************************* * ===== CORRECTION APPLIQUÉE ICI : Routage auto corrigé pour indices =====
+ * Tentative d'utiliser des noms de contrats CFD courants, souvent requis
+ * par les API pour la récupération des prix des indices.
+ * ******************************************************************* */
 async function fetchPrice(symbol){
-  const MAP_TWELVE = {
-    SPX: "SPX",    // S&P 500
-    DJI: "DJI",    // Dow Jones
-    NDX: "NDX",    // Nasdaq 100
-    DAX: "GDAXI",  // DAX 40 (GDAXI est souvent plus fiable que DAX)
-    FCHI: "FCHI"   // CAC 40
-  };
-  
-  const apiSymbol = MAP_TWELVE[symbol] || symbol;
-  return await fetchTwelveDataPrice(apiSymbol);
-}
+  const MAP_TWELVE = {
+    // Noms de contrats CFD courants
+    SPX: "SPX500",   
+    DJI: "US30",     
+    NDX: "NDX100",   
+    DAX: "GER30",    
+    FCHI: "FRA40"   
+  };
+  
+  const apiSymbol = MAP_TWELVE[symbol] || symbol;
 
-/* ===== Refresh 10 s (Aucune modification nécessaire ici) ===== */
+  // Si le symbole fait partie des indices, on tente d'ajouter le suffixe /CFD
+  const finalSymbol = MAP_TWELVE[symbol] ? `${apiSymbol}/CFD` : apiSymbol;
+
+  // Si l'indice ne fonctionne toujours pas, commenter la ligne ci-dessus 
+  // et décommenter celle-ci (sans suffixe /CFD)
+  // const finalSymbol = apiSymbol;
+
+  return await fetchTwelveDataPrice(finalSymbol);
+}
+// ******************************************************************* /* ===== Refresh 10 s ===== */
 async function refreshAllPrices(){
   const needed = new Set([currentSymbol]);
   positions.forEach(p => needed.add(p.symbol));
@@ -175,7 +182,7 @@ async function refreshAllPrices(){
 setInterval(refreshAllPrices, 10000);
 refreshAllPrices();
 
-/* ===== Lissage fluide (Aucune modification nécessaire ici) ===== */
+/* ===== Lissage fluide ===== */
 setInterval(()=>{
   const alpha = 0.2;
   for(const s in lastPrices){
@@ -187,7 +194,7 @@ setInterval(()=>{
   updatePnL(true);
 },200);
 
-/* ===== Trading (Aucune modification nécessaire ici) ===== */
+/* ===== Trading ===== */
 async function placeOrder(side){
   const price=lastPrices[currentSymbol];
   if(!price)return alert("Impossible d'obtenir le prix.");
@@ -199,7 +206,7 @@ function closePosition(id){
   const pos=positions.find(p=>p.id===id);
   if(!pos)return;
   const exit=lastPrices[pos.symbol]||pos.entry;
-  const dir=pos.side==="buy"?1:-1; // Recalcul du PnL final
+  const dir=pos.side==="buy"?1:-1; 
   const pnlFinal=(exit-pos.entry)*dir*pos.qty;
   const closed={...pos,exit,pnl:pnlFinal,time:new Date().toLocaleTimeString()};
   history.unshift(closed);
@@ -207,7 +214,7 @@ function closePosition(id){
   renderPositions();renderHistory();
 }
 
-/* ===== PnL (Correction mineure dans la fonction closePosition ci-dessus) ===== */
+/* ===== PnL ===== */
 function updatePnL(isSmooth=false){
   let total=0;
   positions.forEach(p=>{
@@ -220,7 +227,7 @@ function updatePnL(isSmooth=false){
   renderPositions(total);
 }
 
-/* ===== Rendu (Aucune modification nécessaire ici) ===== */
+/* ===== Rendu ===== */
 function renderPositions(total=0){
   const tbody=document.querySelector("#positionsTable tbody");
   tbody.innerHTML="";
@@ -253,7 +260,7 @@ function renderHistory(){
   });
 }
 
-/* ===== Sélection actif (Aucune modification nécessaire ici) ===== */
+/* ===== Sélection actif ===== */
 document.getElementById("symbolSelect").addEventListener("change",e=>{
   currentSymbol=e.target.value;
   const tv=SYMBOL_MAP_TV[currentSymbol];
@@ -262,7 +269,7 @@ document.getElementById("symbolSelect").addEventListener("change",e=>{
   refreshAllPrices();
 });
 
-/* ===== Plein écran (Aucune modification nécessaire ici) ===== */
+/* ===== Plein écran ===== */
 function toggleFullscreen(){
   document.getElementById("tradingviewIframe").classList.toggle("fullscreen");
 }
