@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Mini Broker — Graphique & Watchlist</title>
 
+  <!-- Google font -->
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
 
   <style>
@@ -19,14 +20,21 @@
       --text:#e6eef8;
     }
     html,body{height:100%; margin:0; font-family:Inter,system-ui,Arial; background: linear-gradient(180deg,#071025 0%, #071427 100%); color:var(--text); -webkit-font-smoothing:antialiased;}
-    .app{display:flex;flex-direction:column;height:100vh;gap:12px;padding:14px;box-sizing:border-box;}
+    .app {
+      display:flex;
+      flex-direction:column;
+      height:100vh;
+      gap:12px;
+      padding:14px;
+      box-sizing:border-box;
+    }
     .topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;}
-    .brand{display:flex; gap:12px; align-items:center;}
-    .logo{width:44px;height:44px;border-radius:10px;background:linear-gradient(135deg,var(--accent),#60a5fa);display:flex;align-items:center;justify-content:center;font-weight:700;color:#042;box-shadow:0 6px 18px rgba(45,212,191,0.08);}
+    .brand{display:flex;gap:12px;align-items:center;}
+    .logo{width:44px;height:44px;border-radius:10px;background:linear-gradient(135deg,var(--accent),#60a5fa);display:flex;align-items:center;justify-content:center;font-weight:700;color:#042;}
     .title{font-weight:600;font-size:18px;}
     .subtitle{font-size:13px;color:var(--muted);margin-top:2px;}
     .main{display:flex;gap:14px;flex:1;min-height:0;}
-    .chart-area{flex:1.6;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));border-radius:12px;padding:12px;box-shadow:0 6px 24px rgba(2,6,23,0.6);display:flex;flex-direction:column;min-width:0;}
+    .chart-area{flex:1.6;background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01));border-radius:12px;padding:12px;box-shadow:0 6px 24px rgba(2,6,23,0.6);display:flex;flex-direction:column;min-width:0;}
     .side{width:320px;max-width:36%;min-width:240px;background:var(--card);border-radius:12px;padding:12px;box-shadow:0 6px 20px rgba(2,6,23,0.6);display:flex;flex-direction:column;gap:10px;}
     .chart-header{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;}
     .symbol-big{font-size:16px;font-weight:700;}
@@ -40,461 +48,195 @@
     .watch-title{font-weight:700;font-size:14px;margin-bottom:6px;}
     .watchlist{display:flex;flex-direction:column;gap:8px;overflow:auto;padding-right:6px;}
     .watch-item{display:flex;justify-content:space-between;align-items:center;padding:8px;border-radius:8px;cursor:pointer;transition:all .12s;background:transparent;}
-    .watch-item:hover{transform:translateY(-3px);background:linear-gradient(90deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));}
-    .price-small{font-weight:600;font-size:13px;}
+    .watch-item:hover{transform:translateY(-3px);background:linear-gradient(90deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01));}
+    .small-muted{color:var(--muted);font-size:13px;}
     .bottom{margin-top:12px;display:flex;flex-direction:column;gap:8px;}
     .tabs{display:flex;gap:8px;align-items:center;}
     .tab-btn{padding:8px 12px;border-radius:10px;cursor:pointer;background:transparent;color:var(--muted);border:1px solid transparent;font-weight:600;}
-    .tab-btn.active{background:linear-gradient(90deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));color:var(--text);border:1px solid rgba(255,255,255,0.03);}
-    .panel{background:linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.00));border-radius:10px;padding:12px;min-height:120px;overflow:auto;}
-    .pos-row{display:flex;gap:10px;align-items:center;justify-content:space-between;padding:10px;border-radius:8px;background:rgba(255,255,255,0.01);margin-bottom:8px;}
-    .pos-symbol{font-weight:700;}
+    .tab-btn.active{background:linear-gradient(90deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01));color:var(--text);border:1px solid rgba(255,255,255,0.03);}
+    .panel{background:linear-gradient(180deg,rgba(255,255,255,0.01),rgba(255,255,255,0.00));border-radius:10px;padding:12px;min-height:120px;overflow:auto;}
+    .pos-row{display:flex;justify-content:space-between;align-items:center;padding:10px;border-radius:8px;background:rgba(255,255,255,0.01);margin-bottom:8px;}
     .pnl{font-weight:700;}
-    .small-muted{color:var(--muted);font-size:13px;}
-    .disabled{opacity:0.6;pointer-events:none;}
+    @media (max-width:960px){.main{flex-direction:column;}.side{width:100%;max-width:100%;order:2;}.chart-area{order:1;min-height:420px;}}
   </style>
 </head>
 <body>
-<div class="app">
-  <div class="topbar">
-    <div class="brand">
-      <div class="logo">MB</div>
-      <div>
-        <div class="title">Mini Broker</div>
-        <div class="subtitle">Graphique · Watchlist · Positions</div>
+  <div class="app">
+    <div class="topbar">
+      <div class="brand">
+        <div class="logo">MB</div>
+        <div>
+          <div class="title">Mini Broker</div>
+          <div class="subtitle">Graphique · Watchlist · Positions</div>
+        </div>
+      </div>
+      <div class="controls">
+        <div class="small-muted">Données : Twelve Data</div>
+        <button class="btn ghost" id="refreshPrices">Rafraîchir</button>
       </div>
     </div>
-    <div class="controls">
-      <div class="small-muted">TwelveData API</div>
-      <button class="btn ghost" id="refreshPrices">Refresh prix</button>
+
+    <div class="main">
+      <div class="chart-area">
+        <div class="chart-header">
+          <div>
+            <div class="symbol-big" id="currentSymbol">EUR/USD</div>
+            <div class="small-muted" id="currentPriceSmall">Prix: --</div>
+          </div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn buy" id="btnBuy">Acheter</button>
+            <button class="btn sell" id="btnSell">Vendre</button>
+          </div>
+        </div>
+        <div id="tv_chart_container"></div>
+
+        <div class="bottom">
+          <div class="tabs">
+            <div class="tab-btn active" data-tab="positions">Positions</div>
+            <div class="tab-btn" data-tab="history">Historique</div>
+          </div>
+
+          <div class="panel" id="panelPositions">
+            <div id="positionsList"><div class="small-muted">Aucune position ouverte.</div></div>
+          </div>
+          <div class="panel" id="panelHistory" style="display:none;">
+            <div id="historyList"><div class="small-muted">Aucun historique.</div></div>
+          </div>
+        </div>
+      </div>
+
+      <aside class="side">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div>
+            <div class="watch-title">Watchlist</div>
+            <div class="small-muted">Forex · Indices · Or</div>
+          </div>
+          <div class="small-muted">Temps réel</div>
+        </div>
+
+        <div class="watchlist" id="watchlist"></div>
+
+        <div style="margin-top:auto;display:flex;gap:8px;align-items:center;justify-content:space-between;">
+          <div class="small-muted">Dernière MAJ: <span id="lastUpdate">--</span></div>
+          <div><button class="btn" id="btnRefreshWatch">Refresh</button></div>
+        </div>
+      </aside>
     </div>
   </div>
 
-  <div class="main">
-    <div class="chart-area">
-      <div class="chart-header">
-        <div>
-          <div class="symbol-big" id="currentSymbol">FX:EURUSD</div>
-          <div class="small-muted" id="currentPriceSmall">Prix: --</div>
-        </div>
-        <div style="display:flex;gap:8px;">
-          <button class="btn buy" id="btnBuy">Acheter</button>
-          <button class="btn sell" id="btnSell">Vendre</button>
-          <button class="btn" id="btnToggleLegend">Toggle Legend</button>
-        </div>
-      </div>
-      <div id="tv_chart_container"></div>
-      <div class="bottom">
-        <div class="tabs">
-          <div class="tab-btn active" data-tab="positions">Positions</div>
-          <div class="tab-btn" data-tab="history">Historique de positions</div>
-        </div>
-        <div class="panel" id="panelPositions"><div id="positionsList"><div class="small-muted">Aucune position ouverte.</div></div></div>
-        <div class="panel" id="panelHistory" style="display:none;"><div id="historyList"><div class="small-muted">Aucun historique.</div></div></div>
-      </div>
-    </div>
-
-    <aside class="side">
-      <div style="display:flex;justify-content:space-between;align-items:center;">
-        <div>
-          <div class="watch-title">Watchlist</div>
-          <div class="small-muted">Pairs & indices</div>
-        </div>
-        <div class="small-muted">Temps réel</div>
-      </div>
-      <div class="watchlist" id="watchlist"></div>
-      <div style="margin-top:auto;display:flex;gap:8px;align-items:center;justify-content:space-between;">
-        <div class="small-muted">Dernière MAJ: <span id="lastUpdate">--</span></div>
-        <div><button class="btn" id="btnRefreshWatch">Refresh</button></div>
-      </div>
-    </aside>
-  </div>
-</div>
-
-<script src="https://s3.tradingview.com/tv.js"></script>
-<script>
-/************************************************************************
- * CONFIG TWELVEDATA
- ************************************************************************/
-const API_KEY = "c9140c9a72264e82bb9f5235b86b2806";
-
-/*
- * Convertit notre format interne en symbole attendu par TwelveData.
- * Si tu utilises des symboles qui diffèrent (ex: TW stocks), ajuste ici.
- */
-function toTD(symbol){
-  // ex: "FX:EURUSD" -> "EURUSD", "COM:XAUUSD" -> "XAUUSD", "INDEX:SPX" -> "SPX"
-  return symbol.replace(/^FX:/,'').replace(/^COM:/,'').replace(/^INDEX:/,'');
-}
-
-/************************************************************************
- * WATCHLIST (modifiable)
- ************************************************************************/
+  <script src="https://s3.tradingview.com/tv.js"></script>
+  <script>
+const API_KEY = 'c9140c9a72264e82bb9f5235b86b2806';
+const API_BASE = 'https://api.twelvedata.com';
 const WATCHLIST = [
-  { id:'FX:EURUSD', label:'EURUSD' },
-  { id:'FX:USDJPY', label:'USDJPY' },
-  { id:'FX:GBPUSD', label:'GBPUSD' },
-  { id:'FX:AUDUSD', label:'AUDUSD' },
-  { id:'FX:USDCAD', label:'USDCAD' },
-  { id:'INDEX:SPX', label:'S&P 500' },
-  { id:'INDEX:NDX', label:'NASDAQ' },
-  { id:'INDEX:DJI', label:'DOW JONES' },
-  { id:'INDEX:DAX', label:'DAX' },
-  { id:'INDEX:FTSE', label:'FTSE 100' },
-  { id:'COM:XAUUSD', label:'OR (XAUUSD)' }
+  { id:'EUR/USD', label:'EURUSD' }, { id:'USD/JPY', label:'USDJPY' },
+  { id:'GBP/USD', label:'GBPUSD' }, { id:'AUD/USD', label:'AUDUSD' },
+  { id:'USD/CAD', label:'USDCAD' }, { id:'SPX', label:'S&P 500' },
+  { id:'NDX', label:'NASDAQ' }, { id:'DJI', label:'DOW JONES' },
+  { id:'DAX', label:'DAX' }, { id:'FTSE', label:'FTSE 100' },
+  { id:'XAU/USD', label:'Or (XAUUSD)' },
 ];
+let tvWidget=null,currentSymbol='EUR/USD',lastPrices={},positions=[],history=[];
+const fmt=(n,d=5)=>n==null?'--':Number(n).toLocaleString('en-US',{maximumFractionDigits:d});
+const now=()=>new Date().toLocaleString('fr-FR');
 
-/************************************************************************
- * STATE
- ************************************************************************/
-let tvWidget = null;
-let currentSymbol = 'FX:EURUSD';
-let lastPrices = {};   // map symbol -> last price (Number)
-let lastSources = {};  // map symbol -> 'api'|'fallback'
-let positions = [];    // open positions
-let history = [];      // closed positions
-
-function nowString(){ return new Date().toLocaleString('fr-FR'); }
-function fmt(n, digits=5){
-  if (n === null || n === undefined || isNaN(n)) return '--';
-  return Number(n).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: digits });
+function apiGetPrice(symbol){
+  return fetch(`${API_BASE}/price?symbol=${encodeURIComponent(symbol)}&apikey=${API_KEY}`)
+  .then(r=>r.json())
+  .then(j=>{
+    if(j && j.price)return{price:Number(j.price),source:'twelvedata'};
+    throw new Error('Invalid');
+  })
+  .catch(()=>{
+    const base=lastPrices[symbol]??1.1;const f=base*(1+(Math.random()-0.5)*0.001);
+    return{price:f,source:'fallback'};
+  });
 }
-
-/************************************************************************
- * Fetch price from TwelveData (returns { price, timestamp, source })
- * Uses simple endpoint: https://api.twelvedata.com/price?symbol=EURUSD&apikey=...
- ************************************************************************/
-async function apiGetPrice(symbol){
-  const td = toTD(symbol);
-  const url = `https://api.twelvedata.com/price?symbol=${encodeURIComponent(td)}&apikey=${encodeURIComponent(API_KEY)}`;
-
-  try {
-    const resp = await fetch(url);
-    if (!resp.ok) throw new Error('HTTP ' + resp.status);
-    const json = await resp.json();
-    // TwelveData returns { "meta": {...}, "price": "1.2345" } or { "code": 400, "status": "error", "message": "..." }
-    if (json && json.price && !isNaN(Number(json.price))) {
-      const price = Number(json.price);
-      return { price, timestamp: Date.now(), source: 'api' };
-    } else {
-      // if TwelveData returns error object, include message
-      const errMsg = json && json.message ? json.message : 'Invalid response';
-      throw new Error('TwelveData: ' + errMsg);
-    }
-  } catch (err) {
-    // fallback: use last known price with tiny jitter
-    const base = (typeof lastPrices[symbol] === 'number') ? lastPrices[symbol] : (symbol.startsWith('FX:') ? 1.0800 : (symbol.includes('XAU') ? 1900.0 : 1000.0));
-    const jitter = (Math.random() - 0.5) * (symbol.startsWith('FX:') ? 0.0008 : 0.6);
-    const fallback = +(base * (1 + jitter)).toFixed(5);
-    console.warn('apiGetPrice failed for', symbol, err);
-    return { price: fallback, timestamp: Date.now(), source: 'fallback' };
-  }
-}
-
-/************************************************************************
- * TradingView widget initialisation (keeps behaviour simple)
- ************************************************************************/
-function initTradingView(symbol){
-  const container = document.getElementById('tv_chart_container');
-  container.innerHTML = '';
-  try {
-    tvWidget = new TradingView.widget({
-      autosize: true,
-      symbol,
-      interval: "60",
-      timezone: "Etc/UTC",
-      theme: "dark",
-      style: "1",
-      locale: "fr",
-      toolbar_bg: "#0b1220",
-      container_id: "tv_chart_container",
-      allow_symbol_change: true,
-      studies_overrides: {}
-    });
-    if (tvWidget && tvWidget.onChartReady) {
-      tvWidget.onChartReady(() => {
-        document.getElementById('currentSymbol').textContent = symbol;
-        updatePriceForSymbol(symbol);
-      });
-    }
-  } catch (e) {
-    console.error('TradingView init error:', e);
-    container.innerHTML = '<div style="padding:20px;color:var(--muted)">Impossible de charger le widget TradingView.</div>';
-  }
-}
-
-function setChartSymbol(symbol){
-  currentSymbol = symbol;
-  document.getElementById('currentSymbol').textContent = symbol;
-  try {
-    if (tvWidget && tvWidget.chart && typeof tvWidget.chart.setSymbol === 'function') {
-      tvWidget.chart.setSymbol(symbol, '60');
-    } else {
-      initTradingView(symbol);
-    }
-  } catch (e) {
-    initTradingView(symbol);
-  }
-  // fetch and update the displayed price for the newly selected symbol
-  updatePriceForSymbol(symbol).catch(()=>{});
-}
-
-/************************************************************************
- * UI: Watchlist rendering & helpers
- ************************************************************************/
-function escapeId(s){ return s.replace(/[^a-zA-Z0-9]/g,'_'); }
 
 function renderWatchlist(){
-  const container = document.getElementById('watchlist');
-  container.innerHTML = '';
-  WATCHLIST.forEach(w => {
-    const item = document.createElement('div');
-    item.className = 'watch-item';
-    item.dataset.symbol = w.id;
-    item.innerHTML = `
-      <div style="display:flex;flex-direction:column;">
-        <div style="font-weight:700">${w.label}</div>
-        <div class="small-muted" style="font-size:12px">${w.id}</div>
-      </div>
-      <div style="text-align:right">
-        <div class="price-small" id="price_${escapeId(w.id)}">--</div>
-        <div class="small-muted" id="source_${escapeId(w.id)}">--</div>
-      </div>
-    `;
-    item.addEventListener('click', () => setChartSymbol(w.id));
-    container.appendChild(item);
+  const c=document.getElementById('watchlist');c.innerHTML='';
+  WATCHLIST.forEach(w=>{
+    const el=document.createElement('div');
+    el.className='watch-item';
+    el.innerHTML=`<div><div style="font-weight:700">${w.label}</div><div class="small-muted" style="font-size:12px">${w.id}</div></div>
+    <div style="text-align:right"><div id="price_${w.label}" class="price-small">--</div><div id="src_${w.label}" class="small-muted">--</div></div>`;
+    el.onclick=()=>setChartSymbol(w.id);
+    c.appendChild(el);
   });
 }
-
-/************************************************************************
- * Refresh all watchlist prices (polling)
- ************************************************************************/
-let pollingHandle = null;
-let POLL_INTERVAL_MS = 5000; // 5s
 
 async function refreshWatchPrices(){
-  const promises = WATCHLIST.map(async w => {
-    const res = await apiGetPrice(w.id);
-    lastPrices[w.id] = res.price;
-    lastSources[w.id] = res.source;
-    const priceEl = document.getElementById('price_' + escapeId(w.id));
-    const srcEl = document.getElementById('source_' + escapeId(w.id));
-    if (priceEl) priceEl.textContent = fmt(res.price, res.price > 100 ? 2 : 5);
-    if (srcEl) srcEl.textContent = res.source === 'api' ? 'api' : 'simulé';
-  });
-
-  await Promise.all(promises);
-  document.getElementById('lastUpdate').textContent = nowString();
-
-  // Update current symbol display and re-render PnL
-  if (typeof lastPrices[currentSymbol] === 'number') {
-    document.getElementById('currentPriceSmall').textContent = 'Prix: ' + fmt(lastPrices[currentSymbol], lastPrices[currentSymbol] > 100 ? 2 : 5);
-  } else {
-    await updatePriceForSymbol(currentSymbol);
-  }
-
-  // Recalculate PnL display for open positions
-  renderPositions();
+  await Promise.all(WATCHLIST.map(async w=>{
+    const r=await apiGetPrice(w.id);lastPrices[w.id]=r.price;
+    document.getElementById(`price_${w.label}`).textContent=fmt(r.price,r.price>100?2:5);
+    document.getElementById(`src_${w.label}`).textContent=r.source;
+  }));
+  document.getElementById('lastUpdate').textContent=now();
+  if(lastPrices[currentSymbol])document.getElementById('currentPriceSmall').textContent='Prix: '+fmt(lastPrices[currentSymbol]);
 }
 
-/************************************************************************
- * Update price for a single symbol (used when switching symbol)
- ************************************************************************/
-async function updatePriceForSymbol(symbol){
-  const r = await apiGetPrice(symbol);
-  lastPrices[symbol] = r.price;
-  lastSources[symbol] = r.source;
-  document.getElementById('currentPriceSmall').textContent = 'Prix: ' + fmt(r.price, r.price > 100 ? 2 : 5);
+function initTradingView(sym){
+  document.getElementById('tv_chart_container').innerHTML='';
+  tvWidget=new TradingView.widget({autosize:true,symbol:sym,interval:"60",theme:"dark",locale:"fr",container_id:"tv_chart_container"});
+  tvWidget.onChartReady(()=>{document.getElementById('currentSymbol').textContent=sym;refreshWatchPrices();});
 }
-
-/************************************************************************
- * POSITION LOGIC
- * - openPosition uses the exact price received from TwelveData at click time
- * - PnL recalculated from lastPrices updated by polling
- ************************************************************************/
-function computePnl(pos, priceNow){
-  // direction: BUY -> long (profit when priceNow > entry), SELL -> short (profit when priceNow < entry)
-  const direction = pos.side === 'BUY' ? 1 : -1;
-  // PnL monetary: (priceNow - entry) * qty * direction
-  const pnl = (priceNow - pos.entryPrice) * pos.qty * direction;
-  return pnl;
+function setChartSymbol(sym){currentSymbol=sym;initTradingView(sym);}
+function computePnl(p,pr){return(p.side==='BUY'?1:-1)*(pr-p.entryPrice)*p.qty;}
+function openPosition(o){positions.push(o);renderPositions();}
+function closePosition(id){
+  const p=positions.find(x=>x.id===id);if(!p)return;
+  const cur=lastPrices[p.symbol]??p.entryPrice;const pnl=computePnl(p,cur);
+  history.unshift({...p,exitPrice:cur,pnl});positions=positions.filter(x=>x.id!==id);
+  renderPositions();renderHistory();
 }
-
-function openPosition({ symbol, side, qty, entryPrice, source }){
-  const pos = {
-    id: 'pos_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
-    symbol,
-    side,
-    qty: Number(qty),
-    entryPrice: Number(entryPrice),
-    entrySource: source || 'api',
-    openedAt: Date.now()
-  };
-  positions.push(pos);
-  renderPositions();
-  renderHistory();
-}
-
-function closePosition(posId){
-  const idx = positions.findIndex(p => p.id === posId);
-  if (idx === -1) return;
-  const pos = positions[idx];
-  const current = (typeof lastPrices[pos.symbol] === 'number') ? lastPrices[pos.symbol] : pos.entryPrice;
-  const pnl = computePnl(pos, current);
-  const closed = { ...pos, closedAt: Date.now(), exitPrice: current, pnl };
-  history.unshift(closed);
-  positions.splice(idx, 1);
-  renderPositions();
-  renderHistory();
-}
-
-/************************************************************************
- * RENDER POSITIONS & HISTORY
- ************************************************************************/
 function renderPositions(){
-  const list = document.getElementById('positionsList');
-  list.innerHTML = '';
-  if (positions.length === 0) {
-    list.innerHTML = '<div class="small-muted">Aucune position ouverte.</div>';
-    return;
-  }
-
-  positions.forEach(p => {
-    const current = (typeof lastPrices[p.symbol] === 'number') ? lastPrices[p.symbol] : p.entryPrice;
-    const pnl = computePnl(p, current);
-    const row = document.createElement('div');
-    row.className = 'pos-row';
-    row.innerHTML = `
-      <div style="display:flex;flex-direction:column;min-width:0;">
-        <div style="display:flex;gap:8px;align-items:center;">
-          <div class="pos-symbol">${p.symbol}</div>
-          <div class="small-muted">x${p.qty}</div>
-        </div>
-        <div class="small-muted">Entrée: ${fmt(p.entryPrice, p.entryPrice > 100 ? 2 : 5)} · Actuel: ${fmt(current, current > 100 ? 2 : 5)}</div>
-        <div class="small-muted">Source entrée: ${p.entrySource}</div>
-      </div>
-      <div style="display:flex;flex-direction:column;align-items:flex-end;">
-        <div class="pnl" style="color:${pnl >= 0 ? '#34d399' : '#fb7185'}">${pnl >= 0 ? '+' : ''}${fmt(pnl, 2)}</div>
-        <div style="display:flex;gap:6px;margin-top:8px;">
-          <button class="btn ghost" onclick="closePosition('${p.id}')">Fermer</button>
-          <button class="btn" onclick="setChartSymbol('${p.symbol}')">Voir</button>
-        </div>
-      </div>
-    `;
-    list.appendChild(row);
+  const l=document.getElementById('positionsList');l.innerHTML='';
+  if(!positions.length)return l.innerHTML='<div class="small-muted">Aucune position ouverte.</div>';
+  positions.forEach(p=>{
+    const cur=lastPrices[p.symbol]??p.entryPrice;const pnl=computePnl(p,cur);
+    l.innerHTML+=`<div class="pos-row"><div><div>${p.symbol}</div><div class="small-muted">Entrée ${fmt(p.entryPrice)} / Actuel ${fmt(cur)}</div></div>
+    <div style="text-align:right"><div class="pnl" style="color:${pnl>=0?'#34d399':'#fb7185'}">${pnl>=0?'+':''}${fmt(pnl,2)}</div>
+    <button class="btn ghost" onclick="closePosition('${p.id}')">Fermer</button></div></div>`;
   });
 }
-
 function renderHistory(){
-  const list = document.getElementById('historyList');
-  list.innerHTML = '';
-  if (history.length === 0) {
-    list.innerHTML = '<div class="small-muted">Aucun historique.</div>';
-    return;
-  }
-
-  history.forEach(h => {
-    const row = document.createElement('div');
-    row.className = 'pos-row';
-    row.innerHTML = `
-      <div style="display:flex;flex-direction:column;">
-        <div style="display:flex;gap:8px;align-items:center;">
-          <div class="pos-symbol">${h.symbol}</div>
-          <div class="small-muted">x${h.qty}</div>
-        </div>
-        <div class="small-muted">Entrée: ${fmt(h.entryPrice, 5)} · Sortie: ${fmt(h.exitPrice, 5)}</div>
-        <div class="small-muted">Ouvert: ${new Date(h.openedAt).toLocaleString('fr-FR')} · Fermé: ${new Date(h.closedAt).toLocaleString('fr-FR')}</div>
-      </div>
-      <div style="display:flex;flex-direction:column;align-items:flex-end;">
-        <div class="pnl" style="color:${h.pnl >= 0 ? '#34d399' : '#fb7185'}">${h.pnl >= 0 ? '+' : ''}${fmt(h.pnl, 2)}</div>
-        <div class="small-muted" style="font-size:12px">${h.side}</div>
-      </div>
-    `;
-    list.appendChild(row);
+  const l=document.getElementById('historyList');l.innerHTML='';
+  if(!history.length)return l.innerHTML='<div class="small-muted">Aucun historique.</div>';
+  history.forEach(h=>{
+    l.innerHTML+=`<div class="pos-row"><div>${h.symbol}<div class="small-muted">${fmt(h.entryPrice)}→${fmt(h.exitPrice)}</div></div>
+    <div style="text-align:right"><div class="pnl" style="color:${h.pnl>=0?'#34d399':'#fb7185'}">${h.pnl>=0?'+':''}${fmt(h.pnl,2)}</div><div>${h.side}</div></div></div>`;
   });
 }
 
-/************************************************************************
- * ORDER HANDLER - guaranteed to fetch TwelveData price at click time
- ************************************************************************/
 async function handleOrder(side){
-  const symbol = currentSymbol || 'FX:EURUSD';
-  // Ask qty
-  const qtyStr = prompt(`Ordre ${side} - ${symbol}\nQuantité (ex: 1000) :`, '1000');
-  const qty = Number(qtyStr);
-  if (!qty || qty <= 0 || isNaN(qty)) {
-    alert('Quantité invalide.');
-    return;
-  }
-
-  // Disable buttons while fetching to avoid double-submits
-  const btnBuy = document.getElementById('btnBuy');
-  const btnSell = document.getElementById('btnSell');
-  btnBuy.classList.add('disabled');
-  btnSell.classList.add('disabled');
-
-  try {
-    // Fetch live price FROM TWELVEDATA at the moment of click
-    const res = await apiGetPrice(symbol);
-    if (!res || typeof res.price !== 'number' || isNaN(res.price)) {
-      alert('Impossible de récupérer la cotation au moment du clic.');
-      return;
-    }
-
-    // Open position using the exact price returned by TwelveData
-    openPosition({ symbol, side, qty, entryPrice: res.price, source: res.source });
-
-    // Immediately update UI (watchlist + pnl)
-    await refreshWatchPrices();
-
-    alert(`Position ouverte : ${side} ${symbol} @ ${fmt(res.price, res.price>100?2:5)} (source: ${res.source})`);
-  } catch (err) {
-    console.error('handleOrder error:', err);
-    alert('Erreur lors de l\'ouverture de la position : ' + (err.message || err));
-  } finally {
-    btnBuy.classList.remove('disabled');
-    btnSell.classList.remove('disabled');
-  }
+  const qty=Number(prompt(`Ordre ${side} - ${currentSymbol}\nQuantité:`,`1000`));
+  if(!qty)return;
+  const r=await apiGetPrice(currentSymbol);
+  openPosition({id:'pos_'+Date.now(),symbol:currentSymbol,side,qty,entryPrice:r.price});
+  alert(`${side} ${currentSymbol} @ ${fmt(r.price)}`);
 }
 
-/************************************************************************
- * UI wiring
- ************************************************************************/
-document.getElementById('btnBuy').addEventListener('click', () => handleOrder('BUY'));
-document.getElementById('btnSell').addEventListener('click', () => handleOrder('SELL'));
-document.getElementById('btnRefreshWatch').addEventListener('click', () => refreshWatchPrices());
-document.getElementById('refreshPrices').addEventListener('click', () => refreshWatchPrices());
-
-document.querySelectorAll('.tab-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    const tab = btn.dataset.tab;
-    document.getElementById('panelPositions').style.display = tab === 'positions' ? 'block' : 'none';
-    document.getElementById('panelHistory').style.display = tab === 'history' ? 'block' : 'none';
-  });
+document.getElementById('btnBuy').onclick=()=>handleOrder('BUY');
+document.getElementById('btnSell').onclick=()=>handleOrder('SELL');
+document.getElementById('btnRefreshWatch').onclick=refreshWatchPrices;
+document.getElementById('refreshPrices').onclick=refreshWatchPrices;
+document.querySelectorAll('.tab-btn').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('.tab-btn').forEach(x=>x.classList.remove('active'));
+  b.classList.add('active');
+  document.getElementById('panelPositions').style.display=b.dataset.tab==='positions'?'block':'none';
+  document.getElementById('panelHistory').style.display=b.dataset.tab==='history'?'block':'none';
 });
 
-/************************************************************************
- * BOOT
- ************************************************************************/
 async function boot(){
   renderWatchlist();
   initTradingView(currentSymbol);
-
-  // first refresh
   await refreshWatchPrices();
-  renderPositions();
-  renderHistory();
-
-  // polling
-  if (pollingHandle) clearInterval(pollingHandle);
-  pollingHandle = setInterval(refreshWatchPrices, POLL_INTERVAL_MS);
+  renderPositions();renderHistory();
+  setInterval(refreshWatchPrices,8000);
 }
-
+window.closePosition=closePosition;
 boot();
-
-</script>
+  </script>
 </body>
 </html>
 
