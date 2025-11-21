@@ -50,14 +50,14 @@ footer{margin-top:20px;font-size:13px;text-align:center;color:#9ca3af}
             <option value="NKY">Nikkei 225</option>
           </optgroup>
           <optgroup label="Forex">
-            <option value="EURUSD">EUR/USD</option>
-            <option value="GBPUSD">GBP/USD</option>
-            <option value="USDJPY">USD/JPY</option>
-            <option value="AUDUSD">AUD/USD</option>
-            <option value="USDCAD">USD/CAD</option>
+            <option value="EUR/USD">EUR/USD</option>
+            <option value="GBP/USD">GBP/USD</option>
+            <option value="USD/JPY">USD/JPY</option>
+            <option value="AUD/USD">AUD/USD</option>
+            <option value="USD/CAD">USD/CAD</option>
           </optgroup>
           <optgroup label="Métaux">
-            <option value="GOLD">Or (Gold)</option>
+            <option value="XAU/USD">Or (Gold)</option>
           </optgroup>
         </select>
       </label>
@@ -99,58 +99,59 @@ footer{margin-top:20px;font-size:13px;text-align:center;color:#9ca3af}
 </div>
 
 <script>
-// --- MAP DES SYMBOLES ---
-const SYMBOL_MAP = {
-  SPX:{stooq:"^SPX",tv:"INDEX:SPX"},DJI:{stooq:"^DJI",tv:"INDEX:DJI"},NDX:{stooq:"^NDX",tv:"INDEX:NDX"},
-  FTSE:{stooq:"^FTSE",tv:"INDEX:UKX"},DAX:{stooq:"^DAX",tv:"INDEX:DAX"},FCHI:{stooq:"^CAC",tv:"INDEX:FR40"},
-  NKY:{stooq:"^NKY",tv:"INDEX:NKY"},EURUSD:{stooq:"EURUSD",tv:"FX:EURUSD"},GBPUSD:{stooq:"GBPUSD",tv:"FX:GBPUSD"},
-  USDJPY:{stooq:"USDJPY",tv:"FX:USDJPY"},AUDUSD:{stooq:"AUDUSD",tv:"FX:AUDUSD"},USDCAD:{stooq:"USDCAD",tv:"FX:USDCAD"},
-  GOLD:{stooq:"GC.F",tv:"TVC:GOLD"}
+// --- MAP DES SYMBOLES TradingView ---
+const SYMBOL_MAP_TV = {
+  SPX:"INDEX:SPX", DJI:"INDEX:DJI", NDX:"INDEX:NDX", FTSE:"INDEX:UKX",
+  DAX:"INDEX:DAX", FCHI:"INDEX:FR40", NKY:"INDEX:NKY",
+  "EUR/USD":"FX:EURUSD", "GBP/USD":"FX:GBPUSD", "USD/JPY":"FX:USDJPY",
+  "AUD/USD":"FX:AUDUSD", "USD/CAD":"FX:USDCAD",
+  "XAU/USD":"TVC:GOLD"
 };
 
-// ----------------------------
-// CORS Proxy
-// ----------------------------
-const CORS_PROXY = "https://api.allorigins.win/raw?url=";
+// --- CORS Proxy pour Render / Stooq ---
+const CORS_PROXY = "https://corsproxy.io/?";
 
 let positions = [];
 let currentSymbol = "SPX";
 let lastPrices = {};
 
-// ----------------------------
-// 📌 Récupérer prix via proxy CORS
-// ----------------------------
-async function fetchStooqPrice(symbol){
-  try{
-    const stooqUrl = `https://stooq.com/q/l/?s=${symbol}&f=sd2t2ohlcv&h&e=csv`;
-    const proxied = CORS_PROXY + encodeURIComponent(stooqUrl);
+// --- Conversion symboles lisibles → Stooq ---
+function convertToStooqSymbol(symbol){
+  return symbol.toLowerCase().replace(/\s+/g,'').replace(/\//g,'');
+}
 
-    const res = await fetch(proxied);
-    if(!res.ok) return null;
+// --- Récupérer prix Stooq via proxy ---
+async function fetchStooqPrice(symbol){
+  try {
+    const stooqSymbol = convertToStooqSymbol(symbol);
+    const stooqUrl = `https://stooq.com/q/l/?s=${stooqSymbol}&f=sd2t2ohlcv&h&e=csv`;
+    const url = CORS_PROXY + encodeURIComponent(stooqUrl);
+
+    const res = await fetch(url);
+    if (!res.ok) return null;
 
     const text = await res.text();
+    if(text.includes("N/D")) return null;
+
     const line = text.split("\n")[1];
     if(!line) return null;
 
-    const parts = line.split(",");
-    const last = parseFloat(parts[6]);
+    const last = parseFloat(line.split(",")[6]);
     return isNaN(last) ? null : last;
-  }catch(e){
+  } catch(e) {
     console.error("fetchStooqPrice error:", e);
     return null;
   }
 }
 
-// ----------------------------
-// 📌 Mise à jour prix /s
-// ----------------------------
+// --- Mise à jour prix toutes les secondes ---
 async function refreshAllPrices(){
   const needed = new Set();
   needed.add(currentSymbol);
   positions.forEach(p => needed.add(p.symbol));
 
   for(const sym of needed){
-    const price = await fetchStooqPrice(SYMBOL_MAP[sym].stooq);
+    const price = await fetchStooqPrice(sym);
     if(price) lastPrices[sym] = price;
   }
 
@@ -161,15 +162,12 @@ async function refreshAllPrices(){
 
   updatePnL();
 }
-
 setInterval(refreshAllPrices, 1000);
 refreshAllPrices();
 
-// ----------------------------
-// 📌 Placer un ordre
-// ----------------------------
+// --- Placer un ordre ---
 async function placeOrder(side){
-  const price = await fetchStooqPrice(SYMBOL_MAP[currentSymbol].stooq);
+  const price = await fetchStooqPrice(currentSymbol);
   if(!price) return alert("Impossible d'obtenir le prix.");
 
   const qty = parseInt(document.getElementById("lotInput").value)||1;
@@ -186,56 +184,43 @@ async function placeOrder(side){
   renderPositions();
 }
 
-// ----------------------------
-// 📌 Fermer une position
-// ----------------------------
+// --- Fermer une position ---
 function closePosition(id){
   positions = positions.filter(p => p.id !== id);
   renderPositions();
 }
 
-// ----------------------------
-// 📌 Mise à jour PnL
-// ----------------------------
+// --- Mise à jour PnL ---
 function updatePnL(){
   let total = 0;
-
   positions.forEach(p => {
     const price = lastPrices[p.symbol];
     if(!price) return;
-    const dir = p.side === "buy" ? 1 : -1;
-    p.pnl = (price - p.entry) * dir * p.qty;
+    const dir = p.side==="buy"?1:-1;
+    p.pnl = (price - p.entry)*dir*p.qty;
     total += p.pnl;
   });
-
   renderPositions(total);
 }
 
-// ----------------------------
-// 📌 Afficher le tableau
-// ----------------------------
-function renderPositions(total = 0){
+// --- Afficher le tableau ---
+function renderPositions(total=0){
   const tbody = document.querySelector("#positionsTable tbody");
   tbody.innerHTML = "";
 
-  positions.forEach(p => {
-    const last = lastPrices[p.symbol] ?? null;
-    const tr = document.createElement("tr");
-
-    tr.innerHTML = `
+  positions.forEach(p=>{
+    const last = lastPrices[p.symbol]??null;
+    const tr=document.createElement("tr");
+    tr.innerHTML=`
       <td>${p.symbol}</td>
       <td>${p.side}</td>
       <td>${p.qty}</td>
       <td>${p.entry.toFixed(4)}</td>
-      <td>${last ? last.toFixed(4) : "—"}</td>
-      <td style="color:${p.pnl>0?"#10b981":p.pnl<0?"#ef4444":"white"}">
-        ${p.pnl.toFixed(4)}
-      </td>
+      <td>${last?last.toFixed(4):"—"}</td>
+      <td style="color:${p.pnl>0?"#10b981":p.pnl<0?"#ef4444":"white"}">${p.pnl.toFixed(4)}</td>
       <td>
         <button onclick="closePosition(${p.id})"
-        style="background:#334155;color:white;border:0;padding:4px 8px;border-radius:6px;cursor:pointer;">
-          ✖
-        </button>
+        style="background:#334155;color:white;border:0;padding:4px 8px;border-radius:6px;cursor:pointer;">✖</button>
       </td>
     `;
     tbody.appendChild(tr);
@@ -246,22 +231,16 @@ function renderPositions(total = 0){
   t.style.color = total>0?"#10b981":total<0?"#ef4444":"#22d3ee";
 }
 
-// ----------------------------
-// 📌 Changer d'actif
-// ----------------------------
-document.getElementById("symbolSelect").addEventListener("change", e => {
-  currentSymbol = e.target.value;
-  const tv = SYMBOL_MAP[currentSymbol].tv;
-
-  document.getElementById("tradingviewIframe").src =
+// --- Changer d'actif ---
+document.getElementById("symbolSelect").addEventListener("change", e=>{
+  currentSymbol=e.target.value;
+  const tv=SYMBOL_MAP_TV[currentSymbol];
+  document.getElementById("tradingviewIframe").src=
     `https://s.tradingview.com/widgetembed/?symbol=${tv}&interval=1&theme=dark&hide_side_toolbar=1`;
-
   refreshAllPrices();
 });
 
-// ----------------------------
-// 📌 Plein écran
-// ----------------------------
+// --- Plein écran ---
 function toggleFullscreen(){
   document.getElementById("tradingviewIframe").classList.toggle("fullscreen");
 }
