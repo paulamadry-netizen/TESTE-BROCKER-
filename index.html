@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8" />
-<title>AmA Broker — Web Trader Demo avec Finnhub</title>
+<title>AmA Broker — Web Trader Demo avec Finnhub et ETFs</title>
 <style>
 /* Votre style inchangé */
 *{box-sizing:border-box}
@@ -43,12 +43,12 @@ footer{margin-top:20px;font-size:13px;text-align:center;color:#9ca3af}
     <div class="controls">
       <label>Actif :
         <select id="symbolSelect">
-          <optgroup label="Indices">
-            <option value="SPX">S&P 500</option>
-            <option value="DJI">Dow Jones</option>
-            <option value="NDX">NASDAQ 100</option>
-            <option value="DAX">DAX 40</option>
-            <option value="FCHI">CAC 40</option>
+          <optgroup label="Indices (via ETFs)">
+            <option value="SPY">SPDR S&P 500 ETF</option>
+            <option value="DIA">SPDR Dow Jones Industrial Average ETF</option>
+            <option value="QQQ">Invesco QQQ Trust (Nasdaq 100)</option>
+            <option value="EXS1.DE">iShares DAX UCITS ETF (Allemagne)</option>
+            <option value="C40.PA">Amundi CAC 40 ETF (Euronext Paris)</option>
           </optgroup>
           <optgroup label="Forex">
             <option value="EUR/USD">EUR/USD</option>
@@ -73,7 +73,7 @@ footer{margin-top:20px;font-size:13px;text-align:center;color:#9ca3af}
         <button class="full-btn" onclick="toggleFullscreen()">⛶ Plein écran</button>
       </div>
       <iframe id="tradingviewIframe"
-        src="https://s.tradingview.com/widgetembed/?symbol=OANDA:SPX500USD&interval=1&theme=dark&hide_side_toolbar=1"></iframe>
+        src="https://s.tradingview.com/widgetembed/?symbol=OANDA:EURUSD&interval=1&theme=dark&hide_side_toolbar=1"></iframe>
 
       <div class="tradebox">
         <button class="buy" onclick="placeOrder('buy')">ACHETER</button>
@@ -110,13 +110,13 @@ footer{margin-top:20px;font-size:13px;text-align:center;color:#9ca3af}
 /* ===== CONFIG ===== */
 const FINNHUB_API_KEY = "d4g61b9r01qm5b343fo0d4g61b9r01qm5b343fog"; // Votre clé Finnhub
 
-/* ===== Mappage Finnhub ===== */
+/* ===== Mappage symboles pour Finnhub ===== */
 const SYMBOL_MAP_FINNHUB = {
-  SPX: "INDEX:SPX",
-  DJI: "INDEX:DJI",
-  NDX: "INDEX:NDX",
-  DAX: "INDEX:DAX",
-  FCHI: "INDEX:PX1", // CAC 40 (Paris PX1)
+  SPY: "SPY",
+  DIA: "DIA",
+  QQQ: "QQQ",
+  "EXS1.DE": "EXS1.DE",  // DAX ETF Allemagne
+  "C40.PA": "C40.PA",    // CAC 40 ETF Paris
   "EUR/USD": "OANDA:EURUSD",
   "GBP/USD": "OANDA:GBPUSD",
   "USD/JPY": "OANDA:USDJPY",
@@ -124,10 +124,10 @@ const SYMBOL_MAP_FINNHUB = {
   "USD/CAD": "OANDA:USDCAD"
 };
 
-let positions = [], history = [], currentSymbol = "SPX";
+let positions = [], history = [], currentSymbol = "SPY";
 let lastPrices = {}, smoothPrices = {};
 
-/* ===== FETCH Finnhub QUOTE PRICE ===== */
+/* ===== FETCH Finnhub QUOTE ===== */
 async function fetchFinnhubPrice(symbol){
   try{
     const finnhubSymbol = SYMBOL_MAP_FINNHUB[symbol];
@@ -146,11 +146,10 @@ async function fetchFinnhubPrice(symbol){
 
 /* ===== FETCH PRICE wrapper ===== */
 async function fetchPrice(symbol){
-  // Tous les symboles sont traités par Finnhub dans ce mapping
   return await fetchFinnhubPrice(symbol);
 }
 
-/* ===== Refresh all prices every 15s to avoid rate limit ===== */
+/* ===== Refresh prices every 15s (limit API calls free plan) ===== */
 async function refreshAllPrices(){
   const needed = new Set([currentSymbol]);
   positions.forEach(p=>needed.add(p.symbol));
@@ -169,7 +168,7 @@ async function refreshAllPrices(){
 setInterval(refreshAllPrices,15000);
 refreshAllPrices();
 
-/* ===== Smooth prices ===== */
+/* ===== Smooth prices for UI ===== */
 setInterval(()=>{
   const alpha = 0.2;
   for(const s in lastPrices){
@@ -253,17 +252,12 @@ function renderHistory(){
 document.getElementById("symbolSelect").addEventListener("change",e=>{
   currentSymbol = e.target.value;
   const tv = {
-    SPX:"OANDA:SPX500USD",
-    DJI:"OANDA:US30USD",
-    NDX:"OANDA:NAS100USD",
-    DAX:"OANDA:DE40EUR",
-    FCHI:"OANDA:FR40EUR",
-    "EUR/USD":"FX:EURUSD",
-    "GBP/USD":"FX:GBPUSD",
-    "USD/JPY":"FX:USDJPY",
-    "AUD/USD":"FX:AUDUSD",
-    "USD/CAD":"FX:USDCAD"
-  }[currentSymbol];
+    SPY:"AMEX:SPY",
+    DIA:"AMEX:DIA",
+    QQQ:"NASDAQ:QQQ",
+    "EXS1.DE":"XETRA:EXS1",
+    "C40.PA":"EPA:C40"
+  }[currentSymbol] || `OANDA:${currentSymbol.replace("/", "")}`;
   document.getElementById("tradingviewIframe").src=
     `https://s.tradingview.com/widgetembed/?symbol=${tv}&interval=1&theme=dark&hide_side_toolbar=1`;
   refreshAllPrices();
@@ -276,6 +270,7 @@ function toggleFullscreen(){
 </script>
 </body>
 </html>
+
 
 
 
