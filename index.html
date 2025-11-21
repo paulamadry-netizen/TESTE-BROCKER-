@@ -123,11 +123,8 @@ const SYMBOL_MAP_TV = {
   "USD/CAD": "FX:USDCAD"
 };
 
-let positions = [];
-let history = [];
-let currentSymbol = "SPX";
-let lastPrices = {};
-let smoothPrices = {};
+let positions = [], history = [], currentSymbol = "SPX";
+let lastPrices = {}, smoothPrices = {};
 
 /* ===== FETCH TWELVE DATA ===== */
 async function fetchTwelveDataPrice(symbol){
@@ -141,15 +138,14 @@ async function fetchTwelveDataPrice(symbol){
   }catch(e){console.error("Twelve Data error:", e);return null;}
 }
 
-/* ===== Routage auto ===== */
+/* ===== Routage auto corrigé pour indices ===== */
 async function fetchPrice(symbol){
-  // Conversion indices → symboles Twelve Data
   const MAP_TWELVE = {
-    SPX: "US500",
-    DJI: "US30",
-    NDX: "NAS100",
-    DAX: "DE40",
-    FCHI: "FR40"
+    SPX: ".SPX",   // S&P 500
+    DJI: ".DJI",   // Dow Jones
+    NDX: ".NDX",   // Nasdaq 100
+    DAX: "DAX",    // DAX 40
+    FCHI: "FCHI"   // CAC 40
   };
   const apiSymbol = MAP_TWELVE[symbol] || symbol;
   return await fetchTwelveDataPrice(apiSymbol);
@@ -182,22 +178,22 @@ setInterval(()=>{
     smoothPrices[s]+=(lastPrices[s]-smoothPrices[s])*alpha;
   }
   if(smoothPrices[currentSymbol])
-    document.getElementById("priceDisplay").innerText = smoothPrices[currentSymbol].toFixed(4);
+    document.getElementById("priceDisplay").innerText=smoothPrices[currentSymbol].toFixed(4);
   updatePnL(true);
 },200);
 
 /* ===== Trading ===== */
 async function placeOrder(side){
-  const price = lastPrices[currentSymbol];
-  if(!price) return alert("Impossible d'obtenir le prix.");
-  const qty = parseInt(document.getElementById("lotInput").value)||1;
+  const price=lastPrices[currentSymbol];
+  if(!price)return alert("Impossible d'obtenir le prix.");
+  const qty=parseInt(document.getElementById("lotInput").value)||1;
   positions.push({id:Date.now(),symbol:currentSymbol,side,qty,entry:price,pnl:0});
   renderPositions();
 }
 function closePosition(id){
-  const pos = positions.find(p=>p.id===id);
-  if(!pos) return;
-  const exit = lastPrices[pos.symbol]||pos.entry;
+  const pos=positions.find(p=>p.id===id);
+  if(!pos)return;
+  const exit=lastPrices[pos.symbol]||pos.entry;
   const closed={...pos,exit,time:new Date().toLocaleTimeString()};
   history.unshift(closed);
   positions=positions.filter(p=>p.id!==id);
