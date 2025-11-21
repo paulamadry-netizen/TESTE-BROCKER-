@@ -4,7 +4,32 @@
 <meta charset="UTF-8" />
 <title>AmA Broker — Web Trader Demo</title>
 <style>
-/* ... Reste inchangé ... */
+body{font-family:Inter,Arial,sans-serif;margin:0;background:linear-gradient(135deg,#0b1220,#111b2d);color:#f3f4f6;min-height:100vh}
+.app{max-width:1400px;margin:0 auto;padding:16px}
+header{display:flex;justify-content:space-between;align-items:center;background:rgba(255,255,255,.05);padding:14px 20px;border-radius:14px;backdrop-filter:blur(10px);box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.brand{font-size:26px;font-weight:700;letter-spacing:1px;color:#22d3ee}
+.brand span{color:#10b981}
+header .controls{display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+select,input{padding:6px 10px;border-radius:6px;background:#1b2533;color:white;border:1px solid #334155}
+.price{font-weight:600;color:#e0e0e0}
+.layout{display:grid;grid-template-columns:1fr 380px;gap:16px;margin-top:16px}
+.chart,.sidebar .panel{background:rgba(255,255,255,.05);border-radius:14px;padding:14px;backdrop-filter:blur(10px);box-shadow:0 6px 18px rgba(0,0,0,.4)}
+.chart iframe{width:100%;height:480px;border:0;border-radius:10px}
+.fullscreen{position:fixed!important;top:0;left:0;width:100vw!important;height:100vh!important;z-index:999;background:#000;border-radius:0!important}
+.tradebox{display:flex;gap:10px;margin-top:14px}
+button.buy,button.sell{flex:1;font-weight:bold;border:none;padding:12px 20px;border-radius:10px;cursor:pointer;transition:all .2s;font-size:16px}
+button.buy{background:#10b981;color:white}
+button.sell{background:#ef4444;color:white}
+button.buy:hover{background:#059669}
+button.sell:hover{background:#dc2626}
+table{width:100%;border-collapse:collapse;font-size:14px}
+td,th{padding:6px 8px;text-align:left}
+th{color:#9ca3af}
+tr:nth-child(odd){background:rgba(255,255,255,.02)}
+footer{margin-top:20px;font-size:13px;text-align:center;color:#9ca3af}
+.full-btn{float:right;background:#1e293b;border:0;color:#22d3ee;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:13}
+.full-btn:hover{background:#0f172a}
+.total-pnl{margin-top:10px;text-align:right;font-weight:bold;font-size:15px;color:#22d3ee;}
 </style>
 </head>
 <body>
@@ -88,15 +113,15 @@ const SYMBOL_MAP_STOOQ = {
   "USD/CAD":"USDCAD",
   "XAU/USD":"GC.F"
 };
-
+// Mapping TradingView embeddable symbols for indices and other assets
 const SYMBOL_MAP_TV = {
-  SPX: "INDEX:SPX",             // S&P 500 [finance:S&P 500]
-  DJI: "INDEX:DJI",             // Dow Jones [finance:Dow Jones Industrial Average]
-  NDX: "INDEX:NDX",             // NASDAQ 100 [finance:NASDAQ 100]
-  FTSE: "INDEX:UKX",            // FTSE 100 [finance:FTSE 100]
-  DAX: "XETR:DAX40",            // DAX 40 [finance:DAX]
-  FCHI: "EURONEXT:FCHI",        // CAC 40 [finance:CAC 40]
-  NKY: "INDEX:NKY",             // Nikkei 225 [finance:Nikkei 225]
+  SPX: "INDEX:SPX",          // S&P 500 [finance:S&P 500]
+  DJI: "INDEX:DJI",          // Dow Jones [finance:Dow Jones Industrial Average]
+  NDX: "INDEX:NDX",          // NASDAQ 100 [finance:NASDAQ 100]
+  FTSE: "OANDA:UK100GBP",    // FTSE 100 (OANDA CFD) as widget free embed alternative
+  DAX: "XETR:DAX",           // DAX 40 [finance:DAX]
+  FCHI: "EURONEXT:PX1",      // CAC 40 [finance:CAC 40]
+  NKY: "INDEX:NKY",          // Nikkei 225 [finance:Nikkei 225]
   "EUR/USD": "FX:EURUSD",
   "GBP/USD": "FX:GBPUSD",
   "USD/JPY": "FX:USDJPY",
@@ -130,18 +155,16 @@ async function refreshAllPrices(){
   const needed = new Set();
   needed.add(currentSymbol);
   positions.forEach(p=>needed.add(p.symbol));
-
   for(const sym of needed){
     const price = await fetchStooqPrice(sym);
     if(price) lastPrices[sym]=price;
   }
-
   if(lastPrices[currentSymbol]){
     document.getElementById("priceDisplay").innerText = lastPrices[currentSymbol].toFixed(4);
   }
-
   updatePnL();
 }
+
 setInterval(refreshAllPrices,1000);
 refreshAllPrices();
 
@@ -193,10 +216,11 @@ function renderPositions(total=0){
   t.style.color=total>0?"#10b981":total<0?"#ef4444":"#22d3ee";
 }
 
+// Changement du graphique à la sélection
 document.getElementById("symbolSelect").addEventListener("change", e=>{
-  currentSymbol=e.target.value;
-  const tv=SYMBOL_MAP_TV[currentSymbol];
-  document.getElementById("tradingviewIframe").src=`https://s.tradingview.com/widgetembed/?symbol=${tv}&interval=1&theme=dark&hide_side_toolbar=1`;
+  currentSymbol = e.target.value;
+  const tv = SYMBOL_MAP_TV[currentSymbol];
+  document.getElementById("tradingviewIframe").src = `https://s.tradingview.com/widgetembed/?symbol=${tv}&interval=1&theme=dark&hide_side_toolbar=1`;
   refreshAllPrices();
 });
 
@@ -206,3 +230,4 @@ function toggleFullscreen(){
 </script>
 </body>
 </html>
+
