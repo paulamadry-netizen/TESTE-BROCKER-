@@ -2,7 +2,8 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8" />
-<title>AmA Broker — Web Trader Demo IG & Twelve Data</title>
+<title>AmA Broker — Web Trader Demo</title>
+
 <style>
 *{box-sizing:border-box}
 body{font-family:Inter,Arial,sans-serif;margin:0;background:linear-gradient(135deg,#0b1220,#111b2d);color:#f3f4f6;min-height:100vh}
@@ -16,107 +17,116 @@ select,input{padding:6px 10px;border-radius:6px;background:#1b2533;color:white;b
 .layout{display:grid;grid-template-columns:1fr 380px;gap:16px;margin-top:16px}
 .chart,.sidebar .panel{background:rgba(255,255,255,.05);border-radius:14px;padding:14px;backdrop-filter:blur(10px);box-shadow:0 6px 18px rgba(0,0,0,.4)}
 .chart iframe{width:100%;height:480px;border:0;border-radius:10px}
-.fullscreen{position:fixed!important;top:0;left:0;width:100vw!important;height:100vh!important;z-index:999;background:#000;border-radius:0!important}
 .tradebox{display:flex;gap:10px;margin-top:14px}
 button.buy,button.sell{flex:1;font-weight:bold;border:none;padding:12px 20px;border-radius:10px;cursor:pointer;transition:all .2s;font-size:16px}
-button.buy{background:#10b981;color:white}
-button.sell{background:#ef4444;color:white}
-button.buy:hover{background:#059669}
-button.sell:hover{background:#dc2626}
+button.buy{background:#10b981}
+button.sell{background:#ef4444}
 table{width:100%;border-collapse:collapse;font-size:14px}
 td,th{padding:6px 8px;text-align:left}
-th{color:#9ca3af}
 tr:nth-child(odd){background:rgba(255,255,255,.02)}
-footer{margin-top:20px;font-size:13px;text-align:center;color:#9ca3af}
-.full-btn{float:right;background:#1e293b;border:0;color:#22d3ee;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:13px}
-.full-btn:hover{background:#0f172a}
-.total-pnl{margin-top:10px;text-align:right;font-weight:bold;font-size:15px;color:#22d3ee;}
-.history-panel{margin-top:16px;background:rgba(255,255,255,.05);border-radius:14px;padding:14px;backdrop-filter:blur(10px);box-shadow:0 6px 18px rgba(0,0,0,.4)}
-.history-panel h3{color:#22d3ee;margin-top:0;margin-bottom:10px}
+.total-pnl{margin-top:10px;text-align:right;font-weight:bold;font-size:15px}
+.full-btn{float:right;background:#1e293b;border:0;color:#22d3ee;padding:6px 12px;border-radius:6px;cursor:pointer}
 </style>
 </head>
+
 <body>
 <div class="app">
-  <header>
-    <div class="brand">AmA <span>Broker</span></div>
-    <div class="controls">
-      <label>Actif :
-        <select id="symbolSelect">
-          <optgroup label="Indices (via CFD IG)">
-            <option value="S&P500">S&P 500</option>
-            <option value="DowJones">Dow Jones</option>
-            <option value="Nasdaq100">Nasdaq 100</option>
-            <option value="DAX">DAX</option>
-            <option value="CAC40">CAC 40</option>
-          </optgroup>
-          <optgroup label="Forex (Twelve Data)">
-            <option value="EUR/USD">EUR/USD</option>
-            <option value="GBP/USD">GBP/USD</option>
-            <option value="USD/JPY">USD/JPY</option>
-            <option value="AUD/USD">AUD/USD</option>
-            <option value="USD/CAD">USD/CAD</option>
-          </optgroup>
-        </select>
-      </label>
-      <div class="price">Prix actuel : <span id="priceDisplay">—</span></div>
-      <label>Lots :
-        <input type="number" id="lotInput" value="1" min="1" step="1" style="width:70px;text-align:center;">
-      </label>
+
+<header>
+  <div class="brand">AmA <span>Broker</span></div>
+
+  <div class="controls">
+    <label>Actif :
+      <select id="symbolSelect">
+        
+        <!-- CFD IG (Indices) -->
+        <optgroup label="Indices CFD (IG Markets)">
+          <option value="SP500">S&P 500</option>
+          <option value="DOW">Dow Jones</option>
+          <option value="NAS100">Nasdaq 100</option>
+          <option value="DAX">DAX</option>
+          <option value="CAC40">CAC 40</option>
+        </optgroup>
+
+        <!-- FOREX NORMAL (Twelve Data) -->
+        <optgroup label="Forex (Twelve Data)">
+          <option value="EUR/USD">EUR/USD</option>
+          <option value="GBP/USD">GBP/USD</option>
+          <option value="USD/JPY">USD/JPY</option>
+          <option value="AUD/USD">AUD/USD</option>
+          <option value="USD/CAD">USD/CAD</option>
+        </optgroup>
+
+      </select>
+    </label>
+
+    <div class="price">Prix actuel : <span id="priceDisplay">—</span></div>
+
+    <label>Lots :
+      <input type="number" id="lotInput" value="1" min="1" step="1" style="width:70px;text-align:center;">
+    </label>
+
+  </div>
+</header>
+
+<main class="layout">
+
+  <!-- CHART -->
+  <section class="chart">
+    <div style="display:flex;justify-content:space-between">
+      <h3 style="color:#22d3ee;margin:0;">Graphique</h3>
+      <button class="full-btn" onclick="toggleFullscreen()">⛶ Plein écran</button>
     </div>
-  </header>
 
-  <main class="layout">
-    <section class="chart">
-      <div style="display:flex;justify-content:space-between;align-items:center;">
-        <h3 style="margin:0;color:#22d3ee;">Graphique</h3>
-        <button class="full-btn" onclick="toggleFullscreen()">⛶ Plein écran</button>
-      </div>
-      <iframe id="tradingviewIframe"
-        src="https://s.tradingview.com/widgetembed/?symbol=INDEX:SPX&interval=1&theme=dark&hide_side_toolbar=1"></iframe>
+    <iframe id="tradingviewIframe"
+      src="https://s.tradingview.com/widgetembed/?symbol=INDEX:SPX&interval=1&theme=dark"></iframe>
 
-      <div class="tradebox">
-        <button class="buy" onclick="placeOrder('buy')">ACHETER</button>
-        <button class="sell" onclick="placeOrder('sell')">VENDRE</button>
-      </div>
+    <div class="tradebox">
+      <button class="buy" onclick="placeOrder('buy')">ACHETER</button>
+      <button class="sell" onclick="placeOrder('sell')">VENDRE</button>
+    </div>
 
-      <div class="history-panel">
-        <h3>Historique des Positions</h3>
-        <table id="historyTable">
-          <thead>
-            <tr><th>Sym</th><th>Side</th><th>Lots</th><th>Entrée</th><th>Sortie</th><th>PnL</th><th>Heure</th></tr>
-          </thead>
-          <tbody></tbody>
-        </table>
-      </div>
-    </section>
+    <div class="history-panel">
+      <h3 style="color:#22d3ee">Historique</h3>
+      <table id="historyTable">
+        <thead><tr><th>Sym</th><th>Side</th><th>Lots</th><th>Entrée</th><th>Sortie</th><th>PnL</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
 
-    <aside class="sidebar">
-      <div class="panel">
-        <h3 style="color:#22d3ee;">Positions Ouvertes</h3>
-        <table id="positionsTable">
-          <thead><tr><th>Sym</th><th>Side</th><th>Lots</th><th>Entrée</th><th>Dernier</th><th>PnL</th><th></th></tr></thead>
-          <tbody></tbody>
-        </table>
-        <div id="totalPnl" class="total-pnl">PnL total : 0.0000</div>
-      </div>
-    </aside>
-  </main>
+  <!-- POSITIONS -->
+  <aside class="sidebar">
+    <div class="panel">
+      <h3 style="color:#22d3ee;">Positions Ouvertes</h3>
+      <table id="positionsTable">
+        <thead><tr><th>Sym</th><th>Side</th><th>Lots</th><th>Entrée</th><th>Dernier</th><th>PnL</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <div id="totalPnl" class="total-pnl">PnL total : 0.0000</div>
+    </div>
+  </aside>
 
-  <footer>© 2025 AmA Broker • Données IG Markets & Twelve Data • Graphiques TradingView</footer>
+</main>
+
+<footer style="text-align:center;margin-top:20px;color:#7b8a9a">
+© 2025 AmA Broker • IG CFD + Twelve Data Forex
+</footer>
 </div>
 
 <script>
-const IG_API_KEY = "44e7b1c12a47da8eb6a0a1c579fa1aae92132b24";
 const TWELVE_API_KEY = "c9140c9a72264e82bb9f5235b86b2806";
 
+/* === CFD IG SYMBOLS (corrigés) === */
 const IG_SYMBOLS = {
-  "S&P500":"CS.D.SP500.MINI.IP",
-  "DowJones":"CS.D.DOW.MINI.IP",
-  "Nasdaq100":"CS.D.NASDAQ.MINI.IP",
-  "DAX":"CS.D.DAX.IFE.IP",
-  "CAC40":"CS.D.CAC40.IFE.IP"
+  SP500: "CS.D.SP500.MINI.IP",
+  DOW: "CS.D.DOW.MINI.IP",
+  NAS100: "CS.D.NASDAQ.MINI.IP",
+  DAX: "IX.D.DAX.IFD.IP",
+  CAC40: "IX.D.CAC.IFD.IP"
 };
 
+/* === FOREX (Twelve Data) === */
 const TWELVE_SYMBOLS = {
   "EUR/USD":"EUR/USD",
   "GBP/USD":"GBP/USD",
@@ -125,175 +135,87 @@ const TWELVE_SYMBOLS = {
   "USD/CAD":"USD/CAD"
 };
 
-let positions = [], history = [], currentSymbol = "S&P500";
+
+let positions = [], history = [];
 let lastPrices = {}, smoothPrices = {};
+let currentSymbol = "SP500";
 
-// --- FETCH IG PRICES ---
-async function fetchIGPrice(symbol) {
-  try {
-    const igSymbol = IG_SYMBOLS[symbol];
-    if (!igSymbol) return null;
-
-    const res = await fetch(`https://demo-api.ig.com/gateway/deal/prices?symbols=${igSymbol}`, {
-      headers: {
-        "X-IG-API-KEY": IG_API_KEY,
-        "Content-Type": "application/json",
-        "Version": "1"
-      }
-    });
-    if (!res.ok) return null;
-    const data = await res.json();
-    if (!data.prices || data.prices.length === 0) return null;
-    const priceObj = data.prices[0];
-    const mid = (priceObj.bid + priceObj.offer) / 2;
-    return parseFloat(mid);
-  } catch (e) {
-    console.error("IG Markets API error:", e);
-    return null;
-  }
+/* ===== IG FETCH (désactivé pour le moment car backend requis) ===== */
+async function fetchIGPrice(symbol){
+  return null; // On activera plus tard avec backend
 }
 
-// --- FETCH TWELVE DATA (Forex) ---
-async function fetchTwelvePrice(symbol) {
+/* ===== FOREX FETCH ===== */
+async function fetchTwelvePrice(symbol){
   try {
-    const url = `https://api.twelvedata.com/price?symbol=${encodeURIComponent(symbol)}&apikey=${TWELVE_API_KEY}`;
-    const res = await fetch(url);
-    if (!res.ok) return null;
+    const res = await fetch(`https://api.twelvedata.com/price?symbol=${symbol}&apikey=${TWELVE_API_KEY}`);
     const data = await res.json();
-    if (!data.price) return null;
-    return parseFloat(data.price);
-  } catch (e) {
-    console.error("Twelve Data API error:", e);
-    return null;
-  }
+    return data.price ? parseFloat(data.price) : null;
+  } catch { return null }
 }
 
-// --- FETCH PRICE GENERIQUE ---
-async function fetchPrice(symbol) {
-  if (IG_SYMBOLS[symbol]) return await fetchIGPrice(symbol);
-  if (TWELVE_SYMBOLS[symbol]) return await fetchTwelvePrice(symbol);
+/* ========= GET PRICE ========= */
+async function fetchPrice(symbol){
+  if(IG_SYMBOLS[symbol]) return null; // IG plus tard
+  if(TWELVE_SYMBOLS[symbol]) return fetchTwelvePrice(symbol);
   return null;
 }
 
-// --- RAFRAÎCHISSEMENT DES PRIX ---
-async function refreshAllPrices() {
-  const needed = new Set([currentSymbol]);
-  positions.forEach(p => needed.add(p.symbol));
-  for (const sym of needed) {
-    const price = await fetchPrice(sym);
-    if (price) {
-      if (!lastPrices[sym]) lastPrices[sym] = price;
-      smoothPrices[sym] = lastPrices[sym];
-      lastPrices[sym] = price;
-    }
+/* ========= REFRESH ========= */
+async function refreshAllPrices(){
+  const price = await fetchPrice(currentSymbol);
+  if(price){
+    lastPrices[currentSymbol] = price;
+    document.getElementById("priceDisplay").innerText = price;
   }
-  if (lastPrices[currentSymbol])
-    document.getElementById("priceDisplay").innerText = lastPrices[currentSymbol].toFixed(4);
-  updatePnL();
 }
-
-// --- INTERVALLE DE RAFRAÎCHISSEMENT ---
-setInterval(refreshAllPrices, 15000);
 refreshAllPrices();
+setInterval(refreshAllPrices, 15000);
 
-setInterval(() => {
-  const alpha = 0.2;
-  for (const s in lastPrices) {
-    if (!smoothPrices[s]) smoothPrices[s] = lastPrices[s];
-    smoothPrices[s] += (lastPrices[s] - smoothPrices[s]) * alpha;
-  }
-  if (smoothPrices[currentSymbol])
-    document.getElementById("priceDisplay").innerText = smoothPrices[currentSymbol].toFixed(4);
-  updatePnL(true);
-}, 200);
-
-// --- ORDRES ET POSITIONS ---
-async function placeOrder(side){
-  const price = lastPrices[currentSymbol];
-  if (!price) return alert("Impossible d'obtenir le prix.");
-  const qty = parseInt(document.getElementById("lotInput").value) || 1;
-  positions.push({ id: Date.now(), symbol: currentSymbol, side, qty, entry: price, pnl: 0 });
+/* ========= ORDERS ========= */
+function placeOrder(side){
+  const p = lastPrices[currentSymbol];
+  if(!p) return alert("Prix indisponible");
+  const qty = parseInt(lotInput.value) || 1;
+  const pos = {id:Date.now(),symbol:currentSymbol,side,qty,entry:p,pnl:0};
+  positions.push(pos);
   renderPositions();
 }
 
+function renderPositions(){
+  const tb = document.querySelector("#positionsTable tbody");
+  tb.innerHTML = "";
+  positions.forEach(p=>{
+    const last = lastPrices[p.symbol] ?? p.entry;
+    p.pnl = (last - p.entry) * (p.side==="buy"?1:-1) * p.qty;
+    tb.innerHTML += `
+      <tr>
+        <td>${p.symbol}</td><td>${p.side}</td><td>${p.qty}</td>
+        <td>${p.entry}</td><td>${last}</td>
+        <td>${p.pnl.toFixed(4)}</td>
+        <td><button onclick="closePosition(${p.id})">X</button></td>
+      </tr>`;
+  });
+}
+
+/* ========= CLOSE ========= */
 function closePosition(id){
-  const pos = positions.find(p => p.id === id);
-  if (!pos) return;
-  const exit = lastPrices[pos.symbol] || pos.entry;
-  const dir = pos.side === "buy" ? 1 : -1;
-  const pnlFinal = (exit - pos.entry) * dir * pos.qty;
-  const closed = { ...pos, exit, pnl: pnlFinal, time: new Date().toLocaleTimeString() };
-  history.unshift(closed);
-  positions = positions.filter(p => p.id !== id);
+  const p = positions.find(x=>x.id===id);
+  const exit = lastPrices[p.symbol] ?? p.entry;
+  history.unshift({...p,exit});
+  positions = positions.filter(x=>x.id!==id);
   renderPositions();
-  renderHistory();
 }
 
-function updatePnL(isSmooth = false){
-  let total = 0;
-  positions.forEach(p => {
-    const price = isSmooth ? smoothPrices[p.symbol] : lastPrices[p.symbol];
-    if (!price) return;
-    const dir = p.side === "buy" ? 1 : -1;
-    p.pnl = (price - p.entry) * dir * p.qty;
-    total += p.pnl;
-  });
-  renderPositions(total);
-}
-
-function renderPositions(total = 0){
-  const tbody = document.querySelector("#positionsTable tbody");
-  tbody.innerHTML = "";
-  positions.forEach(p => {
-    const last = smoothPrices[p.symbol] ?? null;
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td>${p.symbol}</td><td>${p.side}</td><td>${p.qty}</td>
-      <td>${p.entry.toFixed(5)}</td><td>${last ? last.toFixed(5) : "—"}</td>
-      <td style="color:${p.pnl > 0 ? "#10b981" : p.pnl < 0 ? "#ef4444" : "white"}">${p.pnl.toFixed(5)}</td>
-      <td><button onclick="closePosition(${p.id})"
-      style="background:#334155;color:white;border:0;padding:4px 8px;border-radius:6px;cursor:pointer;">✖</button></td>`;
-    tbody.appendChild(tr);
-  });
-  const t = document.getElementById("totalPnl");
-  t.innerText = "PnL total : " + total.toFixed(5);
-  t.style.color = total > 0 ? "#10b981" : total < 0 ? "#ef4444" : "#22d3ee";
-}
-
-function renderHistory(){
-  const tbody = document.querySelector("#historyTable tbody");
-  tbody.innerHTML = "";
-  history.forEach(h => {
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td>${h.symbol}</td><td>${h.side}</td><td>${h.qty}</td>
-      <td>${h.entry.toFixed(5)}</td><td>${h.exit.toFixed(5)}</td>
-      <td style="color:${h.pnl > 0 ? "#10b981" : h.pnl < 0 ? "#ef4444" : "white"}">${h.pnl.toFixed(5)}</td>
-      <td>${h.time}</td>`;
-    tbody.appendChild(tr);
-  });
-}
-
+/* ========= SYMBOL SELECT ========= */
 document.getElementById("symbolSelect").addEventListener("change", e=>{
   currentSymbol = e.target.value;
-  const tv = {
-    "S&P500":"INDEX:SPX",
-    "DowJones":"INDEX:DJI",
-    "Nasdaq100":"INDEX:NDX",
-    "DAX":"INDEX:DAX",
-    "CAC40":"INDEX:PX1"
-  }[currentSymbol] || currentSymbol;
-  document.getElementById("tradingviewIframe").src =
-    `https://s.tradingview.com/widgetembed/?symbol=${tv}&interval=1&theme=dark&hide_side_toolbar=1`;
-  refreshAllPrices();
 });
-
-function toggleFullscreen(){
-  document.getElementById("tradingviewIframe").classList.toggle("fullscreen");
-}
 </script>
+
 </body>
 </html>
+
 
 
 
