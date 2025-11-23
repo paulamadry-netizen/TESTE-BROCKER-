@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Mini Broker — Forex Live</title>
+  <title>Mini Broker — Forex Live (avec édition SL/TP & Ordres Limite)</title>
 
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
   <style>
@@ -12,28 +12,30 @@
       --card:#0b1220;
       --muted:#9aa6bf;
       --accent:#2dd4bf;
+      --accent-2:#60a5fa;
       --danger:#ff6b6b;
       --glass: rgba(255,255,255,0.03);
       --glass-2: rgba(255,255,255,0.02);
       --text:#e6eef8;
+      --success:#34d399;
     }
     html,body{height:100%;margin:0;font-family:Inter,system-ui,Arial;background:linear-gradient(180deg,#071025 0%,#071427 100%);color:var(--text);}
     .app{display:flex;flex-direction:column;height:100vh;gap:12px;padding:14px;box-sizing:border-box;}
     .topbar{display:flex;align-items:center;justify-content:space-between;}
     .brand{display:flex;align-items:center;gap:10px;}
-    .logo{width:44px;height:44px;border-radius:10px;background:linear-gradient(135deg,var(--accent),#60a5fa);display:flex;align-items:center;justify-content:center;font-weight:700;color:#042;}
+    .logo{width:44px;height:44px;border-radius:10px;background:linear-gradient(135deg,var(--accent),var(--accent-2));display:flex;align-items:center;justify-content:center;font-weight:700;color:#042;}
     .title{font-weight:600;font-size:18px;}
     .subtitle{font-size:13px;color:var(--muted);}
     .main{display:flex;gap:14px;flex:1;min-height:0;}
-    .chart-area{flex:1.6;background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01));border-radius:12px;padding:12px;box-shadow:0 6px 24px rgba(2,6,23,0.6);display:flex;flex-direction:column;}
-    .side{width:320px;max-width:36%;background:var(--card);border-radius:12px;padding:12px;box-shadow:0 6px 20px rgba(2,6,23,0.6);display:flex;flex-direction:column;gap:10px;}
+    .chart-area{flex:1.6;background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01));border-radius:12px;padding:12px;box-shadow:0 6px 24px rgba(2,6,23,0.6);display:flex;flex-direction:column;min-width:0;}
+    .side{width:360px;max-width:40%;background:var(--card);border-radius:12px;padding:12px;box-shadow:0 6px 20px rgba(2,6,23,0.6);display:flex;flex-direction:column;gap:12px;min-width:0;}
     .btn{padding:8px 12px;border-radius:8px;background:var(--glass);border:1px solid rgba(255,255,255,0.03);color:var(--text);cursor:pointer;font-weight:600;}
     .btn.buy{background:linear-gradient(90deg,#10b981,#34d399);color:#042;border:none;}
     .btn.sell{background:linear-gradient(90deg,#ef4444,#fb7185);color:white;border:none;}
     .btn.ghost{background:transparent;border:1px solid rgba(255,255,255,0.05);color:var(--muted);}
     #tv_chart_container{flex:1;min-height:380px;border-radius:10px;overflow:hidden;background:var(--glass-2);}
     .small-muted{color:var(--muted);font-size:13px;}
-    .watchlist{display:flex;flex-direction:column;gap:8px;overflow:auto;}
+    .watchlist{display:flex;flex-direction:column;gap:8px;overflow:auto;max-height:220px;padding-right:6px;}
     .watch-item{display:flex;justify-content:space-between;align-items:center;padding:8px;border-radius:8px;cursor:pointer;transition:all .12s;}
     .watch-item:hover{transform:translateY(-3px);background:rgba(255,255,255,0.03);}
     .price-small{font-weight:600;}
@@ -41,9 +43,27 @@
     .tab-btn{padding:8px 12px;border-radius:10px;cursor:pointer;background:transparent;color:var(--muted);border:1px solid transparent;font-weight:600;}
     .tab-btn.active{background:rgba(255,255,255,0.03);color:var(--text);border:1px solid rgba(255,255,255,0.05);}
     .panel{background:rgba(255,255,255,0.02);border-radius:10px;padding:10px;min-height:120px;overflow:auto;}
-    .pos-row{display:flex;justify-content:space-between;align-items:center;padding:10px;margin-bottom:6px;border-radius:8px;background:rgba(255,255,255,0.02);}
+    .pos-row{display:flex;justify-content:space-between;align-items:center;padding:10px;margin-bottom:6px;border-radius:8px;background:rgba(255,255,255,0.02);cursor:pointer;}
+    .pos-row:hover{background:rgba(255,255,255,0.03)}
     .pnl{font-weight:700;}
-    @media(max-width:960px){.main{flex-direction:column;}.side{width:100%;}}
+    .muted-mini{font-size:12px;color:var(--muted)}
+    .limit-table{width:100%;border-collapse:collapse;font-size:13px;}
+    .limit-table th,.limit-table td{padding:6px 8px;text-align:left;border-bottom:1px solid rgba(255,255,255,0.02)}
+    .form-row{display:flex;gap:8px;align-items:center}
+    .input,select{background:transparent;border:1px solid rgba(255,255,255,0.04);padding:8px;border-radius:8px;color:var(--text);width:100%}
+    .small{font-size:13px}
+    .mini-actions{display:flex;gap:6px}
+    .chip{padding:6px 8px;border-radius:8px;background:rgba(255,255,255,0.02);font-weight:600}
+    .green{color:var(--success)}
+    .red{color:var(--danger)}
+    .kbd{background:rgba(255,255,255,0.03);padding:4px 8px;border-radius:6px;font-weight:700}
+    @media(max-width:1000px){.main{flex-direction:column}.side{width:100%;max-width:100%}}
+    /* Modal */
+    .modal-backdrop{position:fixed;inset:0;background:rgba(2,6,23,0.7);display:none;align-items:center;justify-content:center;z-index:60}
+    .modal{background:var(--card);border-radius:12px;padding:16px;min-width:320px;max-width:520px;box-shadow:0 10px 50px rgba(0,0,0,0.6)}
+    .modal .row{margin-bottom:8px}
+    .modal .actions{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
+    .tiny{font-size:12px;color:var(--muted)}
   </style>
 </head>
 <body>
@@ -53,7 +73,7 @@
         <div class="logo">MB</div>
         <div>
           <div class="title">Mini Broker Forex</div>
-          <div class="subtitle">Devises & Or en direct</div>
+          <div class="subtitle">Devises & Or — Gestion SL/TP & Ordres Limite</div>
         </div>
       </div>
       <div class="controls">
@@ -65,7 +85,7 @@
     <div class="main">
       <div class="chart-area">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-          <div>
+          <div style="min-width:0">
             <div style="font-weight:700;" id="currentSymbol">EUR/USD</div>
             <div class="small-muted" id="currentPriceSmall">Prix : --</div>
           </div>
@@ -96,20 +116,98 @@
           <div class="small-muted">Temps réel</div>
         </div>
         <div class="watchlist" id="watchlist"></div>
-        <div style="margin-top:auto;display:flex;justify-content:space-between;align-items:center;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
           <div class="small-muted">Dernière MAJ: <span id="lastUpdate">--</span></div>
           <button class="btn" id="btnRefreshWatch">Refresh</button>
         </div>
 
-        <div style="margin-top:12px;font-weight:700;">Ordres Limites</div>
-        <div id="limitOrdersList"><div class="small-muted">Aucun ordre limite.</div></div>
-        <button class="btn" id="btnAddLimit">Ajouter Ordre Limite</button>
+        <div style="margin-top:8px;font-weight:700;">Ordres Limite</div>
+
+        <!-- Mini-formulaire pour ajouter un ordre limite -->
+        <div style="background:var(--glass);border-radius:10px;padding:10px;">
+          <div class="form-row">
+            <select id="limitSide" class="input" style="max-width:140px">
+              <option value="BUY_LIMIT">Buy Limit</option>
+              <option value="SELL_LIMIT">Sell Limit</option>
+            </select>
+            <input id="limitPrice" class="input" placeholder="Prix" />
+            <input id="limitQty" class="input" placeholder="Qty" />
+          </div>
+          <div class="form-row" style="margin-top:8px">
+            <input id="limitSL" class="input" placeholder="SL (optionnel)"/>
+            <input id="limitTP" class="input" placeholder="TP (optionnel)"/>
+            <button class="btn" id="btnAddLimit">Ajouter</button>
+          </div>
+          <div class="tiny" style="margin-top:6px">Les ordres limite s'exécutent automatiquement si le prix touché. Éditez depuis la table ci-dessous.</div>
+        </div>
+
+        <!-- Tableau des ordres limite -->
+        <div style="max-height:200px;overflow:auto;margin-top:6px">
+          <table class="limit-table" id="limitOrdersTable">
+            <thead>
+              <tr><th>Symbole</th><th>Side</th><th>Prix</th><th>Qty</th><th>SL/TP</th><th>Actions</th></tr>
+            </thead>
+            <tbody id="limitOrdersBody">
+              <tr><td colspan="6" class="muted-mini">Aucun ordre limite.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div style="margin-top:10px;font-weight:700;">Gestion</div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <button class="btn ghost" id="btnCancelAllLimits">Annuler tout</button>
+          <div style="flex:1"></div>
+          <div class="muted-mini">Total positions: <span id="countPos">0</span></div>
+        </div>
       </aside>
+    </div>
+  </div>
+
+  <!-- Modale d'édition position / fermeture -->
+  <div class="modal-backdrop" id="modalBackdrop">
+    <div class="modal" role="dialog" aria-modal="true">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div style="font-weight:700" id="modalTitle">Editer position</div>
+        <button class="btn ghost" id="modalClose">X</button>
+      </div>
+      <div class="row">
+        <div class="tiny">Symbole</div>
+        <div id="modalSymbol" style="font-weight:700"></div>
+      </div>
+      <div class="row form-row">
+        <div style="flex:1">
+          <div class="tiny">Entrée</div>
+          <div id="modalEntry" class="muted-mini"></div>
+        </div>
+        <div style="width:110px">
+          <div class="tiny">Qty</div>
+          <div id="modalQty" class="muted-mini"></div>
+        </div>
+        <div style="width:90px">
+          <div class="tiny">Side</div>
+          <div id="modalSide" class="muted-mini"></div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="tiny">Stop Loss</div>
+        <input id="modalSL" class="input" placeholder="Stop Loss (nombre)"/>
+      </div>
+      <div class="row">
+        <div class="tiny">Take Profit</div>
+        <input id="modalTP" class="input" placeholder="Take Profit (nombre)"/>
+      </div>
+
+      <div class="actions">
+        <button class="btn ghost" id="modalClosePos">Fermer Position</button>
+        <button class="btn" id="modalSave">Enregistrer</button>
+      </div>
     </div>
   </div>
 
   <script src="https://s3.tradingview.com/tv.js"></script>
   <script>
+/* ------------- Configuration & état ------------- */
 const API_KEY='c9140c9a72264e82bb9f5235b86b2806';
 const API_BASE='https://api.twelvedata.com';
 const WATCHLIST=[
@@ -120,173 +218,390 @@ const WATCHLIST=[
   {id:'USD/CAD',label:'USD/CAD'},
   {id:'USD/CHF',label:'USD/CHF'},
   {id:'NZD/USD',label:'NZD/USD'},
-  {id:'XAU/USD',label:'Or (XAU/USD)'}
+  {id:'XAU/USD',label:'XAU/USD'}
 ];
+
 let currentSymbol='EUR/USD';
 let tvWidget=null;
-let lastPrices={};
-let positions=[];
-let history=[];
-let limitOrders=[];
+let lastPrices={};        // { 'EUR/USD': 1.12345, ... }
+let positions=[];         // objets {id,symbol,side,qty,entryPrice,sl,tp}
+let history=[];           // positions fermées { ... exitPrice, pnl}
+let limitOrders=[];       // {id,symbol,side,price,qty,sl,tp}
 const fmt=(n,d=5)=>n==null?'--':Number(n).toLocaleString('en-US',{maximumFractionDigits:d});
 const now=()=>new Date().toLocaleString('fr-FR');
 
-function apiGetPrice(symbol){
-  return fetch(`${API_BASE}/price?symbol=${encodeURIComponent(symbol)}&apikey=${API_KEY}`)
-    .then(r=>r.json())
-    .then(j=>{if(j&&j.price)return{price:Number(j.price),source:'twelvedata'};throw new Error('invalid');})
-    .catch(()=>{const base=lastPrices[symbol]??1.1;const fake=base*(1+(Math.random()-0.5)*0.001);return{price:fake,source:'fallback'};});
+/* ------------- API prix (fallback inclus) ------------- */
+async function apiGetPrice(symbol){
+  try{
+    const res=await fetch(`${API_BASE}/price?symbol=${encodeURIComponent(symbol)}&apikey=${API_KEY}`);
+    const j=await res.json();
+    if(j && j.price) return {price:Number(j.price),source:'twelvedata'};
+    throw new Error('invalid response');
+  }catch(e){
+    // fallback: generate a small random price near last price
+    const base=lastPrices[symbol] ?? (symbol.startsWith('XAU')?1900:1.1);
+    const fake=base*(1+(Math.random()-0.5)*0.0015);
+    return {price:fake,source:'fallback'};
+  }
 }
 
+/* ------------- Rendu watchlist ------------- */
 function renderWatchlist(){
-  const c=document.getElementById('watchlist');
-  c.innerHTML='';
+  const c=document.getElementById('watchlist'); c.innerHTML='';
   WATCHLIST.forEach(w=>{
-    const id=w.label.replace(/[^a-zA-Z0-9]/g,'_');
+    const idSafe=w.label.replace(/[^a-zA-Z0-9]/g,'_');
     const el=document.createElement('div');
     el.className='watch-item';
-    el.innerHTML=`<div><div style="font-weight:700">${w.label}</div></div>
-    <div style="text-align:right;">
-      <div class="price-small" id="price_${id}">--</div>
-      <div class="small-muted" id="src_${id}">--</div>
-    </div>`;
+    el.innerHTML=`
+      <div style="min-width:0">
+        <div style="font-weight:700">${w.label}</div>
+        <div class="tiny muted-mini" style="margin-top:4px">${w.id}</div>
+      </div>
+      <div style="text-align:right;min-width:110px">
+        <div class="price-small" id="price_${idSafe}">--</div>
+        <div class="small-muted" id="src_${idSafe}">--</div>
+      </div>`;
     el.onclick=()=>setChartSymbol(w.id);
     c.appendChild(el);
   });
 }
 
-function renderLimitOrders(){
-  const c=document.getElementById('limitOrdersList');
-  if(!limitOrders.length)return c.innerHTML='<div class="small-muted">Aucun ordre limite.</div>';
-  c.innerHTML='';
-  limitOrders.forEach((o,i)=>{
-    c.innerHTML+=`<div class="pos-row"><div>${o.symbol}
-      <div class="small-muted">${o.side} @ ${fmt(o.price)}</div>
-      <div class="small-muted">Qty:${o.qty}${o.sl?' / SL:'+fmt(o.sl):''}${o.tp?' / TP:'+fmt(o.tp):''}</div>
-      </div><button class="btn ghost" onclick="cancelLimitOrder(${i})">Annuler</button></div>`;
+/* ------------- TradingView initialisation ------------- */
+function initTradingView(sym){
+  document.getElementById('tv_chart_container').innerHTML='';
+  // si TradingView n'est pas chargé, on ignore (mais normalement est chargé via tv.js)
+  try{
+    tvWidget = new TradingView.widget({
+      autosize:true,
+      symbol:sym,
+      interval:"60",
+      theme:"dark",
+      locale:"fr",
+      container_id:"tv_chart_container",
+      enable_publishing:false
+    });
+  }catch(e){
+    // fallback: show placeholder
+    const cont=document.getElementById('tv_chart_container');
+    cont.innerHTML=`<div style="padding:24px;color:var(--muted)">Graph indisponible (TradingView non chargé)</div>`;
+  }
+  document.getElementById('currentSymbol').textContent=sym;
+  currentSymbol=sym;
+}
+
+/* ------------- Positions : affichage & interactions ------------- */
+function renderPositions(){
+  const l=document.getElementById('positionsList');
+  const countPos=document.getElementById('countPos');
+  countPos.textContent = positions.length;
+  if(!positions.length){
+    l.innerHTML='<div class="small-muted">Aucune position ouverte.</div>';
+    return;
+  }
+  l.innerHTML='';
+  positions.forEach(p=>{
+    const cur=lastPrices[p.symbol] ?? p.entryPrice;
+    const pnl=computePnl(p,cur);
+    const row=document.createElement('div');
+    row.className='pos-row';
+    row.dataset.posId=p.id;
+    row.innerHTML=`
+      <div style="min-width:0">
+        <div style="font-weight:700">${p.symbol}</div>
+        <div class="muted-mini">Entrée ${fmt(p.entryPrice,5)} — Actuel ${fmt(cur,5)}</div>
+        <div class="muted-mini">${p.sl?('SL:'+fmt(p.sl,5)):'SL:-'} ${p.tp?(' TP:'+fmt(p.tp,5)):'TP:-'}</div>
+      </div>
+      <div style="text-align:right;min-width:110px">
+        <div class="pnl" style="color:${pnl>=0? 'var(--success)':'var(--danger)'}">${pnl>=0?'+':''}${fmt(pnl,2)}</div>
+        <div class="muted-mini">${p.side} • ${p.qty}</div>
+      </div>`;
+    // click pour éditer
+    row.addEventListener('click',()=>openEditPositionModal(p.id));
+    l.appendChild(row);
   });
 }
 
-function addLimitOrder(){
-  const side=prompt("Type d'ordre (BUY_LIMIT / SELL_LIMIT):",'BUY_LIMIT');
-  if(!side)return;
-  const price=Number(prompt("Prix cible:","1.1000"));
-  if(!price)return;
-  const qty=Number(prompt("Quantité:","1000"));
-  if(!qty)return;
-  const sl=Number(prompt("Stop Loss (vide si aucun):",""))||null;
-  const tp=Number(prompt("Take Profit (vide si aucun):",""))||null;
-  limitOrders.push({id:'limit_'+Date.now(),symbol:currentSymbol,side,price,qty,sl,tp});
+/* ------------- History ------------- */
+function renderHistory(){
+  const l=document.getElementById('historyList');
+  if(!history.length){ l.innerHTML='<div class="small-muted">Aucun historique.</div>'; return; }
+  l.innerHTML='';
+  history.forEach(h=>{
+    const row=document.createElement('div');
+    row.className='pos-row';
+    row.innerHTML=`
+      <div>
+        <div style="font-weight:700">${h.symbol}</div>
+        <div class="muted-mini">${fmt(h.entryPrice,5)} → ${fmt(h.exitPrice,5)}</div>
+      </div>
+      <div style="text-align:right">
+        <div class="pnl" style="color:${h.pnl>=0?'var(--success)':'var(--danger)'}">${h.pnl>=0?'+':''}${fmt(h.pnl,2)}</div>
+        <div class="muted-mini">${h.side}</div>
+      </div>`;
+    l.appendChild(row);
+  });
+}
+
+/* ------------- Limit Orders : rendu tableau ------------- */
+function renderLimitOrders(){
+  const tbody=document.getElementById('limitOrdersBody');
+  tbody.innerHTML='';
+  if(!limitOrders.length){
+    tbody.innerHTML='<tr><td colspan="6" class="muted-mini">Aucun ordre limite.</td></tr>';
+    return;
+  }
+  limitOrders.forEach((o, i)=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML=`
+      <td>${o.symbol}</td>
+      <td>${o.side.includes('BUY')?'<span class="green">BUY</span>':'<span class="red">SELL</span>'}</td>
+      <td>${fmt(o.price,5)}</td>
+      <td>${o.qty}</td>
+      <td class="muted-mini">${o.sl?('SL:'+fmt(o.sl,5)):'-'} ${o.tp?('TP:'+fmt(o.tp,5)):'-'}</td>
+      <td style="white-space:nowrap">
+        <div class="mini-actions">
+          <button class="btn ghost" data-edit-index="${i}">✏️</button>
+          <button class="btn ghost" data-cancel-index="${i}">🗑️</button>
+        </div>
+      </td>`;
+    tbody.appendChild(tr);
+  });
+
+  // liaisons actions
+  tbody.querySelectorAll('[data-cancel-index]').forEach(btn=>{
+    btn.onclick = (e)=>{
+      const idx = Number(btn.dataset.cancelIndex);
+      cancelLimitOrder(idx);
+    };
+  });
+  tbody.querySelectorAll('[data-edit-index]').forEach(btn=>{
+    btn.onclick = (e)=>{
+      const idx = Number(btn.dataset.editIndex);
+      openEditLimitModal(idx);
+    };
+  });
+}
+
+/* ------------- Gestion ordres limite (ajout / annulation / exécution) ------------- */
+function addLimitOrderFromForm(){
+  const side = document.getElementById('limitSide').value;
+  const price = parseFloat(document.getElementById('limitPrice').value);
+  const qty = parseFloat(document.getElementById('limitQty').value) || 0;
+  const sl = parseFloat(document.getElementById('limitSL').value) || null;
+  const tp = parseFloat(document.getElementById('limitTP').value) || null;
+  if(!price || !qty){
+    alert('Veuillez renseigner un prix et une quantité valides.');
+    return;
+  }
+  const symbol = currentSymbol; // on ajoute pour le symbole courant
+  const order = { id: 'L_' + Date.now(), symbol, side, price, qty, sl, tp };
+  limitOrders.push(order);
+  renderLimitOrders();
+  // clear form
+  document.getElementById('limitPrice').value='';
+  document.getElementById('limitQty').value='';
+  document.getElementById('limitSL').value='';
+  document.getElementById('limitTP').value='';
+}
+
+function cancelLimitOrder(idx){
+  if(idx<0 || idx>=limitOrders.length) return;
+  if(!confirm('Annuler cet ordre limite ?')) return;
+  limitOrders.splice(idx,1);
   renderLimitOrders();
 }
-function cancelLimitOrder(i){limitOrders.splice(i,1);renderLimitOrders();}
 
+function cancelAllLimits(){
+  if(!limitOrders.length) return;
+  if(!confirm('Annuler tous les ordres limite ?')) return;
+  limitOrders = [];
+  renderLimitOrders();
+}
+
+/* ------------- Vérification & exécution des ordres limite ------------- */
 function checkLimitOrders(){
-  limitOrders.slice().forEach((o,i)=>{
-    const cur=lastPrices[o.symbol];
-    if(!cur)return;
+  // on itère sur une copie car on peut supprimer pendant l'itération
+  limitOrders.slice().forEach((o,idx)=>{
+    const cur = lastPrices[o.symbol];
+    if(cur==null) return;
     let exec=false;
-    if(o.side==='BUY_LIMIT'&&cur<=o.price)exec=true;
-    if(o.side==='SELL_LIMIT'&&cur>=o.price)exec=true;
+    // BUY_LIMIT triggers when market <= price
+    if(o.side==='BUY_LIMIT' && cur <= o.price) exec=true;
+    // SELL_LIMIT triggers when market >= price
+    if(o.side==='SELL_LIMIT' && cur >= o.price) exec=true;
     if(exec){
-      const sideReal=o.side==='BUY_LIMIT'?'BUY':'SELL';
-      openPosition({id:o.id,symbol:o.symbol,side:sideReal,qty:o.qty,entryPrice:o.price,sl:o.sl,tp:o.tp});
-      limitOrders.splice(i,1);renderLimitOrders();
+      // convert to real side
+      const sideReal = o.side.includes('BUY') ? 'BUY' : 'SELL';
+      openPosition({ id: o.id.replace(/^L_/,'P_') + '_' + Date.now(), symbol: o.symbol, side: sideReal, qty: o.qty, entryPrice: o.price, sl: o.sl, tp: o.tp });
+      // remove order
+      const removeIndex = limitOrders.findIndex(x=>x.id===o.id);
+      if(removeIndex>=0) limitOrders.splice(removeIndex,1);
+      renderLimitOrders();
+      renderPositions();
     }
   });
 }
 
-function computePnl(p,price){return(p.side==='BUY'?1:-1)*(price-p.entryPrice)*p.qty;}
-function openPosition(o){positions.push(o);renderPositions();}
+/* ------------- Positions: ouvrir / fermer / calcul PnL ------------- */
+function computePnl(p,price){
+  // signe selon side
+  const sign = p.side === 'BUY' ? 1 : -1;
+  // pnl scale: (price - entry) * qty * sign
+  return sign * (price - p.entryPrice) * p.qty;
+}
+
+function openPosition(o){
+  // o must contain id,symbol,side,qty,entryPrice,sl,tp
+  positions.push(o);
+  renderPositions();
+}
+
 function closePosition(id){
-  const p=positions.find(x=>x.id===id);if(!p)return;
-  const cur=lastPrices[p.symbol]??p.entryPrice;
-  const pnl=computePnl(p,cur);
-  history.unshift({...p,exitPrice:cur,pnl});
-  positions=positions.filter(x=>x.id!==id);
-  renderPositions();renderHistory();
+  const idx = positions.findIndex(p=>p.id===id);
+  if(idx===-1) return;
+  const p = positions[idx];
+  const cur = lastPrices[p.symbol] ?? p.entryPrice;
+  const pnl = computePnl(p,cur);
+  history.unshift({...p, exitPrice: cur, pnl});
+  positions.splice(idx,1);
+  renderPositions();
+  renderHistory();
 }
 
-function renderPositions(){
-  const l=document.getElementById('positionsList');
-  if(!positions.length)return l.innerHTML='<div class="small-muted">Aucune position ouverte.</div>';
-  l.innerHTML='';
-  positions.forEach(p=>{
-    const cur=lastPrices[p.symbol]??p.entryPrice;
-    const pnl=computePnl(p,cur);
-    l.innerHTML+=`<div class="pos-row">
-      <div>${p.symbol}<div class="small-muted">Entrée ${fmt(p.entryPrice)} / Actuel ${fmt(cur)}</div>
-      ${p.sl?'<div class="small-muted">SL:'+fmt(p.sl)+'</div>':''}
-      ${p.tp?'<div class="small-muted">TP:'+fmt(p.tp)+'</div>':''}
-      </div>
-      <div style="text-align:right;">
-        <div class="pnl" style="color:${pnl>=0?'#34d399':'#fb7185'}">${pnl>=0?'+':''}${fmt(pnl,2)}</div>
-        <button class="btn ghost" onclick="closePosition('${p.id}')">Fermer</button>
-      </div></div>`;
+/* ------------- Auto-check SL/TP on price refresh ------------- */
+function checkStopsTakeProfits(){
+  positions.slice().forEach(p=>{
+    const cur = lastPrices[p.symbol];
+    if(cur==null) return;
+    // Stop Loss
+    if(p.sl){
+      if( (p.side==='BUY' && cur <= p.sl) || (p.side==='SELL' && cur >= p.sl) ){
+        // close
+        closePosition(p.id);
+        return;
+      }
+    }
+    // Take Profit
+    if(p.tp){
+      if( (p.side==='BUY' && cur >= p.tp) || (p.side==='SELL' && cur <= p.tp) ){
+        closePosition(p.id);
+        return;
+      }
+    }
   });
 }
 
-function renderHistory(){
-  const l=document.getElementById('historyList');
-  if(!history.length)return l.innerHTML='<div class="small-muted">Aucun historique.</div>';
-  l.innerHTML='';
-  history.forEach(h=>{
-    l.innerHTML+=`<div class="pos-row"><div>${h.symbol}<div class="small-muted">${fmt(h.entryPrice)}→${fmt(h.exitPrice)}</div></div>
-    <div style="text-align:right;"><div class="pnl" style="color:${h.pnl>=0?'#34d399':'#fb7185'}">${h.pnl>=0?'+':''}${fmt(h.pnl,2)}</div><div>${h.side}</div></div></div>`;
-  });
+/* ------------- Modal édition position ------------- */
+const modalBackdrop = document.getElementById('modalBackdrop');
+let modalEditingPosId = null;
+
+function openEditPositionModal(posId){
+  const pos = positions.find(p=>p.id===posId);
+  if(!pos) return;
+  modalEditingPosId = posId;
+  document.getElementById('modalTitle').textContent = 'Editer position';
+  document.getElementById('modalSymbol').textContent = pos.symbol;
+  document.getElementById('modalEntry').textContent = fmt(pos.entryPrice,5);
+  document.getElementById('modalQty').textContent = pos.qty;
+  document.getElementById('modalSide').textContent = pos.side;
+  document.getElementById('modalSL').value = pos.sl ?? '';
+  document.getElementById('modalTP').value = pos.tp ?? '';
+  modalBackdrop.style.display = 'flex';
 }
 
-async function handleOrder(side){
-  const qty=Number(prompt(`Ordre ${side} - ${currentSymbol}\nQuantité :`,'1000'));
-  if(!qty)return;
-  const sl=Number(prompt("Stop Loss (vide si aucun):",""))||null;
-  const tp=Number(prompt("Take Profit (vide si aucun):",""))||null;
-  const res=await apiGetPrice(currentSymbol);
-  openPosition({id:'pos_'+Date.now(),symbol:currentSymbol,side,qty,entryPrice:res.price,sl,tp});
+document.getElementById('modalClose').addEventListener('click', closeModal);
+document.getElementById('modalSave').addEventListener('click', ()=>{
+  if(!modalEditingPosId) return;
+  const p = positions.find(x=>x.id===modalEditingPosId);
+  if(!p) return closeModal();
+  const slVal = parseFloat(document.getElementById('modalSL').value) || null;
+  const tpVal = parseFloat(document.getElementById('modalTP').value) || null;
+  p.sl = slVal;
+  p.tp = tpVal;
+  renderPositions();
+  closeModal();
+});
+document.getElementById('modalClosePos').addEventListener('click', ()=>{
+  if(!modalEditingPosId) return;
+  if(!confirm('Confirmer fermeture de la position ?')) return;
+  closePosition(modalEditingPosId);
+  closeModal();
+});
+
+function closeModal(){
+  modalBackdrop.style.display = 'none';
+  modalEditingPosId = null;
 }
 
-function initTradingView(sym){
-  document.getElementById('tv_chart_container').innerHTML='';
-  tvWidget=new TradingView.widget({
-    autosize:true,
-    symbol:sym,
-    interval:"60",
-    theme:"dark",
-    locale:"fr",
-    container_id:"tv_chart_container",
-    enable_publishing:false
-  });
-  document.getElementById('currentSymbol').textContent=sym;
+/* ------------- Edit Limit modal (simple prompt-style but better UX) ------------- */
+function openEditLimitModal(idx){
+  const o = limitOrders[idx];
+  if(!o) return;
+  // show quick edit via prompt-like modal (using built-in prompt for simplicity)
+  // But to keep UI consistent, use custom small form overlay:
+  const side = prompt('Side (BUY_LIMIT / SELL_LIMIT):', o.side) || o.side;
+  const price = parseFloat(prompt('Prix:', o.price)) || o.price;
+  const qty = parseFloat(prompt('Quantité:', o.qty)) || o.qty;
+  const sl = (function(v){ const n=parseFloat(prompt('SL (vide pour aucun):', o.sl ?? '')); return isNaN(n)?null:n; })();
+  const tp = (function(v){ const n=parseFloat(prompt('TP (vide pour aucun):', o.tp ?? '')); return isNaN(n)?null:n; })();
+  o.side = side;
+  o.price = price;
+  o.qty = qty;
+  o.sl = sl;
+  o.tp = tp;
+  renderLimitOrders();
 }
 
-function setChartSymbol(sym){currentSymbol=sym;initTradingView(sym);}
-
+/* ------------- Prix rafraîchissement et boucle ------------- */
 async function refreshWatchPrices(){
+  // fetch all watchlist prices in parallel
   await Promise.all(WATCHLIST.map(async w=>{
-    const res=await apiGetPrice(w.id);
-    lastPrices[w.id]=res.price;
-    const id=w.label.replace(/[^a-zA-Z0-9]/g,'_');
-    document.getElementById('price_'+id).textContent=fmt(res.price,res.price>100?2:5);
-    document.getElementById('src_'+id).textContent=res.source;
+    try{
+      const res = await apiGetPrice(w.id);
+      lastPrices[w.id] = res.price;
+      const idSafe = w.label.replace(/[^a-zA-Z0-9]/g,'_');
+      const elPrice = document.getElementById('price_'+idSafe);
+      const elSrc = document.getElementById('src_'+idSafe);
+      if(elPrice) elPrice.textContent = fmt(res.price, res.price>100?2:5);
+      if(elSrc) elSrc.textContent = res.source;
+    }catch(e){
+      // ignore errors
+    }
   }));
-  document.getElementById('lastUpdate').textContent=now();
-  if(lastPrices[currentSymbol]){
-    document.getElementById('currentPriceSmall').textContent='Prix : '+fmt(lastPrices[currentSymbol]);
-  }
+  document.getElementById('lastUpdate').textContent = now();
+  // update current symbol price
+  if(lastPrices[currentSymbol]) document.getElementById('currentPriceSmall').textContent = 'Prix : '+fmt(lastPrices[currentSymbol],5);
+  // check orders
   checkLimitOrders();
-  positions.forEach(p=>{
-    const cur=lastPrices[p.symbol];
-    if(!cur)return;
-    if(p.sl&&((p.side==='BUY'&&cur<=p.sl)||(p.side==='SELL'&&cur>=p.sl)))closePosition(p.id);
-    if(p.tp&&((p.side==='BUY'&&cur>=p.tp)||(p.side==='SELL'&&cur<=p.tp)))closePosition(p.id);
-  });
+  checkStopsTakeProfits();
+  // recompute pnl colors
+  renderPositions();
 }
 
-document.getElementById('btnBuy').onclick=()=>handleOrder('BUY');
-document.getElementById('btnSell').onclick=()=>handleOrder('SELL');
-document.getElementById('btnRefreshWatch').onclick=refreshWatchPrices;
-document.getElementById('refreshPrices').onclick=refreshWatchPrices;
-document.getElementById('btnAddLimit').onclick=addLimitOrder;
+/* ------------- Interaction boutons (Buy/Sell) ------------- */
+async function handleMarketOrder(side){
+  const qty = parseFloat(prompt(`Ordre ${side} - ${currentSymbol}\nQuantité :`, '1000'));
+  if(!qty || qty<=0) return alert('Quantité invalide');
+  const sl = (function(){ const n=parseFloat(prompt('Stop Loss (vide si aucun):','')); return isNaN(n)?null:n; })();
+  const tp = (function(){ const n=parseFloat(prompt('Take Profit (vide si aucun):','')); return isNaN(n)?null:n; })();
+  const res = await apiGetPrice(currentSymbol);
+  openPosition({ id: 'P_' + Date.now(), symbol: currentSymbol, side, qty, entryPrice: res.price, sl, tp });
+  renderPositions();
+}
+
+/* ------------- Utilitaires ------------- */
+function setChartSymbol(sym){
+  currentSymbol=sym;
+  initTradingView(sym);
+}
+
+/* ------------- Initialisation & bindings ------------- */
+document.getElementById('btnBuy').addEventListener('click', ()=>handleMarketOrder('BUY'));
+document.getElementById('btnSell').addEventListener('click', ()=>handleMarketOrder('SELL'));
+document.getElementById('btnRefreshWatch').addEventListener('click', refreshWatchPrices);
+document.getElementById('refreshPrices').addEventListener('click', refreshWatchPrices);
+document.getElementById('btnAddLimit').addEventListener('click', addLimitOrderFromForm);
+document.getElementById('btnCancelAllLimits').addEventListener('click', cancelAllLimits);
 document.querySelectorAll('.tab-btn').forEach(b=>b.onclick=()=>{
   document.querySelectorAll('.tab-btn').forEach(x=>x.classList.remove('active'));
   b.classList.add('active');
@@ -294,6 +609,10 @@ document.querySelectorAll('.tab-btn').forEach(b=>b.onclick=()=>{
   document.getElementById('panelHistory').style.display=b.dataset.tab==='history'?'block':'none';
 });
 
+// Expose closePosition for older onclick references if needed
+window.closePosition = closePosition;
+
+/* ------------- Boot ------------- */
 async function boot(){
   renderWatchlist();
   initTradingView(currentSymbol);
@@ -301,14 +620,15 @@ async function boot(){
   renderPositions();
   renderHistory();
   renderLimitOrders();
-  setInterval(refreshWatchPrices,10000);
+  // refresh prices every 10s
+  setInterval(refreshWatchPrices, 10000);
 }
-window.closePosition=closePosition;
-window.cancelLimitOrder=cancelLimitOrder;
 boot();
+
   </script>
 </body>
 </html>
+
 
 
 
