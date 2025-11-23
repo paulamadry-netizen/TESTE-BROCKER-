@@ -63,6 +63,9 @@ input[type="number"]{background:#071023;border-radius:8px;border:1px solid rgba(
 @media(max-width:1000px){.main{flex-direction:column}.side{width:100%;max-width:100%}}
 /* small inline lot input */
 #lotInput{width:90px;padding:8px;border-radius:8px;background:#071023;border:1px solid rgba(255,255,255,0.03);color:var(--text)}
+.balance-box{display:flex;gap:12px;align-items:end;justify-content:flex-end;text-align:right}
+.balance-primary{font-weight:700;font-size:16px}
+.balance-sub{font-size:12px;color:var(--muted)}
 </style>
 </head>
 <body>
@@ -75,9 +78,18 @@ input[type="number"]{background:#071023;border-radius:8px;border:1px solid rgba(
           <div class="subtitle">Devises & Or — SL/TP & Ordres Limite</div>
         </div>
       </div>
-      <div class="controls">
-        <div class="small-muted">Source : Twelve Data</div>
-        <button class="btn ghost" id="refreshPrices">Rafraîchir</button>
+
+      <div class="controls" style="display:flex;align-items:center;gap:12px;">
+        <div style="text-align:right" class="balance-box">
+          <div>
+            <div class="balance-primary" id="displayEquity">Equity: 50 000.00</div>
+            <div class="balance-sub">Solde: <span id="displayBalance">50 000.00</span> — PnL non réalisé: <span id="displayUnrealized">0.00</span></div>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;">
+          <div class="small-muted">Source : Twelve Data</div>
+          <button class="btn ghost" id="refreshPrices">Rafraîchir</button>
+        </div>
       </div>
     </div>
 
@@ -224,9 +236,11 @@ let currentSymbol='EUR/USD';
 let tvWidget=null;
 let lastPrices={};
 let positions=[];    // {id,symbol,side,qty,entryPrice,sl,tp}
-let history=[];      // closed positions
+let history=[];      // closed positions {..,exitPrice,pnl}
 let limitOrders=[];  // {id,symbol,side,price,qty,sl,tp}
 
+// FINANCE: cash balance (réel), equity (cash + unrealizedPnL)
+let cashBalance = 50000.0; // solde initial demandé
 const fmt=(n,d=5)=>n==null?'--':Number(n).toLocaleString('en-US',{maximumFractionDigits:d});
 const now=()=>new Date().toLocaleString('fr-FR');
 
@@ -234,7 +248,6 @@ const now=()=>new Date().toLocaleString('fr-FR');
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
 function playSuccessSound(){
-  // short sharp tick (880Hz)
   const o = audioCtx.createOscillator();
   const g = audioCtx.createGain();
   o.type = 'sine';
@@ -242,7 +255,6 @@ function playSuccessSound(){
   g.gain.value = 0.0001;
   o.connect(g);
   g.connect(audioCtx.destination);
-  // quick envelope
   const nowT = audioCtx.currentTime;
   g.gain.cancelScheduledValues(nowT);
   g.gain.setValueAtTime(0.0001, nowT);
@@ -253,7 +265,6 @@ function playSuccessSound(){
 }
 
 function playFailSound(){
-  // two low "tock" sounds (220Hz)
   const nowT = audioCtx.currentTime;
   for(let i=0;i<2;i++){
     const o = audioCtx.createOscillator();
@@ -278,10 +289,35 @@ async function apiGetPrice(symbol){
     if(j && j.price) return {price:Number(j.price),source:'twelvedata'};
     throw new Error('invalid');
   }catch(e){
+    // fallback: slightly random price around last known or default
     const base = lastPrices[symbol] ?? (symbol.startsWith('XAU')?1900:1.1);
     const fake = base * (1 + (Math.random()-0.5)*0.0015);
     return {price:fake,source:'fallback'};
   }
+}
+
+/* ================== FINANCE HELPERS ================== */
+function computePnl(p,price){
+  // p.qty in units (ex: 10000 for 0.1 lot)
+  // sign: BUY gains when price > entry
+  const sign = p.side==='BUY'?1:-1;
+  // pnl per unit = (price - entry) for forex pairs quoted as price per unit
+  return sign * (price - p.entryPrice) * p.qty;
+}
+
+function computeTotalUnrealized(){
+  return positions.reduce((s,p)=>{
+    const cur = lastPrices[p.symbol] ?? p.entryPrice;
+    return s + computePnl(p,cur);
+  },0);
+}
+
+function renderBalanceUI(){
+  const unreal = computeTotalUnrealized();
+  const equity = cashBalance + unreal;
+  document.getElementById('displayBalance').textContent = fmt(cashBalance,2);
+  document.getElementById('displayUnrealized').textContent = (unreal>=0?'+':'') + fmt(unreal,2);
+  document.getElementById('displayEquity').textContent = 'Equity: ' + (equity>=0?'+':'') + fmt(equity,2);
 }
 
 /* ================== WATCHLIST UI ================== */
@@ -319,24 +355,25 @@ function initTradingView(sym){
 }
 
 /* ================== POSITIONS ================== */
-function computePnl(p,price){
-  const sign = p.side==='BUY'?1:-1;
-  return sign * (price - p.entryPrice) * p.qty;
-}
 function openPosition(o){
   o.id = o.id ?? 'pos_'+Date.now();
   positions.push(o);
   renderPositions();
+  renderBalanceUI();
 }
+
 function closePosition(id){
   const idx=positions.findIndex(x=>x.id===id); if(idx===-1) return;
   const p=positions[idx];
   const cur=lastPrices[p.symbol] ?? p.entryPrice;
   const pnl = computePnl(p,cur);
+  // realized -> add to cashBalance
+  cashBalance = Number((cashBalance + pnl).toFixed(8));
   history.unshift({...p,exitPrice:cur,pnl});
   positions.splice(idx,1);
   renderPositions();
   renderHistory();
+  renderBalanceUI();
 }
 
 /* ================== RENDER POSITIONS & HISTORY ================== */
@@ -353,8 +390,8 @@ function renderPositions(){
     row.innerHTML=`
       <div style="min-width:0">
         <div style="font-weight:700">${p.symbol} <span style="font-weight:600;font-size:13px">(${p.side})</span></div>
-        <div class="small-muted">Entrée ${fmt(p.entryPrice)} — Actuel ${fmt(cur)}</div>
-        <div class="small-muted">${p.sl?('SL:'+fmt(p.sl)):'SL:-'} ${p.tp?(' TP:'+fmt(p.tp)):'TP:-'}</div>
+        <div class="small-muted">Entrée ${fmt(p.entryPrice,5)} — Actuel ${fmt(cur,5)}</div>
+        <div class="small-muted">${p.sl?('SL:'+fmt(p.sl,5)):'SL:-'} ${p.tp?(' TP:'+fmt(p.tp,5)):'TP:-'}</div>
       </div>
       <div style="text-align:right;">
         <div class="pnl" style="color:${pnl>=0?'var(--success)':'var(--danger)'}">${pnl>=0?'+':''}${fmt(pnl,2)}</div>
@@ -363,6 +400,7 @@ function renderPositions(){
     l.appendChild(row);
   });
 }
+
 function renderHistory(){
   const l=document.getElementById('historyList');
   if(!history.length){ l.innerHTML='<div class="small-muted">Aucun historique.</div>'; return; }
@@ -371,7 +409,7 @@ function renderHistory(){
     const row=document.createElement('div');
     row.className='pos-row';
     row.innerHTML=`
-      <div><b>${h.symbol}</b> (${h.side})<div class="small-muted">${fmt(h.entryPrice)} → ${fmt(h.exitPrice)}</div></div>
+      <div><b>${h.symbol}</b> (${h.side})<div class="small-muted">${fmt(h.entryPrice,5)} → ${fmt(h.exitPrice,5)}</div></div>
       <div class="pnl" style="color:${h.pnl>=0?'var(--success)':'var(--danger)'}">${h.pnl>=0?'+':''}${fmt(h.pnl,2)}</div>
     `;
     l.appendChild(row);
@@ -386,7 +424,7 @@ function openEditModal(id){
   if(!p) return;
   editingPosId = id;
   document.getElementById('modalSymbol').textContent = p.symbol;
-  document.getElementById('modalEntry').textContent = fmt(p.entryPrice);
+  document.getElementById('modalEntry').textContent = fmt(p.entryPrice,5);
   document.getElementById('modalQty').textContent = p.qty;
   document.getElementById('modalSide').textContent = p.side;
   document.getElementById('modalSL').value = p.sl ?? '';
@@ -412,7 +450,7 @@ document.getElementById('modalClosePos').onclick = ()=>{
   editingPosId=null;
 };
 
-/* ================== LIMIT ORDERS (form + table like before) ================== */
+/* ================== LIMIT ORDERS (form + table) ================== */
 function addLimitOrderFromForm(){
   const side = document.getElementById('limitSide').value;
   const price = parseFloat(document.getElementById('limitPrice').value);
@@ -422,9 +460,8 @@ function addLimitOrderFromForm(){
   if(!price || qty<=0){ playFailSound(); alert('Prix et quantité valides requis'); return; }
   const order = { id:'L_'+Date.now(), symbol:currentSymbol, side, price, qty, sl, tp };
   limitOrders.push(order);
-  playSuccessSound(); // feedback création ok
+  playSuccessSound();
   renderLimitOrders();
-  // clear
   document.getElementById('limitPrice').value=''; document.getElementById('limitQty').value='';
   document.getElementById('limitSL').value=''; document.getElementById('limitTP').value='';
 }
@@ -450,7 +487,6 @@ function renderLimitOrders(){
       </td>`;
     tbody.appendChild(tr);
   });
-  // attach handlers
   tbody.querySelectorAll('[data-cancel]').forEach(btn=>{
     btn.onclick = ()=>{ const idx=Number(btn.dataset.cancel); cancelLimitOrder(idx); };
   });
@@ -520,7 +556,6 @@ function checkLimitOrders(){
     if(exec){
       const sideReal = o.side.includes('BUY') ? 'BUY' : 'SELL';
       openPosition({ id:o.id.replace(/^L_/,'P_')+'_'+Date.now(), symbol:o.symbol, side:sideReal, qty:o.qty, entryPrice:o.price, sl:o.sl, tp:o.tp });
-      // remove the limit order
       const idx = limitOrders.findIndex(x=>x.id===o.id);
       if(idx>=0) limitOrders.splice(idx,1);
       renderLimitOrders();
@@ -561,7 +596,8 @@ async function refreshWatchPrices(){
   if(lastPrices[currentSymbol]) document.getElementById('currentPriceSmall').textContent='Prix : '+fmt(lastPrices[currentSymbol]);
   checkLimitOrders();
   checkStopsTakeProfits();
-  renderPositions(); // to update PnL
+  renderPositions(); // update PnL visuals
+  renderBalanceUI();
 }
 document.getElementById('btnRefreshWatch').onclick = refreshWatchPrices;
 document.getElementById('refreshPrices').onclick = refreshWatchPrices;
@@ -574,13 +610,11 @@ function lotsToQty(lots){
   return Math.max(1, Math.round(l * 10000));
 }
 async function handleMarketOrder(side){
-  // get lots from input
   const lotsVal = document.getElementById('lotInput').value;
   const qty = lotsToQty(lotsVal);
   if(!qty){ playFailSound(); alert('Lot invalide (ex : 0.1)'); return; }
   const res = await apiGetPrice(currentSymbol);
   if(res.source === 'fallback'){
-    // network/price unreliable => treat as failed execute
     playFailSound();
     alert('Prix indisponible (fallback) — commande non exécutée.');
     return;
@@ -605,6 +639,7 @@ document.querySelectorAll('.tab-btn').forEach(b=>b.onclick=()=>{
 function setChartSymbol(sym){
   currentSymbol = sym;
   initTradingView(sym);
+  if(lastPrices[sym]) document.getElementById('currentPriceSmall').textContent='Prix : '+fmt(lastPrices[sym]);
 }
 
 /* ================== BOOT ================== */
@@ -615,6 +650,8 @@ function boot(){
   renderPositions();
   renderHistory();
   renderLimitOrders();
+  renderBalanceUI();
+  // refresh périodique
   setInterval(refreshWatchPrices,10000);
 }
 document.getElementById('btnCancelAllLimits').onclick = cancelAllLimits;
@@ -622,6 +659,7 @@ boot();
 </script>
 </body>
 </html>
+
 
 
 
