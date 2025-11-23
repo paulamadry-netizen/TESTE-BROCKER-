@@ -4,11 +4,20 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>Mini Broker — Forex Live (SL/TP & Ordres Limite)</title>
+
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+
 <style>
 :root{
-  --bg:#0f1724;--card:#0b1220;--muted:#9aa6bf;--accent:#2dd4bf;--danger:#ff6b6b;
-  --glass: rgba(255,255,255,0.03);--glass-2: rgba(255,255,255,0.02);--text:#e6eef8;--success:#34d399;
+  --bg:#0f1724;
+  --card:#0b1220;
+  --muted:#9aa6bf;
+  --accent:#2dd4bf;
+  --danger:#ff6b6b;
+  --glass: rgba(255,255,255,0.03);
+  --glass-2: rgba(255,255,255,0.02);
+  --text:#e6eef8;
+  --success:#34d399;
 }
 html,body{height:100%;margin:0;font-family:Inter,system-ui,Arial;background:linear-gradient(180deg,#071025 0%,#071427 100%);color:var(--text);}
 .app{display:flex;flex-direction:column;height:100vh;gap:12px;padding:14px;box-sizing:border-box;}
@@ -43,11 +52,16 @@ html,body{height:100%;margin:0;font-family:Inter,system-ui,Arial;background:line
 .form-row{display:flex;gap:8px;align-items:center}
 .input,select{background:transparent;border:1px solid rgba(255,255,255,0.04);padding:8px;border-radius:8px;color:var(--text);width:100%}
 .mini-actions{display:flex;gap:6px}
+.chip{padding:6px 8px;border-radius:8px;background:rgba(255,255,255,0.02);font-weight:600}
+.green{color:var(--success)}
+.red{color:var(--danger)}
 .kbd{background:rgba(255,255,255,0.03);padding:4px 8px;border-radius:6px;font-weight:700}
+/* modal/panel */
 .modal-backdrop{position:fixed;inset:0;background:rgba(2,6,23,0.6);display:none;align-items:center;justify-content:center;z-index:60}
 .modal{background:var(--card);border-radius:12px;padding:16px;min-width:320px;max-width:520px;box-shadow:0 10px 50px rgba(0,0,0,0.6)}
 input[type="number"]{background:#071023;border-radius:8px;border:1px solid rgba(255,255,255,0.03);padding:8px;color:var(--text)}
 @media(max-width:1000px){.main{flex-direction:column}.side{width:100%;max-width:100%}}
+/* small inline lot input */
 #lotInput{width:90px;padding:8px;border-radius:8px;background:#071023;border:1px solid rgba(255,255,255,0.03);color:var(--text)}
 .balance-box{display:flex;gap:12px;align-items:end;justify-content:flex-end;text-align:right}
 .balance-primary{font-weight:700;font-size:16px}
@@ -64,6 +78,7 @@ input[type="number"]{background:#071023;border-radius:8px;border:1px solid rgba(
           <div class="subtitle">Devises & Or — SL/TP & Ordres Limite</div>
         </div>
       </div>
+
       <div class="controls" style="display:flex;align-items:center;gap:12px;">
         <div style="text-align:right" class="balance-box">
           <div>
@@ -121,6 +136,7 @@ input[type="number"]{background:#071023;border-radius:8px;border:1px solid rgba(
         </div>
 
         <div style="margin-top:6px;font-weight:700;">Ordres Limite</div>
+
         <div style="background:var(--glass);border-radius:10px;padding:10px;">
           <div class="form-row">
             <select id="limitSide" class="input" style="max-width:140px">
@@ -158,6 +174,7 @@ input[type="number"]{background:#071023;border-radius:8px;border:1px solid rgba(
     </div>
   </div>
 
+  <!-- Edit position modal -->
   <div class="modal-backdrop" id="modalBackdrop" style="display:none">
     <div class="modal" role="dialog" aria-modal="true">
       <div style="display:flex;justify-content:space-between;align-items:center">
@@ -201,7 +218,7 @@ input[type="number"]{background:#071023;border-radius:8px;border:1px solid rgba(
 
 <script src="https://s3.tradingview.com/tv.js"></script>
 <script>
-/* ===== STATE & CONFIG ===== */
+/* ================== STATE & CONFIG ================== */
 const API_KEY='c9140c9a72264e82bb9f5235b86b2806';
 const API_BASE='https://api.twelvedata.com';
 const WATCHLIST=[
@@ -214,22 +231,24 @@ const WATCHLIST=[
   {id:'NZD/USD',label:'NZD/USD'},
   {id:'XAU/USD',label:'XAU/USD'}
 ];
+
 let currentSymbol='EUR/USD';
 let tvWidget=null;
 let lastPrices={};
-let positions=[];
-let history=[];
-let limitOrders=[];
-let cashBalance = 50000.0;
+let positions=[];    
+let history=[];      
+let limitOrders=[];  
+
+let cashBalance = 50000.0; 
 const fmt=(n,d=5)=>n==null?'--':Number(n).toLocaleString('en-US',{maximumFractionDigits:d});
 const now=()=>new Date().toLocaleString('fr-FR');
 
-/* ===== WebAudio (feedback) ===== */
+/* ================== AUDIO ================== */
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-function playSuccessSound(){ try{ const o=audioCtx.createOscillator(),g=audioCtx.createGain();o.type='sine';o.frequency.value=880;g.gain.value=0.0001;o.connect(g);g.connect(audioCtx.destination);const t=audioCtx.currentTime;g.gain.exponentialRampToValueAtTime(0.08,t+0.005);o.start(t);o.stop(t+0.09);}catch(e){} }
-function playFailSound(){ try{ const t=audioCtx.currentTime;for(let i=0;i<2;i++){const o=audioCtx.createOscillator(),g=audioCtx.createGain();o.type='sine';o.frequency.value=220; o.connect(g);g.connect(audioCtx.destination);const s=t+i*0.14;g.gain.exponentialRampToValueAtTime(0.06,s+0.02);o.start(s);o.stop(s+0.13);} }catch(e){} }
+function playSuccessSound(){const o=audioCtx.createOscillator();const g=audioCtx.createGain();o.type='sine';o.frequency.value=880;g.gain.value=0.0001;o.connect(g);g.connect(audioCtx.destination);const nowT=audioCtx.currentTime;g.gain.cancelScheduledValues(nowT);g.gain.setValueAtTime(0.0001,nowT);g.gain.exponentialRampToValueAtTime(0.08,nowT+0.005);g.gain.exponentialRampToValueAtTime(0.0001,nowT+0.08);o.start(nowT);o.stop(nowT+0.09);}
+function playFailSound(){const nowT=audioCtx.currentTime;for(let i=0;i<2;i++){const o=audioCtx.createOscillator();const g=audioCtx.createGain();o.type='sine';o.frequency.value=220;o.connect(g);g.connect(audioCtx.destination);const start=nowT+i*0.14;g.gain.setValueAtTime(0.0001,start);g.gain.exponentialRampToValueAtTime(0.06,start+0.02);g.gain.exponentialRampToValueAtTime(0.0001,start+0.12);o.start(start);o.stop(start+0.13);}}
 
-/* ===== Twelve Data price (fallback on error) ===== */
+/* ================== PRICE API ================== */
 async function apiGetPrice(symbol){
   try{
     const res = await fetch(`${API_BASE}/price?symbol=${encodeURIComponent(symbol)}&apikey=${API_KEY}`);
@@ -243,194 +262,11 @@ async function apiGetPrice(symbol){
   }
 }
 
-/* ===== Helpers ===== */
-function computePnl(p,price){ const sign = p.side==='BUY'?1:-1; return sign * (price - p.entryPrice) * p.qty; }
-function computeTotalUnrealized(){ return positions.reduce((s,p)=>{ const cur=lastPrices[p.symbol] ?? p.entryPrice; return s + computePnl(p,cur); },0); }
-function renderBalanceUI(){ const unreal = computeTotalUnrealized(); const equity = cashBalance + unreal; document.getElementById('displayBalance').textContent = fmt(cashBalance,2); document.getElementById('displayUnrealized').textContent = (unreal>=0?'+':'') + fmt(unreal,2); document.getElementById('displayEquity').textContent = 'Equity: ' + (equity>=0?'+':'') + fmt(equity,2); }
+/* ================== FINANCE HELPERS ================== */
+function computePnl(p,price){const sign=p.side==='BUY'?1:-1;return sign*(price-p.entryPrice)*p.qty;}
+function computeTotalUnrealized(){return positions.reduce((s,p)=>{const cur=lastPrices[p.symbol] ?? p.entryPrice;return s+computePnl(p,cur);},0);}
+function renderBalanceUI(){const unreal=computeTotalUnrealized();
 
-/* ===== Watchlist UI ===== */
-function renderWatchlist(){
-  const c=document.getElementById('watchlist'); c.innerHTML='';
-  WATCHLIST.forEach(w=>{
-    const idSafe=w.label.replace(/[^a-zA-Z0-9]/g,'_');
-    const el=document.createElement('div');
-    el.className='watch-item';
-    el.innerHTML = `<div style="min-width:0"><div style="font-weight:700">${w.label}</div></div>
-      <div style="text-align:right;min-width:100px;"><div class="price-small" id="price_${idSafe}">--</div></div>`;
-    el.onclick = ()=>setChartSymbol(w.id);
-    c.appendChild(el);
-  });
-}
-
-/* ===== TradingView symbol mapping (important fix) =====
-   TradingView often shows ETFs when given ambiguous symbols like "EUR/USD".
-   Map to a clear provider prefix (OANDA) so TradingView loads the true FX pair.
-   e.g. "EUR/USD" -> "OANDA:EURUSD", "XAU/USD" -> "OANDA:XAUUSD"
-*/
-function getTradingViewSymbol(sym){
-  if(!sym) return sym;
-  // Normalize: "EUR/USD" -> "EURUSD"
-  const base = sym.replace(/[^A-Za-z0-9]/g,'');
-  // Use OANDA prefix for FX / XAU
-  return `OANDA:${base}`;
-}
-
-/* ===== Init TradingView with mapped symbol ===== */
-function initTradingView(sym){
-  const tvSym = getTradingViewSymbol(sym);
-  document.getElementById('tv_chart_container').innerHTML = '';
-  try{
-    tvWidget = new TradingView.widget({
-      autosize: true,
-      symbol: tvSym,
-      interval: "60",
-      theme: "dark",
-      locale: "fr",
-      container_id: "tv_chart_container",
-      enable_publishing: false,
-      withdateranges: true,
-      hide_side_toolbar: false
-    });
-  }catch(e){
-    document.getElementById('tv_chart_container').innerHTML = '<div style="padding:20px;color:var(--muted)">Chart unavailable</div>';
-  }
-  document.getElementById('currentSymbol').textContent = sym;
-  currentSymbol = sym;
-}
-
-/* ===== Positions / Orders ===== */
-function openPosition(o){ o.id = o.id ?? 'pos_'+Date.now(); positions.push(o); renderPositions(); renderBalanceUI(); }
-function closePosition(id){ const idx=positions.findIndex(x=>x.id===id); if(idx===-1) return; const p=positions[idx]; const cur=lastPrices[p.symbol] ?? p.entryPrice; const pnl = computePnl(p,cur); cashBalance = Number((cashBalance + pnl).toFixed(8)); history.unshift({...p,exitPrice:cur,pnl}); positions.splice(idx,1); renderPositions(); renderHistory(); renderBalanceUI(); }
-
-/* ===== Render positions & history ===== */
-function renderPositions(){
-  const l=document.getElementById('positionsList');
-  document.getElementById('countPos').textContent = positions.length;
-  if(!positions.length){ l.innerHTML='<div class="small-muted">Aucune position ouverte.</div>'; return; }
-  l.innerHTML='';
-  positions.forEach(p=>{
-    const cur=lastPrices[p.symbol] ?? p.entryPrice;
-    const pnl=computePnl(p,cur);
-    const row=document.createElement('div');
-    row.className='pos-row';
-    row.innerHTML = `<div style="min-width:0">
-        <div style="font-weight:700">${p.symbol} <span style="font-weight:600;font-size:13px">(${p.side})</span></div>
-        <div class="small-muted">Entrée ${fmt(p.entryPrice,5)} — Actuel ${fmt(cur,5)}</div>
-        <div class="small-muted">${p.sl?('SL:'+fmt(p.sl,5)):'SL:-'} ${p.tp?(' TP:'+fmt(p.tp,5)):'TP:-'}</div>
-      </div>
-      <div style="text-align:right;">
-        <div class="pnl" style="color:${pnl>=0?'var(--success)':'var(--danger)'}">${pnl>=0?'+':''}${fmt(pnl,2)}</div>
-      </div>`;
-    row.onclick = ()=>openEditModal(p.id);
-    l.appendChild(row);
-  });
-}
-function renderHistory(){ const l=document.getElementById('historyList'); if(!history.length){ l.innerHTML='<div class="small-muted">Aucun historique.</div>'; return; } l.innerHTML=''; history.forEach(h=>{ const row=document.createElement('div'); row.className='pos-row'; row.innerHTML=`<div><b>${h.symbol}</b> (${h.side})<div class="small-muted">${fmt(h.entryPrice,5)} → ${fmt(h.exitPrice,5)}</div></div><div class="pnl" style="color:${h.pnl>=0?'var(--success)':'var(--danger)'}">${h.pnl>=0?'+':''}${fmt(h.pnl,2)}</div>`; l.appendChild(row); }); }
-
-/* ===== Edit modal ===== */
-const modalBackdrop = document.getElementById('modalBackdrop');
-let editingPosId = null;
-function openEditModal(id){
-  const p = positions.find(x=>x.id===id); if(!p) return;
-  editingPosId = id;
-  document.getElementById('modalSymbol').textContent = p.symbol;
-  document.getElementById('modalEntry').textContent = fmt(p.entryPrice,5);
-  document.getElementById('modalQty').textContent = p.qty;
-  document.getElementById('modalSide').textContent = p.side;
-  document.getElementById('modalSL').value = p.sl ?? '';
-  document.getElementById('modalTP').value = p.tp ?? '';
-  modalBackdrop.style.display = 'flex';
-}
-document.getElementById('modalClose').onclick = ()=>{ modalBackdrop.style.display='none'; editingPosId=null; };
-document.getElementById('modalSave').onclick = ()=>{ if(!editingPosId) return; const p=positions.find(x=>x.id===editingPosId); if(!p) return; p.sl = parseFloat(document.getElementById('modalSL').value) || null; p.tp = parseFloat(document.getElementById('modalTP').value) || null; modalBackdrop.style.display='none'; editingPosId=null; renderPositions(); };
-document.getElementById('modalClosePos').onclick = ()=>{ if(!editingPosId) return; if(confirm('Confirmer fermeture de la position ?')) closePosition(editingPosId); modalBackdrop.style.display='none'; editingPosId=null; };
-
-/* ===== Limit orders form & table ===== */
-function addLimitOrderFromForm(){
-  const side = document.getElementById('limitSide').value;
-  const price = parseFloat(document.getElementById('limitPrice').value);
-  const qty = parseFloat(document.getElementById('limitQty').value) || 0;
-  const sl = (n=>isNaN(n)?null:n)(parseFloat(document.getElementById('limitSL').value));
-  const tp = (n=>isNaN(n)?null:n)(parseFloat(document.getElementById('limitTP').value));
-  if(!price || qty<=0){ playFailSound(); alert('Prix et quantité valides requis'); return; }
-  limitOrders.push({ id:'L_'+Date.now(), symbol:currentSymbol, side, price, qty, sl, tp });
-  playSuccessSound(); renderLimitOrders();
-  document.getElementById('limitPrice').value=''; document.getElementById('limitQty').value=''; document.getElementById('limitSL').value=''; document.getElementById('limitTP').value='';
-}
-function renderLimitOrders(){
-  const tbody=document.getElementById('limitOrdersBody'); tbody.innerHTML='';
-  if(!limitOrders.length){ tbody.innerHTML='<tr><td colspan="6" class="muted-mini">Aucun ordre limite.</td></tr>'; return; }
-  limitOrders.forEach((o,i)=>{ const tr=document.createElement('tr'); tr.dataset.index=i; tr.innerHTML=`<td>${o.symbol}</td><td>${o.side.includes('BUY')?'<span style="color:var(--success)">BUY</span>':'<span style="color:var(--danger)">SELL</span>'}</td><td>${fmt(o.price,5)}</td><td>${o.qty}</td><td class="muted-mini">${o.sl?('SL:'+fmt(o.sl,5)):'-'} ${o.tp?('TP:'+fmt(o.tp,5)):'-'}</td><td style="white-space:nowrap"><div class="mini-actions"><button class="btn ghost" data-edit="${i}">✏️</button><button class="btn ghost" data-cancel="${i}">🗑️</button></div></td>`; tbody.appendChild(tr); });
-  tbody.querySelectorAll('[data-cancel]').forEach(btn=>btn.onclick=()=>{ const idx=Number(btn.dataset.cancel); if(confirm('Annuler cet ordre limite ?')){ limitOrders.splice(idx,1); renderLimitOrders(); } });
-  tbody.querySelectorAll('[data-edit]').forEach(btn=>btn.onclick=()=>openInlineEditLimit(Number(btn.dataset.edit)));
-}
-function openInlineEditLimit(idx){
-  const tbody=document.getElementById('limitOrdersBody'),row=tbody.querySelector(`tr[data-index="${idx}"]`); if(!row) return;
-  const o=limitOrders[idx];
-  row.innerHTML = `<td>${o.symbol}</td><td><select id="edit_side_${idx}"><option value="BUY_LIMIT"${o.side==='BUY_LIMIT'?' selected':''}>BUY_LIMIT</option><option value="SELL_LIMIT"${o.side==='SELL_LIMIT'?' selected':''}>SELL_LIMIT</option></select></td><td><input id="edit_price_${idx}" style="width:100px" value="${o.price}"/></td><td><input id="edit_qty_${idx}" style="width:70px" value="${o.qty}"/></td><td><input id="edit_sl_${idx}" style="width:90px" value="${o.sl??''}"/> <input id="edit_tp_${idx}" style="width:90px" value="${o.tp??''}"/></td><td style="white-space:nowrap"><div class="mini-actions"><button class="btn" id="save_edit_${idx}">Save</button><button class="btn ghost" id="cancel_edit_${idx}">Cancel</button></div></td>`;
-  document.getElementById(`save_edit_${idx}`).onclick = ()=>{ const side=document.getElementById(`edit_side_${idx}`).value; const price=parseFloat(document.getElementById(`edit_price_${idx}`).value); const qty=parseFloat(document.getElementById(`edit_qty_${idx}`).value); const sl=(n=>isNaN(n)?null:n)(parseFloat(document.getElementById(`edit_sl_${idx}`).value)); const tp=(n=>isNaN(n)?null:n)(parseFloat(document.getElementById(`edit_tp_${idx}`).value)); if(!price||!qty){ playFailSound(); alert('Prix et qty valides'); return; } limitOrders[idx] = {...limitOrders[idx], side, price, qty, sl, tp}; playSuccessSound(); renderLimitOrders(); };
-  document.getElementById(`cancel_edit_${idx}`).onclick = ()=>renderLimitOrders();
-}
-document.getElementById('btnAddLimit').onclick = addLimitOrderFromForm;
-document.getElementById('btnCancelAllLimits').onclick = ()=>{
-  if(!limitOrders.length) return; if(!confirm('Annuler tous les ordres limite ?')) return; limitOrders=[]; renderLimitOrders();
-};
-
-/* ===== Execute limit orders & stops ===== */
-function checkLimitOrders(){
-  limitOrders.slice().forEach(o=>{ const cur = lastPrices[o.symbol]; if(cur==null) return; let exec=false; if(o.side==='BUY_LIMIT' && cur <= o.price) exec=true; if(o.side==='SELL_LIMIT' && cur >= o.price) exec=true; if(exec){ const sideReal = o.side.includes('BUY') ? 'BUY' : 'SELL'; openPosition({ id:o.id.replace(/^L_/,'P_')+'_'+Date.now(), symbol:o.symbol, side:sideReal, qty:o.qty, entryPrice:o.price, sl:o.sl, tp:o.tp }); limitOrders = limitOrders.filter(x=>x.id!==o.id); renderLimitOrders(); playSuccessSound(); } });
-}
-function checkStopsTakeProfits(){ positions.slice().forEach(p=>{ const cur = lastPrices[p.symbol]; if(cur==null) return; if(p.sl && ((p.side==='BUY' && cur<=p.sl) || (p.side==='SELL' && cur>=p.sl))){ closePosition(p.id); playSuccessSound(); return; } if(p.tp && ((p.side==='BUY' && cur>=p.tp) || (p.side==='SELL' && cur<=p.tp))){ closePosition(p.id); playSuccessSound(); return; } }); }
-
-/* ===== Prices refresh loop ===== */
-async function refreshWatchPrices(){
-  await Promise.all(WATCHLIST.map(async w=>{ const res = await apiGetPrice(w.id); lastPrices[w.id]=res.price; const id = w.label.replace(/[^a-zA-Z0-9]/g,'_'); const el = document.getElementById('price_'+id); if(el) el.textContent = fmt(res.price, res.price>100?2:5); }));
-  document.getElementById('lastUpdate').textContent = now();
-  if(lastPrices[currentSymbol]) document.getElementById('currentPriceSmall').textContent='Prix : '+fmt(lastPrices[currentSymbol]);
-  checkLimitOrders(); checkStopsTakeProfits(); renderPositions(); renderBalanceUI();
-}
-document.getElementById('btnRefreshWatch').onclick = refreshWatchPrices;
-document.getElementById('refreshPrices').onclick = refreshWatchPrices;
-
-/* ===== Market order (lots -> qty) ===== */
-function lotsToQty(lots){ const l=parseFloat(lots); if(isNaN(l)||l<=0) return null; return Math.max(1, Math.round(l*10000)); }
-async function handleMarketOrder(side){
-  const lotsVal = document.getElementById('lotInput').value;
-  const qty = lotsToQty(lotsVal);
-  if(!qty){ playFailSound(); alert('Lot invalide (ex : 0.1)'); return; }
-  const res = await apiGetPrice(currentSymbol);
-  if(res.source === 'fallback'){ playFailSound(); alert('Prix indisponible (fallback) — commande non exécutée.'); return; }
-  openPosition({ id:'P_'+Date.now(), symbol:currentSymbol, side, qty, entryPrice:res.price, sl:null, tp:null });
-  renderPositions(); playSuccessSound();
-}
-document.getElementById('btnBuy').onclick = ()=>handleMarketOrder('BUY');
-document.getElementById('btnSell').onclick = ()=>handleMarketOrder('SELL');
-
-/* ===== Tabs ===== */
-document.querySelectorAll('.tab-btn').forEach(b=>b.onclick=()=>{ document.querySelectorAll('.tab-btn').forEach(x=>x.classList.remove('active')); b.classList.add('active'); document.getElementById('panelPositions').style.display = b.dataset.tab==='positions'?'block':'none'; document.getElementById('panelHistory').style.display = b.dataset.tab==='history'?'block':'none'; });
-
-/* ===== setChartSymbol uses mapping to real FX symbol for TradingView ===== */
-function setChartSymbol(sym){
-  currentSymbol = sym;
-  initTradingView(sym); // initTradingView maps to OANDA:SYMBOL internally
-  if(lastPrices[sym]) document.getElementById('currentPriceSmall').textContent='Prix : '+fmt(lastPrices[sym]);
-}
-
-/* ===== Boot ===== */
-function boot(){
-  renderWatchlist();
-  initTradingView(currentSymbol);
-  refreshWatchPrices();
-  renderPositions();
-  renderHistory();
-  renderLimitOrders();
-  renderBalanceUI();
-  setInterval(refreshWatchPrices,10000);
-}
-boot();
-</script>
-</body>
-</html>
 
 
 
