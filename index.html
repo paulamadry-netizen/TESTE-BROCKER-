@@ -461,9 +461,7 @@
             });
             document.getElementById(`watchlist-${assetData.tv_symbol}`).classList.add('active');
             
-            // Recharger le graphique
             loadTradingViewWidget(assetData.tv_symbol);
-            // Démarrer le WebSocket et demander immédiatement un prix REST
             initWebSocket(assetData.tv_symbol); 
         }
         
@@ -517,12 +515,16 @@
                     
                     console.log(`[REST OK] Prix initial pour ${symbol}: ${price}`);
                     return price;
+                } else if (data.message && data.message.includes('API key is invalid')) {
+                    console.error(`[REST ERREUR FATALE] Clé API Invalide ou Permissions manquantes: ${data.message}`);
+                     // On ne met pas d'alerte ici, mais on laisse la fonction placeOrder le faire si elle ne reçoit rien.
+                    return null;
                 } else {
                     console.error(`[REST ERREUR] Impossible d'obtenir le prix pour ${symbol}.`, data.message);
                     return null;
                 }
             } catch (error) {
-                console.error('[REST ÉCHEC] Erreur lors de la requête REST pour le prix:', error);
+                console.error('[REST ÉCHEC] Erreur lors de la requête REST pour le prix. Le CORS peut être le problème si vous exécutez localement.', error);
                 return null;
             }
         }
@@ -616,22 +618,24 @@
             
             let openPrice = assetPrices[currentSymbol];
 
-            // Si le prix n'est PAS là (même après l'appel REST de initWebSocket), on force un nouvel appel.
+            // 1. Vérifier si le prix est déjà là
             if (!openPrice) {
-                console.warn('Le prix est manquant au moment du clic. Nouvelle tentative de récupération REST...');
-                alert('Récupération du prix en cours, veuillez patienter quelques secondes...');
+                console.warn(`Le prix pour ${currentSymbol} est manquant au moment du clic. Nouvelle tentative de récupération REST...`);
+                // 2. Si non, forcer une alerte et attendre le prix REST
+                alert('Prix non disponible. Tentative de récupération en cours, veuillez patienter quelques secondes...');
                 
                 openPrice = await getInitialPriceRest(currentSymbol); 
             }
             
+            // 3. Échec final après la tentative REST
             if (!openPrice) {
-                // Si REST échoue à nouveau, il y a un problème de clé, de symbole ou de connexion API.
-                alert('Erreur: Le prix actuel n\'a pas pu être récupéré via API. Vérifiez votre clé API et les symboles dans la console (F12).');
+                console.error('Échec critique: Le prix actuel n\'a pas pu être récupéré via API après double tentative. Vérifiez les logs REST/WS dans la console (F12) pour un message d\'erreur détaillé (CORS ou Clé invalide).');
+                alert('Erreur: Le prix actuel n\'a pas pu être récupéré via API. Problème de connexion/CORS ou Clé API invalide.');
                 playSound('rejected');
                 return;
             }
             
-            // Si on arrive ici, le prix est garanti.
+            // 4. Succès: Placer l'ordre.
             const newPosition = {
                 id: Date.now(), 
                 symbol: currentSymbol,
