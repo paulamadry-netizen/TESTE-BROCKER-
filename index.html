@@ -387,11 +387,13 @@
 
         // CLÉ API UTILISÉE : 8906aa7f29ca470da317f72ae7efab51
         const API_KEY = '8906aa7f29ca470da317f72ae7efab51'; 
+        // L'API WebSocket utilise les symboles TWELVEDATA (ex: EURUSD)
         const TWELVEDATA_WSS = (symbol) => `wss://ws.twelvedata.com/v1/quotes/price?symbol=${symbol}&apikey=${API_KEY}`;
-        // Nouvelle URL REST pour la récupération initiale
+        // L'API REST utilise également les symboles TWELVEDATA (ex: EURUSD)
         const TWELVEDATA_PRICE_REST = (symbol) => `https://api.twelvedata.com/price?symbol=${symbol}&apikey=${API_KEY}`;
         
         const ALL_ASSETS = [
+            // symbol: affiché | tv_symbol: utilisé pour API (sans slash)
             { symbol: 'EUR/USD', tv_symbol: 'EURUSD', name: 'Euro/Dollar', type: 'FOREX', multiplier: 100000 }, 
             { symbol: 'GBP/USD', tv_symbol: 'GBPUSD', name: 'Livre/Dollar', type: 'FOREX', multiplier: 100000 },
             { symbol: 'USD/JPY', tv_symbol: 'USDJPY', name: 'Dollar/Yen', type: 'FOREX', multiplier: 100000 },
@@ -411,7 +413,7 @@
         let positionHistory = []; 
         let websocket = null; 
 
-        // Références DOM (Inchagées)
+        // Références DOM (Inchangées)
         const watchlistBody = document.getElementById('watchlist-body');
         const positionsBody = document.getElementById('positions-body');
         const historyBody = document.getElementById('history-body');
@@ -423,8 +425,7 @@
         const soundRejected = document.getElementById('sound-rejected');
         const lotsInput = document.getElementById('lots'); 
 
-        // --- Fonctions d'Utilitaires (Inchagées) ---
-
+        // --- Fonctions d'Utilitaires (Inchangées) ---
         const formatUSD = (amount) => {
             const color = amount >= 0 ? 'var(--buy-color)' : 'var(--sell-color)';
             const sign = amount >= 0 ? '+' : '';
@@ -454,7 +455,6 @@
             if (!assetData) return;
 
             orderSymbolDisplay.textContent = symbol;
-            
             updateNotionalValue(); 
 
             document.querySelectorAll('.watchlist-item').forEach(item => {
@@ -493,14 +493,16 @@
              }
         }
 
-        // --- Récupération de Prix via REST (Nouvelle fonction pour la stabilité) ---
+        // --- Récupération de Prix via REST (Corrigé pour utiliser tv_symbol) ---
         async function getInitialPriceRest(symbol) {
             const assetData = getAssetData(symbol);
             if (!assetData) return null;
 
+            // Utiliser le tv_symbol (sans slash) pour la requête REST
+            const tv_symbol = assetData.tv_symbol; 
+
             try {
-                // Twelve Data REST API utilise le symbole sans slash
-                const response = await fetch(TWELVEDATA_PRICE_REST(assetData.tv_symbol)); 
+                const response = await fetch(TWELVEDATA_PRICE_REST(tv_symbol)); 
                 const data = await response.json();
                 
                 if (data.price && !isNaN(parseFloat(data.price))) {
@@ -508,8 +510,7 @@
                     // Stocker le prix sous le symbole interne (ex: EUR/USD)
                     assetPrices[symbol] = price; 
                     
-                    // Mise à jour visuelle pour la watchlist
-                    const priceElement = document.getElementById(`price-${assetData.tv_symbol}`);
+                    const priceElement = document.getElementById(`price-${tv_symbol}`);
                     if (priceElement && priceElement.textContent === '---') {
                          priceElement.textContent = formatPrice(price, symbol);
                     }
@@ -555,6 +556,7 @@
             // Récupère d'abord un prix par REST au cas où le WS serait lent ou échouerait
             getInitialPriceRest(currentSymbol); 
 
+            // Utiliser le tv_symbol (sans slash) pour la requête WS
             const WSS_URL = TWELVEDATA_WSS(tv_symbol);
             websocket = new WebSocket(WSS_URL);
             
@@ -565,14 +567,16 @@
             websocket.onmessage = (event) => {
                 const data = JSON.parse(event.data);
                 if (data.event === 'price') {
+                    // Trouver le symbole interne (EUR/USD) à partir du symbole TV (EURUSD)
                     const assetData = ALL_ASSETS.find(a => a.tv_symbol === data.symbol);
                     if (!assetData) return;
                     
-                    const symbol = assetData.symbol;
+                    const symbol = assetData.symbol; // EUR/USD
                     const price = parseFloat(data.price);
                     
                     if (isNaN(price)) return;
 
+                    // Stocker le prix sous le symbole interne (EUR/USD)
                     assetPrices[symbol] = price; 
                     
                     // Mise à jour Watchlist (visuel)
@@ -614,15 +618,15 @@
             
             let openPrice = assetPrices[currentSymbol];
 
-            // 🚨 Tenter de récupérer le prix une dernière fois via REST si le WS est toujours muet
+            // Tenter de récupérer le prix une dernière fois via REST si le WS est toujours muet
             if (!openPrice) {
-                console.warn('Le prix n\'est pas encore disponible via WS. Tentative de récupération via REST...');
-                // Le symbole de l'actif actuel est utilisé
+                console.warn('Le prix n\'est pas encore disponible. Tentative de récupération via REST...');
+                // getInitialPriceRest est async et met à jour assetPrices[currentSymbol]
                 openPrice = await getInitialPriceRest(currentSymbol); 
             }
             
             if (!openPrice) {
-                alert('Erreur: Le prix actuel n\'a pas pu être récupéré via WebSocket ou REST API. Vérifiez votre clé API et la connexion.');
+                alert('Erreur: Le prix actuel n\'a pas pu être récupéré via WebSocket ou REST API. Veuillez vérifier votre connexion internet et la validité de votre clé API.');
                 playSound('rejected');
                 return;
             }
@@ -645,14 +649,13 @@
             renderPositions();
             playSound('accepted');
             
-            // Nettoyage des champs pour les ordres limites
             document.getElementById('limit-price').value = '';
             document.getElementById('stop-loss').value = '';
             document.getElementById('take-profit').value = '';
         }
         
-        // --- Fonctions de Rendu et de Logique (Inchagées) ---
-        function calculateAndUpdatePnL() { /* ... Inchangé ... */
+        // --- Fonctions de Rendu et de Logique (Inchangées) ---
+        function calculateAndUpdatePnL() {
             let totalPnL = 0;
 
             positions.forEach(pos => {
@@ -686,7 +689,7 @@
             tabPositions.textContent = `Positions (${positions.length})`;
         }
 
-        function checkStopLossTakeProfit(position, currentPrice) { /* ... Inchangé ... */
+        function checkStopLossTakeProfit(position, currentPrice) {
             let shouldClose = false;
             let closeReason = '';
 
@@ -711,7 +714,7 @@
             }
         }
         
-        function closePosition(id, closePrice = null, closeReason = 'Closed by User') { /* ... Inchangé ... */
+        function closePosition(id, closePrice = null, closeReason = 'Closed by User') {
             const index = positions.findIndex(pos => pos.id === id);
             if (index === -1) return;
 
@@ -750,7 +753,7 @@
             playSound('accepted');
         }
 
-        function renderPositions() { /* ... Inchangé ... */
+        function renderPositions() {
             positionsBody.innerHTML = '';
             positions.forEach(pos => {
                 const row = positionsBody.insertRow();
@@ -772,7 +775,7 @@
             tabPositions.textContent = `Positions (${positions.length})`;
         }
 
-        function renderHistory() { /* ... Inchangé ... */
+        function renderHistory() {
             historyBody.innerHTML = '';
             positionHistory.sort((a, b) => b.id - a.id).forEach(hist => {
                 const row = historyBody.insertRow();
@@ -787,7 +790,7 @@
             });
         }
         
-        function openTab(evt, tabName) { /* ... Inchangé ... */
+        function openTab(evt, tabName) {
             document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
             document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
             
@@ -795,7 +798,7 @@
             evt.currentTarget.classList.add('active');
         }
         
-        function placeLimitOrder(type) { /* ... Inchangé ... */
+        function placeLimitOrder(type) {
             const limitPriceInput = document.getElementById('limit-price');
             const stopLossInput = document.getElementById('stop-loss');
             const takeProfitInput = document.getElementById('take-profit');
