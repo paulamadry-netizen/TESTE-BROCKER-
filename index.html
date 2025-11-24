@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mini Broker Pro (Fonctionnel)</title>
+    <title>Mini Broker Pro (Connexion WS Unique)</title>
     <style>
         /* --- CSS for Modern Dark Theme (Inchangé) --- */
         :root {
@@ -387,11 +387,11 @@
 
         // CLÉ API UTILISÉE : 8906aa7f29ca470da317f72ae7efab51
         const API_KEY = '8906aa7f29ca470da317f72ae7efab51'; 
-        const TWELVEDATA_WSS = (symbol) => `wss://ws.twelvedata.com/v1/quotes/price?symbol=${symbol}&apikey=${API_KEY}`;
+        // L'URL du WebSocket doit inclure la clé API pour l'authentification
+        const TWELVEDATA_WSS_BASE = `wss://ws.twelvedata.com/v1/quotes/price?apikey=${API_KEY}`;
         const TWELVEDATA_PRICE_REST = (symbol) => `https://api.twelvedata.com/price?symbol=${symbol}&apikey=${API_KEY}`;
         
         const ALL_ASSETS = [
-            // symbol: affiché | tv_symbol: utilisé pour API (sans slash)
             { symbol: 'EUR/USD', tv_symbol: 'EURUSD', name: 'Euro/Dollar', type: 'FOREX', multiplier: 100000 }, 
             { symbol: 'GBP/USD', tv_symbol: 'GBPUSD', name: 'Livre/Dollar', type: 'FOREX', multiplier: 100000 },
             { symbol: 'USD/JPY', tv_symbol: 'USDJPY', name: 'Dollar/Yen', type: 'FOREX', multiplier: 100000 },
@@ -410,6 +410,7 @@
         let positions = []; 
         let positionHistory = []; 
         let websocket = null; 
+        let isWsInitialized = false; // NOUVEAU: Flag pour n'initialiser la connexion qu'une fois
 
         // Références DOM (Inchangées)
         const watchlistBody = document.getElementById('watchlist-body');
@@ -424,7 +425,7 @@
         const lotsInput = document.getElementById('lots'); 
 
         // --- Fonctions d'Utilitaires (Inchangées) ---
-
+        // ... (formatUSD, formatPrice, playSound, getAssetData restent inchangés) ...
         const formatUSD = (amount) => {
             const color = amount >= 0 ? 'var(--buy-color)' : 'var(--sell-color)';
             const sign = amount >= 0 ? '+' : '';
@@ -462,10 +463,13 @@
             document.getElementById(`watchlist-${assetData.tv_symbol}`).classList.add('active');
             
             loadTradingViewWidget(assetData.tv_symbol);
+            
+            // NOUVEAU: On passe le tv_symbol pour l'abonnement
             initWebSocket(assetData.tv_symbol); 
         }
         
         function renderWatchlist() {
+            // ... (Inchangée) ...
             watchlistBody.innerHTML = '';
             ALL_ASSETS.forEach(asset => {
                 const item = document.createElement('div');
@@ -491,7 +495,7 @@
              }
         }
 
-        // --- Récupération de Prix via REST (AVEC DIAGNOSTIC) ---
+        // --- Récupération de Prix via REST (pour l'initialisation) ---
         async function getInitialPriceRest(symbol) {
             const assetData = getAssetData(symbol);
             if (!assetData) return null;
@@ -514,8 +518,7 @@
                     console.log(`[REST OK] Prix initial pour ${symbol} (API: ${tv_symbol}): ${price}`);
                     return price;
                 } else {
-                    // Si la propriété 'price' est manquante ou invalide, logguer la réponse complète
-                    console.error(`[REST ÉCHEC] Le prix est manquant pour ${symbol} (API: ${tv_symbol}). Réponse complète de l'API Twelve Data:`, data);
+                    console.error(`[REST ÉCHEC] Le prix est manquant pour ${symbol}. Réponse complète de l'API Twelve Data:`, data);
                     return null;
                 }
             } catch (error) {
@@ -523,82 +526,92 @@
                 return null;
             }
         }
-
-        // --- TradingView et WebSocket ---
-        function loadTradingViewWidget(tv_symbol) { 
-            const tvContainer = document.getElementById('tradingview-widget');
-            tvContainer.innerHTML = ''; 
-
-            new TradingView.widget(
-            {
-                "container_id": "tradingview-widget",
-                "symbol": tv_symbol, 
-                "interval": "60", 
-                "timezone": "Europe/Paris",
-                "theme": "dark",
-                "style": "1",
-                "locale": "fr",
-                "toolbar_bg": "var(--bg-dark)",
-                "enable_publishing": false,
-                "allow_symbol_change": true,
-                "hide_side_toolbar": false,
-                "autosize": true,
-            });
+        
+        // NOUVELLE FONCTION: Gérer l'abonnement à un nouveau symbole sur la connexion existante
+        function subscribeToSymbol(tv_symbol) {
+            if (websocket && websocket.readyState === WebSocket.OPEN) {
+                // Le message d'abonnement doit être un JSON que l'API comprend
+                const subscribeMessage = JSON.stringify({
+                    action: 'subscribe',
+                    params: {
+                        symbols: tv_symbol
+                    }
+                });
+                websocket.send(subscribeMessage);
+                console.log(`[WS SUBSCRIBE] Abonnement envoyé à Twelve Data pour ${tv_symbol}.`);
+            } else {
+                console.warn("[WS WARNING] Tentative d'abonnement échouée: WebSocket non ouverte. Réessayer l'initialisation.");
+                // Si la connexion s'est fermée inopinément, on peut essayer de la relancer
+                isWsInitialized = false; 
+                initWebSocket(tv_symbol); 
+            }
         }
 
+
+        // MODIFIÉ: initWebSocket ne se connecte qu'une seule fois
         function initWebSocket(tv_symbol) {
-            if (websocket) {
-                websocket.close(); 
-            }
+            // Tente de récupérer le prix immédiatement via REST (en cas de besoin)
             getInitialPriceRest(currentSymbol); 
 
-            const WSS_URL = TWELVEDATA_WSS(tv_symbol);
-            websocket = new WebSocket(WSS_URL);
-            
-            websocket.onopen = () => {
-                console.log('[WS OK] WebSocket connectée pour ' + tv_symbol);
-            };
+            if (!isWsInitialized) {
+                const WSS_URL = TWELVEDATA_WSS_BASE; // Utilisation de l'URL de base sans symbole
+                websocket = new WebSocket(WSS_URL);
+                
+                websocket.onopen = () => {
+                    console.log('[WS OK] WebSocket connectée. Envoi du premier abonnement.');
+                    isWsInitialized = true;
+                    // On s'abonne au premier symbole sélectionné
+                    subscribeToSymbol(tv_symbol); 
+                };
 
-            websocket.onmessage = (event) => {
-                const data = JSON.parse(event.data);
-                if (data.event === 'price') {
-                    const assetData = ALL_ASSETS.find(a => a.tv_symbol === data.symbol);
-                    if (!assetData) return;
-                    
-                    const symbol = assetData.symbol; 
-                    const price = parseFloat(data.price);
-                    
-                    if (isNaN(price)) return;
+                websocket.onmessage = (event) => {
+                    const data = JSON.parse(event.data);
+                    if (data.event === 'price') {
+                        const assetData = ALL_ASSETS.find(a => a.tv_symbol === data.symbol);
+                        if (!assetData) return;
+                        
+                        const symbol = assetData.symbol; 
+                        const price = parseFloat(data.price);
+                        
+                        if (isNaN(price)) return;
 
-                    assetPrices[symbol] = price; 
-                    
-                    const priceElement = document.getElementById(`price-${data.symbol}`);
-                    if (priceElement) {
-                        priceElement.textContent = formatPrice(price, symbol);
-                        const oldPrice = parseFloat(priceElement.dataset.lastPrice || price);
-                        if (price > oldPrice) {
-                            priceElement.style.color = 'var(--buy-color)';
-                        } else if (price < oldPrice) {
-                            priceElement.style.color = 'var(--sell-color)';
+                        assetPrices[symbol] = price; 
+                        
+                        const priceElement = document.getElementById(`price-${data.symbol}`);
+                        if (priceElement) {
+                            priceElement.textContent = formatPrice(price, symbol);
+                            const oldPrice = parseFloat(priceElement.dataset.lastPrice || price);
+                            if (price > oldPrice) {
+                                priceElement.style.color = 'var(--buy-color)';
+                            } else if (price < oldPrice) {
+                                priceElement.style.color = 'var(--sell-color)';
+                            }
+                            setTimeout(() => priceElement.style.color = 'var(--text-light)', 200);
+                            priceElement.dataset.lastPrice = price;
                         }
-                        setTimeout(() => priceElement.style.color = 'var(--text-light)', 200);
-                        priceElement.dataset.lastPrice = price;
+                        
+                        calculateAndUpdatePnL();
                     }
-                    
-                    calculateAndUpdatePnL();
-                }
-            };
+                };
 
-            websocket.onerror = (error) => {
-                console.error('[WS ERREUR] Erreur WebSocket:', error);
-            };
-            
-            websocket.onclose = () => {
-                console.log('[WS CLOSING] WebSocket déconnectée.');
-            };
+                websocket.onerror = (error) => {
+                    console.error('[WS ERREUR] Erreur WebSocket:', error);
+                    isWsInitialized = false;
+                };
+                
+                websocket.onclose = () => {
+                    console.log('[WS CLOSING] WebSocket déconnectée.');
+                    isWsInitialized = false;
+                };
+
+            } else {
+                // Si déjà initialisé, on change juste l'abonnement
+                subscribeToSymbol(tv_symbol);
+            }
         }
         
-        // --- Passer un Ordre Market (Stabilisé) ---
+        // --- Le reste des fonctions (Inchangées) ---
+        
         async function placeOrder(type) {
             const lots = parseFloat(lotsInput.value);
             
@@ -611,11 +624,10 @@
             let openPrice = assetPrices[currentSymbol];
 
             if (!openPrice) {
-                console.warn(`Le prix pour ${currentSymbol} est manquant au moment du clic. Nouvelle tentative de récupération REST...`);
-                
-                // Cette alerte est utile pour signaler le délai à l'utilisateur
+                console.warn(`Le prix pour ${currentSymbol} est manquant. Tentative de récupération REST...`);
                 alert('Prix non disponible. Tentative de récupération en cours, veuillez patienter quelques secondes...');
                 
+                // Tentative REST (consomme le quota) en dernier recours
                 openPrice = await getInitialPriceRest(currentSymbol); 
             }
             
@@ -648,7 +660,6 @@
             document.getElementById('take-profit').value = '';
         }
         
-        // --- Le reste des fonctions (Inchangées) ---
         function calculateAndUpdatePnL() {
             let totalPnL = 0;
 
@@ -838,7 +849,6 @@
 
 </body>
 </html>
-
 
 
 
