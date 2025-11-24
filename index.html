@@ -6,7 +6,7 @@
     <title>AmA Trading - Prop Firm Broker</title>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
-        /* CSS V2.0 */
+        /* CSS V2.1 */
         :root {
             --bg-dark: #121417; /* Presque noir */
             --bg-medium: #1c2025; /* Arrière-plan des panneaux */
@@ -60,7 +60,7 @@
             flex-direction: column;
             background-color: var(--bg-medium);
             border-right: 1px solid var(--border-color);
-            overflow-y: auto;
+            /* overflow-y: auto; */ /* Retiré pour éviter le scroll sur ce panneau s'il est petit */
         }
 
         .main-chart {
@@ -82,6 +82,7 @@
             border-bottom: 1px solid var(--border-color);
             color: var(--color-primary);
             text-align: center;
+            flex-shrink: 0; /* Empêche de rétrécir */
         }
 
         .watchlist-header {
@@ -91,10 +92,13 @@
             font-size: 1em;
             text-transform: uppercase;
             border-bottom: 1px solid var(--border-color);
+            flex-shrink: 0;
         }
 
         .watchlist {
-            flex-shrink: 0;
+            flex-grow: 1; /* Prend l'espace restant */
+            overflow-y: auto; /* Permet le scroll si trop d'éléments */
+            border-bottom: 1px solid var(--border-color); /* Ajouté pour séparer visuellement */
         }
 
         .asset-item {
@@ -122,12 +126,13 @@
             color: var(--color-green);
         }
         
-        /* --- LIMIT ORDER TABLE (Amélioré) --- */
+        /* --- LIMIT ORDER TABLE (Amélioré V2.1) --- */
         .limit-order-panel {
             padding: 15px;
             background-color: var(--bg-medium);
             border-top: 5px solid var(--border-color);
-            flex-grow: 1; /* Prend l'espace restant */
+            flex-shrink: 0; /* Empêche de rétrécir et maintient sa taille */
+            /* Suppression de flex-grow: 1 pour qu'il soit compact */
         }
 
         .limit-order-panel h3 {
@@ -143,7 +148,7 @@
         .order-form {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 10px;
+            gap: 8px; /* Réduction du gap */
         }
         
         .form-group {
@@ -164,12 +169,12 @@
         }
 
         .order-form input, .order-form select {
-            padding: 10px 8px;
+            padding: 8px; /* Réduction du padding */
             border: 1px solid var(--border-color);
             background-color: var(--bg-light);
             color: var(--color-text);
             border-radius: 6px;
-            font-size: 14px;
+            font-size: 13px; /* Réduction de la taille de police */
             outline: none;
             transition: border-color 0.2s;
         }
@@ -179,12 +184,12 @@
         }
 
         .order-form button {
-            padding: 12px;
+            padding: 10px; /* Réduction du padding */
             border: none;
             border-radius: 6px;
             cursor: pointer;
             font-weight: 700;
-            font-size: 1.1em;
+            font-size: 1em; /* Réduction de la taille de police */
             transition: transform 0.1s, opacity 0.2s;
         }
 
@@ -204,11 +209,11 @@
         .lot-info {
             grid-column: span 2;
             text-align: center;
-            padding: 10px;
+            padding: 8px; /* Réduction du padding */
             background-color: var(--bg-light);
             border-radius: 6px;
-            margin-top: 10px;
-            font-size: 0.9em;
+            margin-top: 8px; /* Réduction de la marge */
+            font-size: 0.85em; /* Réduction de la taille de police */
             font-weight: 600;
         }
         
@@ -217,6 +222,7 @@
             display: flex;
             background-color: var(--bg-light);
             border-bottom: 1px solid var(--border-color);
+            flex-shrink: 0;
         }
 
         .tab-button {
@@ -350,7 +356,7 @@
 
         <div class="main-chart">
             <iframe id="tradingViewChart"
-                src="https://fr.tradingview.com/widgetembed/?symbol=FX_IDC%3AEURUSD&interval=60&theme=dark&style=1&locale=fr&toolbar_bg=%23f1f3f6&enable_publishing=false&allow_symbol_change=true&container_id=tradingview_widget"
+                src="https://fr.tradingview.com/widgetembed/?symbol=FX_IDC%3AEURUSD&interval=60&theme=dark&style=1&locale=fr&toolbar_bg=%231c2025&enable_publishing=false&allow_symbol_change=true&container_id=tradingview_widget"
                 frameborder="0"
                 allowfullscreen
                 style="width: 100%; height: 100%;">
@@ -409,7 +415,7 @@
         // JAVASCRIPT
         
         // ----------------------------------------------------
-        // --- CONFIGURATION & DATA SIMULATION V2.0 ---
+        // --- CONFIGURATION & DATA SIMULATION V2.1 ---
         // ----------------------------------------------------
         const ASSETS = {
             // Forex: 1 Lot standard = 100,000 unités de la devise de base. Valeur nominale en USD.
@@ -490,7 +496,7 @@
                 item.setAttribute('data-symbol', symbol);
                 
                 // Détermine le nombre de décimales
-                const decimals = asset.group === 'Index' || asset.group === 'Metal' ? 2 : 5; 
+                const decimals = (asset.group === 'Index' || asset.group === 'Metal') ? 2 : 5; 
 
                 item.innerHTML = `
                     <span class="symbol">${symbol}</span>
@@ -508,7 +514,7 @@
                 const price = fetchCurrentPrice(symbol);
                 const priceEl = document.getElementById(`price-${symbol}`);
                 if (priceEl) {
-                    const decimals = ASSETS[symbol].group === 'Index' || ASSETS[symbol].group === 'Metal' ? 2 : 5;
+                    const decimals = (ASSETS[symbol].group === 'Index' || ASSETS[symbol].group === 'Metal') ? 2 : 5;
                     priceEl.textContent = price.toFixed(decimals);
                     // Simuler la couleur de changement
                     const lastPrice = parseFloat(priceEl.getAttribute('data-last-price') || price);
@@ -698,77 +704,7 @@
                     
                     row.innerHTML = `
                         <td>${pos.symbol}</td>
-                        <td style="color: ${pos.direction === 'buy' ? 'var(--color-green)' : 'var(--color-red)'}; font-weight: 600;">${pos.direction.toUpperCase()}</td>
-                        <td>${pos.lots.toFixed(2)}</td>
-                        <td>${pos.openPrice.toFixed(4)}</td>
-                        <td>${slText} / ${tpText}</td>
-                        <td class="${pos.pnl >= 0 ? 'pnl-positive' : 'pnl-negative'}">${pos.pnl.toFixed(2)} $</td>
-                        <td><button class="action-button" onclick="closePosition(${pos.id})">Fermer</button></td>
-                    `;
-                });
-            }
-            document.querySelector('.tabs-header button:nth-child(1)').textContent = `Positions (${positions.length})`;
-        }
-
-        function updateHistoryDisplay() {
-            const tableBody = document.getElementById('positionHistoryTable');
-            tableBody.innerHTML = '';
-            
-            if (history.length === 0) {
-                tableBody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--color-text-light);">Aucun historique de position.</td></tr>';
-            } else {
-                history.forEach(pos => {
-                    const row = tableBody.insertRow();
-                    row.innerHTML = `
-                        <td>${pos.symbol}</td>
-                        <td style="color: ${pos.direction === 'buy' ? 'var(--color-green)' : 'var(--color-red)'}; font-weight: 600;">${pos.direction.toUpperCase()}</td>
-                        <td>${pos.lots.toFixed(2)}</td>
-                        <td>${pos.openPrice.toFixed(4)}</td>
-                        <td>${pos.closePrice.toFixed(4)}</td>
-                        <td class="${pos.result >= 0 ? 'pnl-positive' : 'pnl-negative'}">${pos.result.toFixed(2)}$ (${pos.reason})</td>
-                    `;
-                });
-            }
-            document.querySelector('.tabs-header button:nth-child(2)').textContent = `Historique (${history.length})`;
-        }
-
-        function showTab(tabId) {
-            document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
-            document.querySelectorAll('.tab-pane').forEach(pane => pane.classList.remove('active'));
-            
-            document.querySelector(`.tabs-header button[onclick="showTab('${tabId}')"]`).classList.add('active');
-            document.getElementById(tabId).classList.add('active');
-        }
-
-        // --- Initialisation ---
-
-        document.addEventListener('DOMContentLoaded', () => {
-            renderWatchlist();
-            selectAsset(currentAsset); 
-            updateBalance(0); 
-
-            // Démarrer la boucle de calcul PnL (toutes les 1 seconde)
-            pnlInterval = setInterval(calculateAndCheckPnL, 1000); 
-
-            // Événement pour le champ Prix Limite
-            document.getElementById('orderType').addEventListener('change', (e) => {
-                const limitPriceInput = document.getElementById('limitPrice');
-                limitPriceInput.disabled = e.target.value !== 'limit';
-                if (e.target.value !== 'limit') {
-                    limitPriceInput.value = '';
-                }
-            });
-            
-            // Logique de clôture du marché au démarrage
-            if (isMarketClosed()) {
-                positions.forEach(pos => closePosition(pos.id, 'Market Close'));
-                alert("Marchés fermés. Toutes les positions ont été clôturées.");
-            }
-        });
-
-    </script>
-</body>
-</html>
+                        <td style="color: ${pos.
 
 
 
