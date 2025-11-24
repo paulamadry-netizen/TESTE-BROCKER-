@@ -205,7 +205,7 @@
 
         /* Chart */
         .chart-container {
-            height: 60%; /* Espace pour le graphique */
+            height: 60%; 
             min-height: 400px;
             background-color: black;
         }
@@ -267,7 +267,7 @@
         #bid-price { color: var(--negative-color); background: rgba(255, 99, 72, 0.1); } 
         #ask-price { color: var(--positive-color); background: rgba(0, 184, 148, 0.1); } 
 
-        /* Tabs and Tables (RÉTABLISSEMENT DE L'AFFICHAGE EN ONGLET) */
+        /* Tabs and Tables */
         .position-history-tabs {
             flex-grow: 1;
             overflow: hidden;
@@ -382,7 +382,43 @@
             width: 350px;
             border-radius: 8px;
         }
-        /* ... (Le reste du style de la modale est inchangé) ... */
+        
+        .modal-content h3 {
+            color: var(--accent-color);
+            margin-top: 0;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 10px;
+        }
+
+        .modal-body > div {
+            margin-bottom: 15px;
+        }
+        
+        .modal-body input[type="number"], .modal-body label {
+            width: 100%;
+            box-sizing: border-box;
+            display: block;
+            margin-top: 5px;
+        }
+
+        .modal-footer {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 20px;
+        }
+        
+        .modal-footer button {
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        
+        .modal-footer .close-modal {
+            background-color: #6c757d;
+            color: white;
+        }
     </style>
 </head>
 <body>
@@ -557,6 +593,7 @@
         let currentAsset = 'EUR/USD';
         let tvWidget = null; 
         let currentEditingPositionId = null;
+        let tvChartReady = false; // NOUVEAU: Drapeau pour indiquer l'état
 
         const TV_SYMBOLS = {
             'EUR/USD': 'FX_IDC:EURUSD',
@@ -604,9 +641,11 @@
         // INITIALISATION
         // ====================================================================
 
-        document.addEventListener('DOMContentLoaded', () => {
-            updateWatchlist(); // IMPORTANT: Charger les actifs en premier
-            initTradingView(currentAsset);
+        document.addEventListener('DOMContentLoaded', async () => {
+            updateWatchlist();
+            // Utiliser la promesse pour attendre que le graphique soit prêt
+            await initTradingView(currentAsset); 
+            
             updateAccountInfo();
             selectAsset(currentAsset); 
             setInterval(updatePricesAndPnL, 2000); 
@@ -622,34 +661,37 @@
         });
 
         /**
-         * Initialise le widget TradingView en utilisant le symbole mappé.
-         * VERROUILLAGE DU CHANGEMENT DE SYMBOLE
+         * Initialise le widget TradingView et retourne une Promesse qui se résout quand il est prêt.
          * @param {string} assetKey - La clé interne (ex: 'EUR/USD').
          */
         function initTradingView(assetKey) {
-            const tvSymbol = TV_SYMBOLS[assetKey] || assetKey; 
-            
-            tvWidget = new TradingView.widget({
-                "container_id": "tv_chart_container",
-                "symbol": tvSymbol, 
-                "interval": "60",
-                "timezone": "Europe/Paris",
-                "theme": "dark",
-                "style": "1",
-                "locale": "fr",
-                "toolbar_bg": "#f1f3f6",
-                "enable_publishing": false,
-                "allow_symbol_change": false, // Empêche l'utilisateur de cliquer sur le symbole pour le changer
-                "symbol_search_request_delay": 0, // Option pour éviter la recherche
-                "hide_side_toolbar": true,
-                "autosize": true,
-                "studies": [ "Moving Average" ],
-                "client_id": "tradingview.com", 
-                "user_id": "test_user"
-            });
-            
-            tvWidget.onChartReady(() => {
-                console.log("TradingView Chart est prêt.");
+            return new Promise((resolve) => {
+                const tvSymbol = TV_SYMBOLS[assetKey] || assetKey; 
+                
+                tvWidget = new TradingView.widget({
+                    "container_id": "tv_chart_container",
+                    "symbol": tvSymbol, 
+                    "interval": "60",
+                    "timezone": "Europe/Paris",
+                    "theme": "dark",
+                    "style": "1",
+                    "locale": "fr",
+                    "toolbar_bg": "#f1f3f6",
+                    "enable_publishing": false,
+                    "allow_symbol_change": false, // VERROUILLAGE
+                    "symbol_search_request_delay": 0, // VERROUILLAGE
+                    "hide_side_toolbar": true,
+                    "autosize": true,
+                    "studies": [ "Moving Average" ],
+                    "client_id": "tradingview.com", 
+                    "user_id": "test_user"
+                });
+                
+                tvWidget.onChartReady(() => {
+                    console.log("TradingView Chart est prêt.");
+                    tvChartReady = true; // Définir le drapeau
+                    resolve();
+                });
             });
         }
 
@@ -715,7 +757,7 @@
          * Change l'actif actuellement regardé et sélectionné.
          * @param {string} asset - Le nouveau symbole.
          */
-        function selectAsset(asset) {
+        async function selectAsset(asset) {
             currentAsset = asset;
             const tvSymbol = TV_SYMBOLS[asset] || asset;
 
@@ -727,11 +769,26 @@
                 }
             });
 
-            // 2. Mise à jour du graphique TradingView (Mise à jour du symbole)
-            if (tvWidget && tvWidget.chart) {
-                tvWidget.onChartReady(() => {
-                    tvWidget.chart().setSymbol(tvSymbol);
-                });
+            // 2. Mise à jour du graphique TradingView (UTILISATION DU DRAPEAU)
+            if (tvWidget && tvChartReady) {
+                // Si le graphique est prêt, on change le symbole immédiatement
+                tvWidget.chart().setSymbol(tvSymbol);
+            } else {
+                 // Si non prêt, on met une attente (fallback)
+                 console.warn("Chart non prêt, changement de symbole mis en attente.");
+                 // Ceci est un fallback, la Promesse dans DOMContentLoaded devrait suffire.
+                 let attempts = 0;
+                 const interval = setInterval(() => {
+                     if (tvChartReady && tvWidget && tvWidget.chart) {
+                         tvWidget.chart().setSymbol(tvSymbol);
+                         clearInterval(interval);
+                     }
+                     attempts++;
+                     if (attempts > 10) { 
+                         clearInterval(interval);
+                         console.error("Échec du changement de symbole après plusieurs tentatives.");
+                     }
+                 }, 500);
             }
 
             // 3. Mise à jour des panneaux d'exécution
@@ -746,7 +803,7 @@
         }
 
         // ====================================================================
-        // LOGIQUE DE PRIX ET PNL
+        // LOGIQUE DE PRIX ET PNL (inchangée)
         // ====================================================================
 
         function fetchPriceSimulation(asset) {
@@ -775,15 +832,12 @@
             if (assetSpec.isForex) {
                 const pipSize = position.asset.includes('JPY') ? 0.01 : 0.0001; 
                 const pips = priceDiff * (1 / pipSize);
-                // Le pipValueUSD est la valeur d'un pip par lot standard (100k unités)
                 pnl = pips * (assetSpec.pipValueUSD / 10) * lots; 
                 
             } else if (position.asset === 'XAU/USD') {
-                // Pour XAU/USD (l'or), 1 lot = 100 onces. 1 point = 0.01. La valeur du point est 1$.
                 pnl = priceDiff * 100 * lots; 
                 
             } else {
-                // Indices : Le pipValueUSD est la valeur d'un point par lot/contrat
                 pnl = priceDiff * assetSpec.pipValueUSD * lots; 
             }
             
@@ -864,7 +918,7 @@
         }
 
         // ====================================================================
-        // LOGIQUE DE TRADING ET GESTION DES POSITIONS
+        // LOGIQUE DE TRADING ET GESTION DES POSITIONS (inchangée)
         // ====================================================================
 
         function checkMargin(asset, lots) {
@@ -920,15 +974,11 @@
             updatePricesAndPnL(); 
         }
 
-        /**
-         * Ajoute un ordre limite (simulé) avec SL/TP.
-         */
         function placeLimitOrder(type) {
             const asset = document.getElementById('limit-asset').value;
             const price = parseFloat(document.getElementById('limit-price').value);
             const lots = parseFloat(document.getElementById('limit-lots').value);
             
-            // Récupération des valeurs de SL/TP du panneau limite
             const sl = parseFloat(document.getElementById('limit-stoploss').value) || null;
             const tp = parseFloat(document.getElementById('limit-takeprofit').value) || null;
             
@@ -950,11 +1000,6 @@
             alert(message);
         }
 
-        /**
-         * Ferme une position ouverte (partiellement ou totalement).
-         * @param {string} id - ID de la position.
-         * @param {number} lotsToClose - Nombre de lots à fermer.
-         */
         function closePosition(id, lotsToClose) {
             const index = openPositions.findIndex(p => p.id === id);
             if (index === -1) return;
@@ -969,14 +1014,13 @@
             }
 
             const closePrice = isBuy ? currentPrices[position.asset].bid : currentPrices[position.asset].ask;
-            // Calculer le PnL proportionnel
             const pnlPerLot = calculatePnL({ ...position, lots: 1 }, closePrice);
             const finalPnL = pnlPerLot * lotsToClose;
             
             balance += finalPnL;
 
             const historyEntry = {
-                id: Date.now().toString(), // Nouvel ID pour l'historique
+                id: Date.now().toString(), 
                 asset: position.asset,
                 type: position.type,
                 lots: lotsToClose,
@@ -985,13 +1029,13 @@
                 openTime: position.openTime,
                 closeTime: new Date().toISOString(),
                 finalPnL: finalPnL,
-                partialCloseOf: lotsRemaining > 0.001 // Marque si c'est une fermeture partielle
+                partialCloseOf: lotsRemaining > 0.001 
             };
             positionHistory.push(historyEntry);
 
-            if (lotsRemaining <= 0.001) { // Fermeture totale
+            if (lotsRemaining <= 0.001) { 
                 openPositions.splice(index, 1);
-            } else { // Fermeture partielle
+            } else { 
                 position.lots = lotsRemaining;
             }
             
@@ -1000,8 +1044,7 @@
             playSound('success');
             
             if (currentEditingPositionId === id && lotsRemaining > 0.001) {
-                // Mettre à jour la modale après la fermeture partielle
-                openPositionModal(id); 
+                openPositionModal(id);
             } else if (lotsRemaining <= 0.001) {
                 closeModal();
             }
@@ -1028,14 +1071,13 @@
             }
 
             if (triggered) {
-                // Fermeture totale par SL/TP
                 closePosition(position.id, position.lots);
                 alert(`🛑 Position ${position.asset} fermée par ${triggerType}.`);
             }
         }
 
         // ====================================================================
-        // MODAL DE MODIFICATION DE POSITION
+        // MODAL DE MODIFICATION DE POSITION (inchangée)
         // ====================================================================
 
         function openPositionModal(id) {
@@ -1048,21 +1090,17 @@
             currentEditingPositionId = id;
             const assetSpec = LOT_VALUES[position.asset];
 
-            // 1. Remplir les informations
             document.getElementById('modal-asset-info').textContent = `${position.asset} (${position.type})`;
             document.getElementById('modal-lots-open').textContent = position.lots.toFixed(2);
             document.getElementById('modal-pnl-current').textContent = `$${position.pnl.toFixed(2)}`;
             document.getElementById('modal-pnl-current').style.color = position.pnl >= 0 ? 'var(--positive-color)' : 'var(--negative-color)';
 
-            // 2. Remplir SL/TP
             document.getElementById('modal-stoploss').value = position.stopLoss ? position.stopLoss.toFixed(assetSpec.precision) : '';
             document.getElementById('modal-takeprofit').value = position.takeProfit ? position.takeProfit.toFixed(assetSpec.precision) : '';
             
-            // 3. Réinitialiser la fermeture partielle
             document.getElementById('modal-close-lots').value = '0.00';
             document.getElementById('modal-close-lots').max = position.lots.toFixed(2);
 
-            // 4. Afficher la modale
             document.getElementById('position-modal').style.display = 'block';
         }
         
@@ -1078,9 +1116,7 @@
             
             const slInput = parseFloat(document.getElementById('modal-stoploss').value);
             const tpInput = parseFloat(document.getElementById('modal-takeprofit').value);
-            const assetSpec = LOT_VALUES[position.asset];
 
-            // Appliquer uniquement si valide ou vide
             position.stopLoss = (slInput > 0 || isNaN(slInput)) ? slInput : null;
             position.takeProfit = (tpInput > 0 || isNaN(tpInput)) ? tpInput : null;
 
@@ -1111,7 +1147,7 @@
         }
 
         // ====================================================================
-        // INTERFACE UTILISATEUR
+        // INTERFACE UTILISATEUR (inchangée)
         // ====================================================================
 
         function openTab(tabId) {
