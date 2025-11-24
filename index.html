@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mini Broker Pro (V3)</title>
+    <title>Mini Broker Pro (Fonctionnel)</title>
     <style>
         /* --- CSS for Modern Dark Theme --- */
         :root {
@@ -83,7 +83,6 @@
             box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
         }
         
-        /* --- Trade Toolbar (Nouveau) --- */
         .trade-toolbar {
             background-color: var(--bg-card);
             border-radius: 8px;
@@ -125,7 +124,7 @@
         .trade-toolbar .trade-buttons {
             display: flex;
             gap: 8px;
-            margin-left: auto; /* Pousse les boutons à droite */
+            margin-left: auto;
         }
         
         .trade-toolbar button {
@@ -148,24 +147,20 @@
             color: var(--bg-dark);
         }
 
-        /* --- Chart Container --- */
+        /* --- Chart Container (Corrigé) --- */
         .chart-container {
             flex: 1;
             min-height: 400px;
             margin-top: 0;
-            padding: 0; /* Retirer le padding pour le widget */
+            padding: 0; 
             border-radius: 8px;
             overflow: hidden;
+            background-color: var(--bg-dark); /* Assurer que le fond est sombre */
         }
         
-        .chart-container .card-header {
-            padding: 15px 15px 10px 15px;
-            background-color: var(--bg-card);
-            border-bottom: 1px solid var(--border-color);
-        }
+        /* Pour le titre au-dessus du widget, on le remet dans le HTML de la toolbar/en-tête */
 
         /* --- Watchlist --- */
-        /* ... Styles Watchlist (inchangés) ... */
         .watchlist-item {
             display: flex;
             justify-content: space-between;
@@ -193,7 +188,7 @@
             transition: color 0.05s ease-in-out; 
         }
 
-        /* --- Order Form (Déplacé/Simplifié) --- */
+        /* --- Order Form Limite --- */
         .order-form-container h3 {
             margin-top: 0;
             padding-bottom: 10px;
@@ -218,7 +213,6 @@
             color: var(--text-light);
         }
         
-        /* --- Positions / History Tabs --- */
         .positions-history-card {
             padding-bottom: 15px !important; 
         }
@@ -305,11 +299,11 @@
                     <button class="btn-sell-market" onclick="placeOrder('SELL')">VENDRE</button>
                 </div>
 
-                <p style="font-size: 0.8em; color: var(--text-muted);">
+                <p style="font-size: 0.8em; color: var(--text-muted); margin: 0;">
                     Valeur Not.: <span id="notional-value-display">$100,000</span> (Total)
                 </p>
             </div>
-            <div class="card chart-container">
+            <div class="chart-container">
                 <div id="tradingview-widget" style="height: 100%;"></div>
             </div>
 
@@ -384,8 +378,8 @@
                 </div>
                 
                 <div class="trade-buttons">
-                    <button class="btn-buy-market" style="background-color: #007bff;" onclick="placeLimitOrder('BUY')">Placer Ordre Achat Limite</button>
-                    <button class="btn-sell-market" style="background-color: #d9534f;" onclick="placeLimitOrder('SELL')">Placer Ordre Vente Limite</button>
+                    <button class="btn-buy-market" style="background-color: #007bff;" onclick="placeLimitOrder('BUY')">Placer Achat Limite</button>
+                    <button class="btn-sell-market" style="background-color: #d9534f;" onclick="placeLimitOrder('SELL')">Placer Vente Limite</button>
                 </div>
             </div>
 
@@ -400,7 +394,6 @@
         const API_KEY = '8906aa7f29ca470da317f72ae7efab51'; 
         const TWELVEDATA_WSS = (symbol) => `wss://ws.twelvedata.com/v1/quotes/price?symbol=${symbol}&apikey=${API_KEY}`;
         
-        // 2. Watchlist et Actif Séléctionné
         const ALL_ASSETS = [
             { symbol: 'EUR/USD', tv_symbol: 'EURUSD', name: 'Euro/Dollar', type: 'FOREX', multiplier: 100000 }, 
             { symbol: 'GBP/USD', tv_symbol: 'GBPUSD', name: 'Livre/Dollar', type: 'FOREX', multiplier: 100000 },
@@ -425,17 +418,15 @@
         const watchlistBody = document.getElementById('watchlist-body');
         const positionsBody = document.getElementById('positions-body');
         const historyBody = document.getElementById('history-body');
-        const chartSymbolDisplay = document.getElementById('chart-symbol-display');
         const orderSymbolDisplay = document.getElementById('order-symbol-display');
         const pnlTotalDisplay = document.getElementById('pnl-total-display');
         const tabPositions = document.getElementById('tab-positions-btn');
         const notionalValueDisplay = document.getElementById('notional-value-display');
         const soundAccepted = document.getElementById('sound-accepted');
         const soundRejected = document.getElementById('sound-rejected');
-        const lotsInput = document.getElementById('lots'); // Référence directe pour les ordres Market
+        const lotsInput = document.getElementById('lots'); 
 
-
-        // --- Fonctions d'Utilitaires (Inchagées) ---
+        // --- Fonctions d'Utilitaires ---
 
         const formatUSD = (amount) => {
             const color = amount >= 0 ? 'var(--buy-color)' : 'var(--sell-color)';
@@ -465,13 +456,11 @@
             const assetData = getAssetData(symbol);
             if (!assetData) return;
 
-            chartSymbolDisplay.textContent = symbol;
             orderSymbolDisplay.textContent = symbol;
             
-            // Mise à jour de la valeur notionnelle dans la barre d'outils
             updateNotionalValue(); 
 
-            // Mise à jour de la classe active dans la watchlist
+            // Mise à jour de la classe active
             document.querySelectorAll('.watchlist-item').forEach(item => {
                 item.classList.remove('active');
             });
@@ -509,7 +498,7 @@
         }
 
 
-        // --- TradingView et WebSocket (Inchagées) ---
+        // --- TradingView et WebSocket ---
         function loadTradingViewWidget(tv_symbol) {
             const tvContainer = document.getElementById('tradingview-widget');
             tvContainer.innerHTML = ''; 
@@ -546,6 +535,7 @@
             websocket.onmessage = (event) => {
                 const data = JSON.parse(event.data);
                 if (data.event === 'price') {
+                    // Trouver le symbole interne (EUR/USD) à partir du symbole TV (EURUSD)
                     const assetData = ALL_ASSETS.find(a => a.tv_symbol === data.symbol);
                     if (!assetData) return;
                     
@@ -554,7 +544,8 @@
                     
                     if (isNaN(price)) return;
 
-                    assetPrices[symbol] = price;
+                    // STOCKER LE PRIX EN UTILISANT LE SYMBOLE INTERNE (ex: EUR/USD)
+                    assetPrices[symbol] = price; 
                     
                     // Mise à jour Watchlist (visuel)
                     const priceElement = document.getElementById(`price-${data.symbol}`);
@@ -619,7 +610,7 @@
         }
 
 
-        // --- 6. Passer un Ordre Market ---
+        // --- Passer un Ordre Market (Corrigé) ---
         function placeOrder(type) {
             const lots = parseFloat(lotsInput.value);
             
@@ -629,9 +620,11 @@
                 return;
             }
             
+            // Correction ici: On vérifie que le prix est disponible pour le SYMBOL ACTUEL
             const openPrice = assetPrices[currentSymbol];
             
             if (!openPrice) {
+                // Ce message apparaît si le WebSocket n'a pas encore envoyé le premier prix.
                 alert('Erreur: Prix actuel non disponible. Veuillez attendre les données API.');
                 playSound('rejected');
                 return;
@@ -643,8 +636,8 @@
                 symbol: currentSymbol,
                 type: type, 
                 lots: lots.toFixed(2),
-                openPrice: openPrice,
-                sl: null, // Pas de SL/TP par défaut pour les ordres Market simples
+                openPrice: openPrice, // Utilise le prix récupéré
+                sl: null, 
                 tp: null, 
                 openTime: new Date().toLocaleTimeString(),
                 currentPrice: openPrice,
@@ -655,13 +648,12 @@
             renderPositions();
             playSound('accepted');
             
-            // Remise à zéro des champs optionnels après exécution Market
             document.getElementById('limit-price').value = '';
             document.getElementById('stop-loss').value = '';
             document.getElementById('take-profit').value = '';
         }
         
-        // --- 7. Passer un Ordre Limite ---
+        // --- Passer un Ordre Limite ---
         function placeLimitOrder(type) {
             const limitPriceInput = document.getElementById('limit-price');
             const stopLossInput = document.getElementById('stop-loss');
@@ -684,19 +676,40 @@
                 return;
             }
 
-            // En mode démo (sans backend), on simule l'acceptation
-            alert(`Ordre Limite ${type} pour ${currentSymbol} à ${limitPrice} placé. SL: ${sl || 'Non'} / TP: ${tp || 'Non'}. (Le déclenchement réel n'est pas géré en Front-end pur.)`);
+            alert(`Ordre Limite ${type} pour ${currentSymbol} à ${limitPrice} placé. (Simulé)`);
             playSound('accepted');
             
-            // Ici, dans une application réelle, vous stockeriez l'ordre pending
-            
-            // Nettoyage après soumission
             limitPriceInput.value = '';
             stopLossInput.value = '';
             takeProfitInput.value = '';
         }
 
         // --- Fermer une Position et Rendu (Inchagés) ---
+        function checkStopLossTakeProfit(position, currentPrice) {
+            let shouldClose = false;
+            let closeReason = '';
+
+            if (position.sl && position.sl > 0) {
+                if ((position.type === 'BUY' && currentPrice <= position.sl) || 
+                    (position.type === 'SELL' && currentPrice >= position.sl)) {
+                    shouldClose = true;
+                    closeReason = 'Stop Loss Hit';
+                }
+            }
+
+            if (!shouldClose && position.tp && position.tp > 0) {
+                if ((position.type === 'BUY' && currentPrice >= position.tp) || 
+                    (position.type === 'SELL' && currentPrice <= position.tp)) {
+                    shouldClose = true;
+                    closeReason = 'Take Profit Hit';
+                }
+            }
+
+            if (shouldClose) {
+                closePosition(position.id, currentPrice, closeReason);
+            }
+        }
+        
         function closePosition(id, closePrice = null, closeReason = 'Closed by User') {
             const index = positions.findIndex(pos => pos.id === id);
             if (index === -1) return;
@@ -786,7 +799,6 @@
             renderWatchlist(); 
             renderHistory(); 
             
-            // Écouteur pour mettre à jour la valeur notionnelle quand le nombre de lots change
             document.getElementById('lots').addEventListener('input', updateNotionalValue);
             
             openTab({currentTarget: tabPositions}, 'positions');
