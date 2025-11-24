@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mini Broker Pro (Connexion WS Unique)</title>
+    <title>Mini Broker Pro (Diagnostic Ultime)</title>
     <style>
         /* --- CSS for Modern Dark Theme (Inchangé) --- */
         :root {
@@ -411,7 +411,7 @@
         let positionHistory = []; 
         let websocket = null; 
         let isWsInitialized = false; 
-        let lastSubscribedSymbol = null; // Pour éviter les abonnements répétés
+        let lastSubscribedSymbol = null; 
 
         // Références DOM (Inchangées)
         const watchlistBody = document.getElementById('watchlist-body');
@@ -463,10 +463,8 @@
             });
             document.getElementById(`watchlist-${assetData.tv_symbol}`).classList.add('active');
             
-            // RESTORED: Appel pour le graphique TradingView
             loadTradingViewWidget(assetData.tv_symbol); 
             
-            // Gestion de l'unique connexion WS
             initWebSocket(assetData.tv_symbol); 
         }
         
@@ -496,17 +494,26 @@
              }
         }
 
-        // --- Récupération de Prix via REST (pour l'initialisation) ---
+        // --- NOUVELLE FONCTION CRITIQUE DE DIAGNOSTIC ---
         async function getInitialPriceRest(symbol) {
             const assetData = getAssetData(symbol);
             if (!assetData) return null;
 
             const tv_symbol = assetData.tv_symbol; 
+            const URL = TWELVEDATA_PRICE_REST(tv_symbol);
+
+            console.log(`[REST TENTATIVE] Envoi de la requête à : ${URL}`);
 
             try {
-                const response = await fetch(TWELVEDATA_PRICE_REST(tv_symbol)); 
+                const response = await fetch(URL); 
                 const data = await response.json();
                 
+                // --- DIAGNOSTIC CRITIQUE ---
+                
+                // 1. Log la réponse complète de Twelve Data
+                console.warn(`[TWELVE DATA RÉPONSE BRUTE] Symbole: ${symbol}. Réponse complète :`, data);
+                
+                // 2. Vérifie la présence de la propriété 'price'
                 if (data.price && !isNaN(parseFloat(data.price))) {
                     const price = parseFloat(data.price);
                     assetPrices[symbol] = price; 
@@ -516,18 +523,27 @@
                          priceElement.textContent = formatPrice(price, symbol);
                     }
                     
-                    console.log(`[REST OK] Prix initial pour ${symbol} (API: ${tv_symbol}): ${price}`);
+                    console.log(`[REST OK] Prix initial pour ${symbol}: ${price}`);
                     return price;
-                } else {
-                    // C'EST CE MESSAGE D'ERREUR DANS LA CONSOLE QUI EST CRUCIAL
-                    console.error(`[REST ÉCHEC] Le prix est manquant pour ${symbol}. Réponse complète de l'API Twelve Data:`, data);
-                    return null;
+                } 
+                // 3. Si la propriété 'price' est absente, cela signifie une ERREUR DE TWELVE DATA.
+                else if (data.code && data.message) {
+                    // C'est ici que l'API nous dira si c'est la limite de taux (code 429) ou une clé invalide
+                    console.error(`[REST ÉCHEC - API TWELVE DATA] Code ${data.code}: ${data.message}`);
+                } 
+                // 4. Si la propriété 'price' est absente mais que la réponse est JSON valide.
+                else {
+                    console.error(`[REST ÉCHEC - INCONNU] Réponse JSON inattendue de Twelve Data (pas de propriété 'price').`);
                 }
+
+                return null;
+
             } catch (error) {
-                console.error('[REST ÉCHEC] Erreur lors de la requête REST (problème de réseau ou de serveur API):', error);
+                console.error('[REST ÉCHEC - RÉSEAU] Erreur lors de la requête REST (réseau, CORS, ou clé API malformée):', error);
                 return null;
             }
         }
+        // --- FIN DE LA NOUVELLE FONCTION CRITIQUE DE DIAGNOSTIC ---
         
         // --- TradingView et WebSocket ---
         function loadTradingViewWidget(tv_symbol) { 
@@ -555,7 +571,7 @@
         function subscribeToSymbol(tv_symbol) {
             if (lastSubscribedSymbol === tv_symbol) {
                 console.log(`[WS INFO] Déjà abonné à ${tv_symbol}.`);
-                return; // Évite d'envoyer le même abonnement
+                return; 
             }
 
             if (websocket && websocket.readyState === WebSocket.OPEN) {
@@ -656,7 +672,7 @@
             
             if (!openPrice) {
                 // Le message d'erreur générique
-                console.error('Échec critique: Le prix actuel n\'a pas pu être récupéré via API après double tentative. Regardez le message de LOG [REST ÉCHEC] ci-dessus pour la réponse de Twelve Data.');
+                console.error('Échec critique: Le prix actuel n\'a pas pu être récupéré via API après double tentative. Regardez le message de LOG [TWELVE DATA RÉPONSE BRUTE] ci-dessus pour la réponse de Twelve Data.');
                 alert('Erreur: Le prix actuel n\'a pas pu être récupéré via API. Problème de connexion/API. Voir console (F12).');
                 playSound('rejected');
                 return;
@@ -684,7 +700,7 @@
             document.getElementById('take-profit').value = '';
         }
         
-        // ... (Les autres fonctions (calculateAndUpdatePnL, closePosition, renderPositions, etc.) sont inchangées)
+        // ... (Les autres fonctions sont inchangées)
 
         function calculateAndUpdatePnL() {
             let totalPnL = 0;
