@@ -1,419 +1,355 @@
-<!DOCTYPE html>
-<html lang="fr">
-<head>
-<meta charset="UTF-8">
-<title>Mini-Broker Pro</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+import React, { useEffect, useState, useRef } from "react";
 
-<!-- TradingView -->
-<script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
+// Mini Broker Web Trader - Single File React Component
+// Tailwind CSS assumed available in the hosting app.
+// IMPORTANT: replace API keys and endpoints with your own keys before use.
 
-<!-- STYLES EXACTS ORIGINE -->
-<style>
-body {
-    margin: 0;
-    background: #010409;
-    color: #fff;
-    font-family: Arial, sans-serif;
-}
-header {
-    background: #161b22;
-    padding: 10px;
-    text-align: center;
-    border-bottom: 1px solid #30363d;
-}
-.tabs {
-    display: flex;
-    justify-content: center;
-    background: #0d1117;
-    border-bottom: 1px solid #30363d;
-}
-.tab {
-    padding: 15px;
-    cursor: pointer;
-    color: #8b949e;
-}
-.tab.active {
-    color: #fff;
-    border-bottom: 3px solid #58a6ff;
-}
-#main {
-    display: flex;
-    height: calc(100vh - 100px);
-}
-#broker, #ordersTab, #historyTab {
-    flex: 1;
-    padding: 20px;
-    overflow-y: auto;
-    display: none;
-}
-#ordersTab, #historyTab {
-    background: #0d1117;
-    border-left: 1px solid #30363d;
-}
-table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-top: 15px;
-}
-table th, table td {
-    padding: 10px;
-    border-bottom: 1px solid #30363d;
-    text-align: center;
-}
-.buy-row {
-    background: rgba(46, 160, 67, 0.1);
-}
-.sell-row {
-    background: rgba(248, 81, 73, 0.1);
-}
-.panel {
-    margin-bottom: 20px;
-    padding: 15px;
-    background: #0d1117;
-    border: 1px solid #30363d;
-}
-.panel h2 {
-    margin: 0 0 10px;
-}
-input, select {
-    width: 100%;
-    padding: 10px;
-    margin: 8px 0;
-    background: #161b22;
-    border: 1px solid #30363d;
-    color: #fff;
-    border-radius: 5px;
-}
-button {
-    width: 100%;
-    padding: 12px;
-    margin: 5px 0;
-    border: none;
-    cursor: pointer;
-    font-weight: bold;
-    border-radius: 5px;
-}
-.buyBtn {
-    background: #238636;
-    color: #fff;
-}
-.sellBtn {
-    background: #da3633;
-    color: #fff;
-}
-#chart {
-    height: 50vh;
-    border: 1px solid #30363d;
-    border-radius: 5px;
-    margin-bottom: 20px;
-}
-</style>
-</head>
+export default function MiniBrokerWebTrader() {
+  // --- Config (replace keys later) ---
+  const TWELVEDATA_API_KEY = "YOUR_TWELVEDATA_KEY"; // put your key here
+  const IG_API_KEY = "YOUR_IG_API_KEY"; // put your IG key here
+  const IG_ACCOUNT_TYPE = "demo"; // or 'live'
 
-<body>
+  // --- UI State ---
+  const [selectedSymbol, setSelectedSymbol] = useState("EUR/USD");
+  const [symbols] = useState([
+    // top 5 FX majors
+    { id: "EUR/USD", type: "forex", tdSymbol: "EUR/USD" },
+    { id: "USD/JPY", type: "forex", tdSymbol: "USD/JPY" },
+    { id: "GBP/USD", type: "forex", tdSymbol: "GBP/USD" },
+    { id: "AUD/USD", type: "forex", tdSymbol: "AUD/USD" },
+    { id: "USD/CAD", type: "forex", tdSymbol: "USD/CAD" },
+    // indices (IG)
+    { id: "US500", label: "S&P 500", type: "index", igEpic: "IX.D.SPTRD.Daily", igName: "US500" },
+    { id: "NAS100", label: "Nasdaq 100", type: "index", igEpic: "IX.D.NAS100.CFD.IP", igName: "NAS100" },
+    { id: "UK100", label: "FTSE 100", type: "index", igEpic: "IX.D.FTSE.Daily", igName: "UK100" },
+    { id: "DE40", label: "Germany 40", type: "index", igEpic: "IX.D.DAX.Daily", igName: "DE40" },
+    { id: "JP225", label: "Nikkei 225", type: "index", igEpic: "IX.D.NIK225.Daily", igName: "JP225" },
+    // gold
+    { id: "XAU/USD", label: "Gold (XAUUSD)", type: "metal", tdSymbol: "XAU/USD", igEpic: "CS.D.GC","igName":"XAUUSD" }
+  ]);
 
-<header>
-    <h1>Mini-Broker Pro</h1>
-    <div>
-        <input id="symbolInput" placeholder="Entrer un symbole (ex: BTC/USD)" style="width:200px;">
-        <button onclick="setChartSymbol()">Changer</button>
-    </div>
-</header>
+  // contract sizes and point values (defaults). You can tune per-broker later.
+  const CONTRACT_SPECS = {
+    // forex: 1 standard lot = 100,000 units
+    "forex": { units_per_lot: 100000, pip: 0.0001, pip_decimal_places: 4 },
+    // gold (IG typical spot gold contract: 100 troy oz per contract -> value per point ~$100)
+    "metal": { units_per_lot: 100, point_value_per_lot: 100, pip: 0.01, pip_decimal_places: 2 },
+    // indices: value-per-point varies by index; we'll use IG default templates (user can override)
+    "index": { point_value_per_contract: 1 }
+  };
 
-<div class="tabs">
-    <div class="tab active" data-tab="trade">Trading</div>
-    <div class="tab" data-tab="orders">Ordres en cours</div>
-    <div class="tab" data-tab="history">Historique</div>
-</div>
+  // --- Trading state ---
+  const [balance, setBalance] = useState(50000); // starting 50k
+  const [positions, setPositions] = useState([]); // open positions
+  const [history, setHistory] = useState([]);
+  const [limitOrders, setLimitOrders] = useState([]);
+  const [prices, setPrices] = useState({}); // latest prices for symbols we asked
+  const streamingRef = useRef({});
 
-<div id="main">
+  // --- Helper: format number ---
+  const fmt = (v) => (typeof v === "number" ? v.toFixed(2) : v);
 
-    <!-- BROKER -->
-    <div id="broker" style="display:block;">
-        <div id="chart"></div>
-
-        <div class="panel">
-            <h2 id="symbolDisplay">Symbole</h2>
-            <p>Prix Actuel: <span id="currentPrice">--</span></p>
-
-            <label>Lots</label>
-            <input id="lotInput" type="number" value="1">
-
-            <label>Stop Loss</label>
-            <input id="slInput" type="number" placeholder="SL">
-
-            <label>Take Profit</label>
-            <input id="tpInput" type="number" placeholder="TP">
-
-            <button class="buyBtn" id="btnBuy">BUY Market</button>
-            <button class="sellBtn" id="btnSell">SELL Market</button>
-
-            <label>Prix limite :</label>
-            <input id="priceInput" type="number" placeholder="Entrer prix">
-
-            <button class="buyBtn" id="btnBuyLimit">BUY Limit</button>
-            <button class="sellBtn" id="btnSellLimit">SELL Limit</button>
-        </div>
-    </div>
-
-    <!-- ORDERS -->
-    <div id="ordersTab">
-        <h2>Ordres en cours</h2>
-        <table id="ordersTable">
-            <thead>
-                <tr>
-                    <th>ID</th><th>Heure</th><th>Type</th><th>Side</th><th>Prix</th>
-                    <th>SL</th><th>TP</th><th>Lots</th><th>Status</th><th>Action</th>
-                </tr>
-            </thead>
-            <tbody></tbody>
-        </table>
-    </div>
-
-    <!-- HISTORY -->
-    <div id="historyTab">
-        <h2>Historique</h2>
-        <table id="historyTable">
-            <thead>
-                <tr>
-                    <th>ID</th><th>Type</th><th>Side</th><th>Entry</th><th>Exit</th>
-                    <th>Lots</th><th>PNL</th><th>Heure</th>
-                </tr>
-            </thead>
-            <tbody></tbody>
-        </table>
-    </div>
-
-</div>
-
-<script>
-// ======================
-// Variables
-// ======================
-let symbol = "BTC/USD";
-let currentPrice = 0;
-let orders = [];
-let history = [];
-let orderID = 1;
-
-// ======================
-// Initialisation TradingView
-// ======================
-function initChart() {
-    new TradingView.widget({
-        "width": "100%",
-        "height": "100%",
-        "symbol": symbol.replace("/", ""),
-        "interval": "1",
-        "timezone": "Europe/Paris",
-        "theme": "dark",
-        "style": "1",
-        "locale": "fr",
-        "container_id": "chart",
-        "hide_side_toolbar": false,
-    });
-
-    simulatePrice();
-}
-
-function simulatePrice() {
-    setInterval(() => {
-        currentPrice += (Math.random() - 0.5) * 0.5;
-        if (currentPrice <= 0) currentPrice = 1;
-        document.getElementById("currentPrice").textContent = currentPrice.toFixed(2);
-        checkOrders();
-    }, 800);
-}
-
-// ======================
-// Change Symbol
-// ======================
-function setChartSymbol() {
-    const input = document.getElementById("symbolInput").value;
-    if (!input) return;
-    symbol = input;
-    document.getElementById("symbolDisplay").textContent = symbol;
-    initChart();
-}
-
-// ======================
-// Tabs
-// ======================
-document.querySelectorAll(".tab").forEach(t => {
-    t.addEventListener("click", () => {
-        document.querySelectorAll(".tab").forEach(e => e.classList.remove("active"));
-        t.classList.add("active");
-
-        document.getElementById("broker").style.display = "none";
-        document.getElementById("ordersTab").style.display = "none";
-        document.getElementById("historyTab").style.display = "none";
-
-        if (t.dataset.tab === "trade") document.getElementById("broker").style.display = "block";
-        if (t.dataset.tab === "orders") document.getElementById("ordersTab").style.display = "block";
-        if (t.dataset.tab === "history") document.getElementById("historyTab").style.display = "block";
-    });
-});
-
-// ======================
-// Market Order
-// ======================
-function marketOrder(side) {
-    const lots = parseFloat(document.getElementById("lotInput").value);
-    const sl = parseFloat(document.getElementById("slInput").value) || null;
-    const tp = parseFloat(document.getElementById("tpInput").value) || null;
-
-    const order = {
-        id: orderID++,
-        time: new Date().toLocaleTimeString(),
-        type: "market",
-        side,
-        lots,
-        entry: currentPrice,
-        sl,
-        tp,
-        status: "running"
-    };
-
-    orders.push(order);
-    updateOrdersTable();
-}
-
-// ======================
-// Limit Order
-// ======================
-function limitOrder(side) {
-    const price = parseFloat(document.getElementById("priceInput").value);
-    const lots = parseFloat(document.getElementById("lotInput").value);
-    const sl = parseFloat(document.getElementById("slInput").value) || null;
-    const tp = parseFloat(document.getElementById("tpInput").value) || null;
-
-    const order = {
-        id: orderID++,
-        time: new Date().toLocaleTimeString(),
-        type: "limit",
-        side,
-        lots,
-        sl,
-        tp,
-        entry: price,
-        status: "pending"
-    };
-
-    orders.push(order);
-    updateOrdersTable();
-}
-
-// ======================
-// Vérification des ordres
-// ======================
-function checkOrders() {
-    for (let i = orders.length - 1; i >= 0; i--) {
-        let o = orders[i];
-
-        if (o.type === "limit" && o.status === "pending") {
-            if ((o.side === "BUY" && currentPrice <= o.entry) ||
-                (o.side === "SELL" && currentPrice >= o.entry)) {
-                o.entry = currentPrice;
-                o.status = "running";
-            }
+  // --- Fetch price for a symbol (only called for selected assets or assets in positions) ---
+  async function fetchPriceFor(symbolObj) {
+    try {
+      if (symbolObj.type === "forex" || symbolObj.type === "metal") {
+        // Use Twelve Data REST quote endpoint
+        const sym = encodeURIComponent(symbolObj.tdSymbol || symbolObj.id.replace("/","/"));
+        const url = `https://api.twelvedata.com/price?symbol=${sym}&apikey=${TWELVEDATA_API_KEY}`;
+        const res = await fetch(url);
+        const j = await res.json();
+        if (j && j.price) {
+          return Number(j.price);
         }
-
-        if (o.status === "running") {
-            if (o.tp && ((o.side === "BUY" && currentPrice >= o.tp) || (o.side === "SELL" && currentPrice <= o.tp))) {
-                closeOrder(i);
-            }
-            if (o.sl && ((o.side === "BUY" && currentPrice <= o.sl) || (o.side === "SELL" && currentPrice >= o.sl))) {
-                closeOrder(i);
-            }
-        }
+      } else if (symbolObj.type === "index") {
+        // Use IG REST pricing - placeholder endpoint and headers
+        // NOTE: IG streaming requires a session and Lightstreamer subscription. Here we fetch snapshot using REST.
+        // You will have to substitute endpoints and authentication per IG's docs.
+        const epic = symbolObj.igEpic;
+        const url = `https://demo-api.ig.com/gateway/deal/prices/${epic}`; // demo endpoint pattern (may need adjustment)
+        const res = await fetch(url, {
+          headers: {
+            'X-IG-API-KEY': IG_API_KEY,
+            'Version': '2',
+            'Accept': 'application/json'
+          }
+        });
+        if (!res.ok) throw new Error('IG price fetch failed');
+        const j = await res.json();
+        // IG returns snapshot with 'snapshot' or 'prices' - best-effort parse
+        const price = j.bid && j.offer ? (j.bid + j.offer)/2 : (j.snapshot && j.snapshot[0] && j.snapshot[0].mid) || null;
+        if (price) return Number(price);
+      }
+    } catch (e) {
+      console.warn("price fetch error", e);
     }
+    return null;
+  }
 
-    updateOrdersTable();
-}
+  // --- Compute PnL for a position given current price ---
+  function computePnL(pos, price) {
+    // pos: { id, symbolObj, direction: 'buy'|'sell', entryPrice, lots }
+    const { symbolObj, entryPrice, direction, lots } = pos;
+    const spec = CONTRACT_SPECS[symbolObj.type];
+    if (!spec || !price) return 0;
+    if (symbolObj.type === 'forex') {
+      // For forex assume 1 pip = 0.0001 (or 0.01 for JPY pairs) and 1 lot = 100,000 units
+      const pip = spec.pip;
+      const pipValuePerLot = (spec.units_per_lot * pip); // in quote currency units
+      // If quote currency is USD we can use directly; for generality, assume quote is USD for majors in watchlist
+      const pipValue = pipValuePerLot * lots;
+      const priceDiff = (price - entryPrice);
+      const pipsMoved = priceDiff / pip;
+      const pnl = (direction === 'buy' ? 1 : -1) * pipsMoved * pipValue;
+      return pnl;
+    } else if (symbolObj.type === 'metal') {
+      // gold: use point_value_per_lot (e.g. $100 per 1 USD move per lot)
+      const point = spec.pip; // 0.01
+      const pointVal = spec.point_value_per_lot * lots;
+      const pointsMoved = (price - entryPrice) / point;
+      return (direction === 'buy' ? 1 : -1) * pointsMoved * pointVal;
+    } else if (symbolObj.type === 'index') {
+      // index: assume user-specified point value in symbolObj or default 1
+      const pointValSingle = symbolObj.point_value_per_contract || spec.point_value_per_contract || 1;
+      const pointsMoved = price - entryPrice;
+      return (direction === 'buy' ? 1 : -1) * pointsMoved * pointValSingle * lots;
+    }
+    return 0;
+  }
 
-// ======================
-// Fermer un ordre
-// ======================
-function closeOrder(i) {
-    const o = orders[i];
-    o.exit = currentPrice;
-    o.pnl = (o.side === "BUY" ? (o.exit - o.entry) : (o.entry - o.exit)) * o.lots;
+  // --- Place market order ---
+  function placeMarketOrder(symbolId, direction, lots, price) {
+    const symbolObj = symbols.find(s => s.id === symbolId || s.label === symbolId);
+    if (!symbolObj) return alert('symbol not found');
+    // check funds: compute notional rough
+    const spec = CONTRACT_SPECS[symbolObj.type];
+    const units = (symbolObj.type === 'forex') ? spec.units_per_lot * lots : (symbolObj.type==='metal'? spec.units_per_lot * lots : (symbolObj.point_value_per_contract || 1) * lots);
+    const notional = (price || prices[symbolId] || 0) * units;
+    if (notional > balance) return playSound('reject'), alert('Not enough balance for this position (notional > balance)');
 
-    history.push(o);
-    orders.splice(i, 1);
+    // open position
+    const pos = {
+      id: Date.now(),
+      symbolId,
+      symbolObj,
+      direction,
+      entryPrice: price || prices[symbolId],
+      lots,
+      createdAt: new Date().toISOString(),
+      stop: null,
+      tp: null
+    };
+    setPositions(p => [...p, pos]);
+    playSound('accept');
+  }
 
-    updateOrdersTable();
-    updateHistoryTable();
-}
+  // --- Limit orders handler ---
+  function submitLimitOrder(symbolId, direction, lots, limitPrice) {
+    const order = { id: Date.now(), symbolId, direction, lots, limitPrice, status: 'open', createdAt: new Date().toISOString() };
+    setLimitOrders(lo => [...lo, order]);
+  }
 
-// ======================
-// Update Tables
-// ======================
-function updateOrdersTable() {
-    const tbody = document.querySelector("#ordersTable tbody");
-    tbody.innerHTML = "";
+  // --- Simple sounds ---
+  function playSound(type) {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.connect(g); g.connect(ctx.destination);
+    if (type === 'accept') { o.frequency.value = 880; g.gain.value = 0.02; }
+    else { o.frequency.value = 220; g.gain.value = 0.02; }
+    o.start();
+    setTimeout(()=>{ o.stop(); ctx.close(); }, 150);
+  }
 
-    orders.forEach(o => {
-        const tr = document.createElement("tr");
-        tr.className = o.side === "BUY" ? "buy-row" : "sell-row";
+  // --- Periodic updater: fetch price for selected symbol and only for symbols with positions or selected ---
+  useEffect(() => {
+    let cancelled = false;
+    async function tick() {
+      // build list of unique symbolObj to update: selected + those in positions
+      const needed = new Set();
+      needed.add(selectedSymbol);
+      positions.forEach(p => needed.add(p.symbolId));
+      for (const sid of needed) {
+        const sym = symbols.find(s => s.id === sid || s.label === sid);
+        if (!sym) continue;
+        const price = await fetchPriceFor(sym);
+        if (price !== null) {
+          setPrices(prev => ({ ...prev, [sym.id]: price }));
+          // Update PnL in-place by forcing state recompute (we keep positions as-is and compute PnL on render)
+        }
+      }
+    }
+    // initial tick
+    tick();
+    const iv = setInterval(tick, 1000);
+    return () => { cancelled = true; clearInterval(iv); };
+  }, [selectedSymbol, positions]);
 
-        tr.innerHTML = `
-            <td>${o.id}</td>
-            <td>${o.time}</td>
-            <td>${o.type}</td>
-            <td>${o.side}</td>
-            <td>${o.entry.toFixed(2)}</td>
-            <td>${o.sl ?? "-"}</td>
-            <td>${o.tp ?? "-"}</td>
-            <td>${o.lots}</td>
-            <td>${o.status}</td>
-            <td><button onclick="forceClose(${o.id})" style="background:red;color:white;">Fermer</button></td>
-        `;
-        tbody.appendChild(tr);
+  // --- Close position ---
+  function closePosition(posId) {
+    setPositions(prev => {
+      const pos = prev.find(p=>p.id===posId);
+      if (!pos) return prev;
+      const price = prices[pos.symbolId] || pos.entryPrice;
+      const pnl = computePnL(pos, price);
+      setBalance(b => b + pnl);
+      setHistory(h => [{...pos, closedAt: new Date().toISOString(), closePrice: price, pnl}, ...h]);
+      return prev.filter(p=>p.id!==posId);
     });
+  }
+
+  // --- UI small components ---
+  function WatchList() {
+    return (
+      <div className="w-80 p-3 bg-white rounded shadow">
+        <h3 className="font-semibold mb-2">Watchlist</h3>
+        <ul>
+          {symbols.map(s => (
+            <li key={s.id} className={`py-2 cursor-pointer flex justify-between items-center ${selectedSymbol===s.id? 'bg-slate-100 rounded':''}`} onClick={()=>setSelectedSymbol(s.id)}>
+              <div>
+                <div className="font-medium">{s.label || s.id}</div>
+                <div className="text-xs text-slate-500">{s.type.toUpperCase()}</div>
+              </div>
+              <div className="text-right">
+                <div className="font-mono">{prices[s.id] ? Number(prices[s.id]).toFixed(4) : '—'}</div>
+                <div className="text-xs text-slate-400">{s.type==='index'?'IG': 'TD'}</div>
+              </div>
+            </li>
+          ))}
+        </ul>
+
+        {/* Limit orders table */}
+        <div className="mt-4">
+          <h4 className="text-sm font-semibold">Limit Orders</h4>
+          <table className="w-full text-sm mt-2">
+            <thead>
+              <tr className="text-left text-slate-500"><th>Symbol</th><th>Dir</th><th>Lots</th><th>Price</th></tr>
+            </thead>
+            <tbody>
+              {limitOrders.map(o => (
+                <tr key={o.id}><td>{o.symbolId}</td><td>{o.direction}</td><td>{o.lots}</td><td>{o.limitPrice}</td></tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  }
+
+  function ChartArea() {
+    // embed TradingView lightweight widget
+    useEffect(()=>{
+      // load widget script only once
+      if (window.TradingView) return;
+      const s = document.createElement('script');
+      s.src = 'https://s3.tradingview.com/tv.js';
+      s.onload = ()=> console.log('TV script loaded');
+      document.body.appendChild(s);
+    },[]);
+
+    return (
+      <div className="flex-1 p-3 bg-white rounded shadow flex flex-col">
+        <div className="flex-1" id="tv-widget" style={{minHeight:300}}>
+          {/* You can render the TradingView widget here using the global TradingView widget API after the script loads. */}
+          <div className="h-full w-full flex items-center justify-center text-slate-400">TradingView chart placeholder — the real widget will be injected here with your TradingView settings.</div>
+        </div>
+
+        <div className="mt-3">
+          <div className="flex gap-2">
+            <button className="px-4 py-2 bg-green-600 text-white rounded" onClick={()=>placeMarketOrder(selectedSymbol,'buy',1, prices[selectedSymbol])}>Buy 1 lot</button>
+            <button className="px-4 py-2 bg-red-600 text-white rounded" onClick={()=>placeMarketOrder(selectedSymbol,'sell',1, prices[selectedSymbol])}>Sell 1 lot</button>
+            <div className="ml-auto">Balance: <strong>${fmt(balance)}</strong></div>
+          </div>
+
+          <div className="mt-3">
+            <div className="bg-slate-50 p-2 rounded">
+              <div className="flex gap-2 items-center">
+                <div><strong>{selectedSymbol}</strong> price: {prices[selectedSymbol] ? Number(prices[selectedSymbol]).toFixed(4) : '—'}</div>
+                <div className="ml-auto">Lots: <input defaultValue={1} id="quickLots" className="w-16 border px-1 rounded ml-2"/></div>
+              </div>
+            </div>
+          </div>
+
+          {/* tabs for Positions / History */}
+          <div className="mt-4">
+            <div className="border-t pt-3">
+              <div className="flex gap-2">
+                <div className="font-semibold">Positions</div>
+                <div className="ml-4 text-slate-500">History</div>
+              </div>
+
+              <div className="mt-2">
+                {positions.length===0 ? <div className="text-slate-500">No open positions</div> : (
+                  <table className="w-full text-sm">
+                    <thead><tr className="text-left text-slate-500"><th>Sym</th><th>Dir</th><th>Entry</th><th>Lots</th><th>PNL</th><th></th></tr></thead>
+                    <tbody>
+                      {positions.map(p=>{
+                        const price = prices[p.symbolId] || p.entryPrice;
+                        const pnl = computePnL(p, price);
+                        return (
+                          <tr key={p.id}>
+                            <td>{p.symbolId}</td>
+                            <td>{p.direction}</td>
+                            <td>{Number(p.entryPrice).toFixed(4)}</td>
+                            <td>{p.lots}</td>
+                            <td className={pnl>=0?'text-green-600':'text-red-600'}>${fmt(pnl)}</td>
+                            <td><button className="text-xs px-2 py-1 border rounded" onClick={()=>closePosition(p.id)}>Close</button></td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen p-6 bg-slate-100 text-slate-800">
+      <div className="max-w-7xl mx-auto grid grid-cols-3 gap-4">
+        <WatchList />
+        <ChartArea />
+        <div className="col-span-1 p-3 bg-white rounded shadow">
+          <h3 className="font-semibold mb-2">Quick Controls</h3>
+          <div className="mb-2">Selected: <strong>{selectedSymbol}</strong></div>
+          <div className="mb-2">
+            <label className="block text-sm">Place Limit Order</label>
+            <div className="flex gap-2 mt-1">
+              <input placeholder="Price" id="limPrice" className="border px-2 py-1 rounded w-24" />
+              <input placeholder="Lots" id="limLots" className="border px-2 py-1 rounded w-20" />
+              <button className="px-3 py-1 bg-blue-600 text-white rounded" onClick={()=>{
+                const price = Number(document.getElementById('limPrice').value);
+                const lots = Number(document.getElementById('limLots').value) || 1;
+                submitLimitOrder(selectedSymbol, 'buy', lots, price);
+              }}>Add</button>
+            </div>
+          </div>
+
+          <div className="mt-4">
+            <h4 className="font-semibold">Order / Event Sounds</h4>
+            <div className="flex gap-2 mt-2">
+              <button className="px-3 py-1 border rounded" onClick={()=>playSound('accept')}>Play accept</button>
+              <button className="px-3 py-1 border rounded" onClick={()=>playSound('reject')}>Play reject</button>
+            </div>
+          </div>
+
+          <div className="mt-4">
+            <h4 className="font-semibold">Account</h4>
+            <div>Balance: ${fmt(balance)}</div>
+            <div>Open positions: {positions.length}</div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  );
 }
-
-function forceClose(id) {
-    const i = orders.findIndex(o => o.id === id);
-    if (i !== -1) closeOrder(i);
-}
-
-function updateHistoryTable() {
-    const tbody = document.querySelector("#historyTable tbody");
-    tbody.innerHTML = "";
-
-    history.forEach(o => {
-        const tr = document.createElement("tr");
-
-        tr.innerHTML = `
-            <td>${o.id}</td>
-            <td>${o.type}</td>
-            <td>${o.side}</td>
-            <td>${o.entry.toFixed(2)}</td>
-            <td>${o.exit.toFixed(2)}</td>
-            <td>${o.lots}</td>
-            <td>${o.pnl.toFixed(2)}</td>
-            <td>${o.time}</td>
-        `;
-        tbody.appendChild(tr);
-    });
-}
-
-// ======================
-// Buttons
-// ======================
-document.getElementById("btnBuy").onclick = () => marketOrder("BUY");
-document.getElementById("btnSell").onclick = () => marketOrder("SELL");
-document.getElementById("btnBuyLimit").onclick = () => limitOrder("BUY");
-document.getElementById("btnSellLimit").onclick = () => limitOrder("SELL");
-
-// Start
-initChart();
-</script>
-
-</body>
-</html>
 
 
 
