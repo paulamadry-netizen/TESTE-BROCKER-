@@ -11,14 +11,14 @@
            STYLE (CSS) - PRO & MODERNE
            ========================================================== */
         :root {
-            --bg-primary: #121419; /* Arrière-plan principal très sombre */
-            --bg-secondary: #1e2129; /* Arrière-plan des panneaux */
+            --bg-primary: #121419;
+            --bg-secondary: #1e2129;
             --text-color: #e5e9f0;
-            --accent-color: #5d5dff; /* Bleu plus vif */
-            --positive-color: #00b894; /* Vert crypto/pro */
-            --negative-color: #ff6348; /* Rouge alerte */
+            --accent-color: #5d5dff;
+            --positive-color: #00b894;
+            --negative-color: #ff6348;
             --border-color: #3f444c;
-            --font-mono: 'Roboto Mono', monospace; /* Police plus technique */
+            --font-mono: 'Roboto Mono', monospace;
         }
 
         body {
@@ -59,7 +59,7 @@
         /* Layout */
         .trading-interface {
             display: flex;
-            height: calc(100vh - 58px); /* Hauteur moins le header */
+            height: calc(100vh - 58px);
         }
 
         /* Sidebar (Watchlist & Ordres) */
@@ -120,32 +120,46 @@
         .price-down { color: var(--negative-color); }
         .pnl-positive { color: var(--positive-color); }
         .pnl-negative { color: var(--negative-color); }
-        .pnl-neutral { color: var(--text-color); }
 
-        /* Order Panels */
-        .limit-order-panel table {
-            width: 100%;
-            border-collapse: collapse;
+        /* --- NOUVEAU STYLE ORDRE LIMITE --- */
+        .limit-order-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
         }
 
-        .limit-order-panel th, .limit-order-panel td {
-            padding: 5px;
-            text-align: center;
+        .limit-row {
+            display: flex;
+            gap: 8px;
+            align-items: center;
         }
 
-        .limit-order-panel input[type="number"], .limit-order-panel select, .trade-execution-panel input[type="number"] {
-            width: 100%;
+        .limit-row label {
+            width: 80px;
+            flex-shrink: 0;
+        }
+
+        .limit-row select, 
+        .limit-row input[type="number"] {
+            flex-grow: 1;
             padding: 8px;
             border-radius: 4px;
             border: 1px solid var(--border-color);
             background-color: var(--bg-primary);
             color: var(--text-color);
-            box-sizing: border-box;
             font-family: var(--font-mono);
+            text-align: right;
         }
 
-        .limit-order-panel button, .trade-execution-panel button {
-            padding: 8px 15px;
+        .limit-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .limit-actions button {
+            flex-grow: 1;
+            padding: 10px 15px;
             font-weight: bold;
             cursor: pointer;
             border: none;
@@ -153,19 +167,17 @@
             transition: background-color 0.2s;
         }
 
-        .limit-order-panel button {
-            background-color: var(--accent-color);
-            color: white;
-        }
+        .limit-buy-btn { background-color: var(--positive-color); color: white; }
+        .limit-sell-btn { background-color: var(--negative-color); color: white; }
 
-        .limit-order-panel .lot-info {
+        .limit-info-bar {
             font-size: 0.85em;
-            padding-top: 10px;
-            text-align: left;
-            grid-column: 1 / span 4; /* Étend sur toute la largeur si besoin */
             color: #9aa5b1;
+            padding-top: 5px;
+            text-align: center;
         }
-        
+        /* ------------------------------------- */
+
         /* Main Content (Chart & Tabs) */
         .main-content {
             flex-grow: 1;
@@ -201,6 +213,21 @@
         .execution-controls input[type="number"] {
             width: 80px;
             text-align: center;
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid var(--border-color);
+            background-color: var(--bg-primary);
+            color: var(--text-color);
+            font-family: var(--font-mono);
+        }
+
+        .execution-controls button {
+            padding: 10px 20px;
+            font-weight: bold;
+            cursor: pointer;
+            border: none;
+            border-radius: 4px;
+            transition: background-color 0.2s;
         }
 
         .buy-btn { background-color: var(--positive-color); color: white; }
@@ -226,7 +253,7 @@
         #bid-price { color: var(--negative-color); background: rgba(255, 99, 72, 0.1); } 
         #ask-price { color: var(--positive-color); background: rgba(0, 184, 148, 0.1); } 
 
-        /* Tabs */
+        /* Tabs and Tables (unchanged) */
         .position-history-tabs {
             flex-grow: 1;
             overflow: hidden;
@@ -269,7 +296,6 @@
             display: block;
         }
 
-        /* Tables */
         #open-positions-table, #history-positions-table {
             width: 100%;
             border-collapse: collapse;
@@ -294,11 +320,6 @@
             font-family: var(--font-mono);
         }
 
-        #open-positions-table tbody tr:hover, #history-positions-table tbody tr:hover {
-            background-color: #333a46;
-        }
-
-        /* Buttons in table */
         .set-stoptp-btn, .close-position-btn {
             border: none;
             padding: 4px 8px;
@@ -340,33 +361,32 @@
 
             <div class="panel limit-order-panel">
                 <h3>Passer un Ordre Limite</h3>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Actif</th>
-                            <th>Prix Limite</th>
-                            <th>Lots</th>
-                            <th colspan="2">Action</th>
-                        </tr>
-                    </thead>
-                    <tbody id="limit-orders-body">
-                        <tr>
-                            <td>
-                                <select id="limit-asset">
-                                    </select>
-                            </td>
-                            <td><input type="number" id="limit-price" step="0.00001" placeholder="Prix"></td>
-                            <td><input type="number" id="limit-lots" min="0.01" step="0.01" value="1.00"></td>
-                            <td><button onclick="placeLimitOrder('BUY')">Acheter</button></td>
-                            <td><button onclick="placeLimitOrder('SELL')">Vendre</button></td>
-                        </tr>
-                        <tr>
-                            <td colspan="5" class="lot-info">
-                                1.00 Lot sur <span id="selected-lot-asset"></span>: Valeur notionnelle ~ <span id="lot-value-usd"></span> USD.
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
+                
+                <div class="limit-row">
+                    <label for="limit-asset">Actif</label>
+                    <select id="limit-asset">
+                        </select>
+                </div>
+                
+                <div class="limit-row">
+                    <label for="limit-price">Prix Limite</label>
+                    <input type="number" id="limit-price" step="0.00001" placeholder="Prix d'exécution">
+                </div>
+                
+                <div class="limit-row">
+                    <label for="limit-lots">Lots</label>
+                    <input type="number" id="limit-lots" min="0.01" step="0.01" value="1.00">
+                </div>
+
+                <div class="limit-info-bar">
+                    <span id="limit-asset-type-info">1.00 Lot sur <span id="selected-lot-asset"></span>: Valeur notionnelle ~ <span id="lot-value-usd"></span> USD.</span>
+                </div>
+                
+                <div class="limit-actions">
+                    <button class="limit-buy-btn" onclick="placeLimitOrder('BUY')">Acheter Limite</button>
+                    <button class="limit-sell-btn" onclick="placeLimitOrder('SELL')">Vendre Limite</button>
+                </div>
+
             </div>
             
         </section>
@@ -445,9 +465,7 @@
         // ====================================================================
 
         const API_KEYS = {
-            // Clé TwelveData fournie par l'utilisateur pour le Forex/Métal
             TWELVEDATA: "1fc6cd30be484552ad303afda1087501", 
-            // IG Markets serait utilisé pour les Indices, mais c'est simulé ici
             IG_MARKETS: "YOUR_IG_MARKETS_API_KEY"  
         };
 
@@ -456,38 +474,45 @@
         let openPositions = [];
         let positionHistory = [];
         let currentAsset = 'EUR/USD';
-        let tvWidget = null; // Référence au widget TradingView
+        let tvWidget = null; 
 
-        // Symboles d'actifs réels (pas d'ETFs)
+        // Symboles d'actifs réels (FOREX, Métal, Indices CFDs)
+        // NOTE: Pour TradingView, les paires de devises doivent souvent être préfixées par un échange comme "FX_IDC:" ou "OANDA:". Nous utiliserons "EURUSD" pour TradingView et "EUR/USD" pour notre logique.
+        const TV_SYMBOLS = {
+            'EUR/USD': 'FX_IDC:EURUSD',
+            'GBP/USD': 'FX_IDC:GBPUSD',
+            'USD/JPY': 'FX_IDC:USDJPY',
+            'AUD/USD': 'FX_IDC:AUDUSD',
+            'USD/CHF': 'FX_IDC:USDCHF',
+            'XAU/USD': 'TVC:GOLD', // Symbole Or TradingView
+            'US30': 'CFD:US30',     // Indices comme CFD (exemples)
+            'US100': 'CFD:US100',
+            'US500': 'CFD:US500',
+            'DE40': 'CFD:DE40',
+            'FR40': 'CFD:FR40',
+        };
+
         let currentPrices = {
-            // Forex (TwelveData)
             'EUR/USD': { bid: 1.08000, ask: 1.08005 },
             'GBP/USD': { bid: 1.25000, ask: 1.25005 },
             'USD/JPY': { bid: 145.000, ask: 145.005 },
             'AUD/USD': { bid: 0.65000, ask: 0.65005 },
             'USD/CHF': { bid: 0.90000, ask: 0.90005 },
-            // Métal (Or) (TwelveData)
             'XAU/USD': { bid: 1950.00, ask: 1950.50 }, 
-            // Indices (IG Markets ou autre CFD Broker - Ces formats sont des symboles CFD typiques)
-            'US30': { bid: 34500.00, ask: 34505.00 }, // Dow Jones Industrial Average
-            'US100': { bid: 15000.00, ask: 15005.00 }, // Nasdaq 100 Index
-            'US500': { bid: 4400.00, ask: 4400.50 }, // S&P 500 Index
-            'DE40': { bid: 16000.00, ask: 16005.00 }, // DAX 40 Index
-            'FR40': { bid: 7300.00, ask: 7303.00 }, // CAC 40 Index
+            'US30': { bid: 34500.00, ask: 34505.00 },
+            'US100': { bid: 15000.00, ask: 15005.00 },
+            'US500': { bid: 4400.00, ask: 4400.50 },
+            'DE40': { bid: 16000.00, ask: 16005.00 },
+            'FR40': { bid: 7300.00, ask: 7303.00 },
         };
 
-        // Spécifications des Lots et Valeur par Point (pour la cohérence du PnL)
         const LOT_VALUES = {
-            // Units: 100,000 unités de la devise de base (EUR/USD), $10/pip (0.0001)
             'EUR/USD': { units: 100000, pipValueUSD: 10.00, isForex: true, precision: 5 }, 
             'GBP/USD': { units: 100000, pipValueUSD: 10.00, isForex: true, precision: 5 },
-            // JPY: pip est 0.01, $10/pip standard.
             'USD/JPY': { units: 100000, pipValueUSD: 10.00, isForex: true, precision: 3 }, 
             'AUD/USD': { units: 100000, pipValueUSD: 10.00, isForex: true, precision: 5 },
             'USD/CHF': { units: 100000, pipValueUSD: 10.00, isForex: true, precision: 5 },
-            // Or: 100 onces par lot. $1 par 0.01 de mouvement.
             'XAU/USD': { units: 100, pipValueUSD: 1.00, isForex: false, precision: 2 }, 
-            // Indices: Valeur par point/tick (exemples de valeur par contrat)
             'US30': { units: 1, pipValueUSD: 1.00, isForex: false, precision: 2 }, 
             'US100': { units: 1, pipValueUSD: 2.00, isForex: false, precision: 2 },
             'US500': { units: 1, pipValueUSD: 50.00, isForex: false, precision: 2 },
@@ -504,13 +529,11 @@
             updateWatchlist();
             updateAccountInfo();
             selectAsset(currentAsset); 
-            setInterval(updatePricesAndPnL, 2000); // Mise à jour toutes les 2 secondes
+            setInterval(updatePricesAndPnL, 2000); 
             
-            // Événement pour mettre à jour l'info lot dans l'onglet ordre limite
             const limitAssetEl = document.getElementById('limit-asset');
             limitAssetEl.addEventListener('change', (e) => updateLotInfo(e.target.value));
             
-            // Ajouter un bouton pour simuler la fermeture des marchés
             const header = document.querySelector('.header');
             const closeBtn = document.createElement('button');
             closeBtn.textContent = 'Fermeture Marché';
@@ -520,15 +543,15 @@
         });
 
         /**
-         * Initialise ou recrée le widget TradingView (solution pour le changement de symbole).
-         * @param {string} symbol - Le symbole à afficher.
+         * Initialise le widget TradingView en utilisant le symbole mappé.
+         * @param {string} assetKey - La clé interne (ex: 'EUR/USD').
          */
-        function initTradingView(symbol) {
-            // Détruire l'ancien widget si nécessaire (nécessite Charting Library, mais on simule)
+        function initTradingView(assetKey) {
+            const tvSymbol = TV_SYMBOLS[assetKey] || assetKey; // Utiliser le symbole mappé ou la clé
             
             tvWidget = new TradingView.widget({
                 "container_id": "tv_chart_container",
-                "symbol": symbol,
+                "symbol": tvSymbol, // Utilisation du symbole FX/CFD
                 "interval": "60",
                 "timezone": "Europe/Paris",
                 "theme": "dark",
@@ -536,20 +559,15 @@
                 "locale": "fr",
                 "toolbar_bg": "#f1f3f6",
                 "enable_publishing": false,
-                "allow_symbol_change": false, // On désactive pour forcer la sélection par la watchlist
+                "allow_symbol_change": false, 
                 "hide_side_toolbar": true,
                 "autosize": true,
                 "studies": [ "Moving Average" ],
-                // Utilisez un exchange/broker pour les symboles si possible
-                "exchange": symbol.includes('/') || symbol === 'XAU/USD' ? 'FX_IDC' : 'CFD', 
                 "client_id": "tradingview.com", 
                 "user_id": "test_user"
             });
         }
 
-        /**
-         * Met à jour la Watchlist et le select d'ordres limites.
-         */
         function updateWatchlist() {
             const watchlistEl = document.getElementById('watchlist');
             const limitAssetEl = document.getElementById('limit-asset');
@@ -583,9 +601,6 @@
             updateLotInfo(assets[0]);
         }
 
-        /**
-         * Met à jour l'affichage du solde et du PnL total.
-         */
         function updateAccountInfo() {
             document.getElementById('balance').textContent = `$${balance.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",")}`;
             document.getElementById('total-pnl').textContent = `$${totalPnL.toFixed(2)}`;
@@ -595,10 +610,6 @@
             document.querySelector('.tab-header button:nth-child(2)').textContent = `Historique (${positionHistory.length})`;
         }
 
-        /**
-         * Met à jour les informations sur la valeur du lot pour l'actif sélectionné.
-         * @param {string} asset - L'actif sélectionné.
-         */
         function updateLotInfo(asset) {
             const lotInfo = LOT_VALUES[asset];
             const currentPrice = currentPrices[asset]?.ask || 1;
@@ -606,10 +617,8 @@
             let lotValueInUSD;
 
             if (lotInfo.isForex || asset === 'XAU/USD') {
-                // Valeur notionnelle (units * price)
                 lotValueInUSD = (lotInfo.units * currentPrice).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
             } else {
-                // Indices - Utilisation de la valeur par point pour l'estimation
                 lotValueInUSD = 'Variable (selon effet de levier)'; 
             }
 
@@ -623,7 +632,8 @@
          */
         function selectAsset(asset) {
             currentAsset = asset;
-            
+            const tvSymbol = TV_SYMBOLS[asset] || asset;
+
             // 1. Mise à jour de la classe CSS pour la watchlist
             document.querySelectorAll('.watchlist-item').forEach(item => {
                 item.classList.remove('selected');
@@ -632,18 +642,19 @@
                 }
             });
 
-            // 2. Mise à jour du graphique TradingView
-            // Ceci est la meilleure approche avec la Charting Library pour changer de symbole sans recharger toute l'interface.
+            // 2. Mise à jour du graphique TradingView (CORRECTION)
+            // Utiliser la méthode API de TradingView pour changer le symbole
             if (tvWidget && tvWidget.chart()) {
-                tvWidget.chart().setSymbol(asset);
+                tvWidget.chart().setSymbol(tvSymbol);
             } else {
-                // Si la librairie n'est pas chargée, on réinitialise (solution plus lourde, éviter en prod)
+                // Si non initialisé, on le refait (devrait être initialisé au début)
                 initTradingView(asset);
             }
 
             // 3. Mise à jour des panneaux d'exécution
             document.getElementById('current-asset').textContent = asset;
             document.getElementById('selected-asset-info').textContent = asset;
+            document.getElementById('limit-asset').value = asset; // Synchronisation du select limite
 
             updatePriceDisplay(asset);
             updateLotInfo(asset);
@@ -653,16 +664,10 @@
         // LOGIQUE DE PRIX ET PNL
         // ====================================================================
 
-        /**
-         * Simule la récupération de prix depuis les API.
-         * @param {string} asset - Le symbole de l'actif.
-         * @returns {object} - Objet avec bid et ask.
-         */
         function fetchPriceSimulation(asset) {
             const current = currentPrices[asset];
             if (!current) return { bid: 0, ask: 0 };
 
-            // Simulation d'une fluctuation aléatoire cohérente avec l'actif
             const volatility = LOT_VALUES[asset].isForex ? 0.00005 : 0.5; 
             const change = (Math.random() - 0.5) * volatility;
             
@@ -672,9 +677,6 @@
             return current;
         }
 
-        /**
-         * Calcule le PnL pour une position.
-         */
         function calculatePnL(position, currentPrice) {
             const assetSpec = LOT_VALUES[position.asset];
             const lots = position.lots;
@@ -688,35 +690,27 @@
             if (assetSpec.isForex) {
                 const pipSize = position.asset.includes('JPY') ? 0.01 : 0.0001; 
                 const pips = priceDiff * (1 / pipSize);
-                // Utilisation de la valeur du pip en USD
                 pnl = pips * (assetSpec.pipValueUSD / 10) * lots; 
                 
             } else if (position.asset === 'XAU/USD') {
-                // $1 par 0.01 de mouvement
                 pnl = priceDiff * 100 * lots; 
                 
             } else {
-                // Indices: Valeur par point/tick
                 pnl = priceDiff * assetSpec.pipValueUSD * lots; 
             }
             
             return pnl;
         }
 
-        /**
-         * Met à jour les prix, le PnL des positions et les tableaux.
-         */
         function updatePricesAndPnL() {
             totalPnL = 0;
             
-            // On met à jour tous les prix dans la liste
             const assetsToUpdate = Object.keys(currentPrices); 
             
             assetsToUpdate.forEach(asset => {
                 const newPrice = fetchPriceSimulation(asset);
                 const precision = LOT_VALUES[asset]?.precision || 5;
 
-                // Watchlist Update
                 const priceEl = document.getElementById(`price-${asset}`);
                 if (priceEl) {
                     const oldPrice = parseFloat(priceEl.textContent);
@@ -733,10 +727,8 @@
                 }
             });
 
-            // Mise à jour du prix d'affichage Bid/Ask pour l'actif sélectionné
             updatePriceDisplay(currentAsset);
             
-            // Calcul du PnL des positions
             const positionsTableBody = document.getElementById('open-positions-table').querySelector('tbody');
             positionsTableBody.innerHTML = '';
             
@@ -749,7 +741,6 @@
                 position.pnl = pnl;
                 totalPnL += pnl;
                 
-                // Affichage de la position dans le tableau
                 const row = document.createElement('tr');
                 row.innerHTML = `
                     <td>${position.asset}</td>
@@ -773,9 +764,6 @@
             updateAccountInfo();
         }
 
-        /**
-         * Met à jour l'affichage des prix Bid/Ask pour l'actif sélectionné.
-         */
         function updatePriceDisplay(asset) {
             const prices = currentPrices[asset] || { bid: 0, ask: 0 };
             const precision = LOT_VALUES[asset]?.precision || 5;
@@ -790,23 +778,18 @@
         // LOGIQUE DE TRADING ET GESTION DES POSITIONS
         // ====================================================================
 
-        /**
-         * Vérifie la marge requise contre le solde.
-         * Refuse la position si 100 lots sur l'Or demande plus de fonds que le solde.
-         */
         function checkMargin(asset, lots) {
             const price = currentPrices[asset].ask;
             const lotSpec = LOT_VALUES[asset];
             
-            // Utilisation d'une marge simplifiée (ex: 2% pour 1:50)
             let marginRequired = 0;
             
             if (lotSpec.isForex) {
-                marginRequired = lotSpec.units * lots * 0.02; // 2% de la valeur notionnelle
+                marginRequired = lotSpec.units * lots * 0.02; 
             } else if (asset === 'XAU/USD') {
-                marginRequired = lotSpec.units * lots * price * 0.01; // 1% de la valeur notionnelle Or
+                marginRequired = lotSpec.units * lots * price * 0.01; 
             } else {
-                marginRequired = lotSpec.pipValueUSD * lots * 50; // Estimation pour indices
+                marginRequired = lotSpec.pipValueUSD * lots * 50; 
             }
             
             if (marginRequired > balance) {
@@ -817,9 +800,6 @@
             return true;
         }
 
-        /**
-         * Exécute un ordre au marché.
-         */
         function executeMarketOrder(type) {
             const lots = parseFloat(document.getElementById('market-lots').value);
             const asset = currentAsset;
@@ -851,9 +831,6 @@
             updatePricesAndPnL(); 
         }
 
-        /**
-         * Ajoute un ordre limite (simulé).
-         */
         function placeLimitOrder(type) {
             const asset = document.getElementById('limit-asset').value;
             const price = parseFloat(document.getElementById('limit-price').value);
@@ -872,9 +849,6 @@
             alert(`✅ Ordre Limite ${type} de ${lots.toFixed(2)} lots sur ${asset} à ${price.toFixed(assetSpec.precision)} placé (Simulé).`);
         }
 
-        /**
-         * Ferme une position ouverte.
-         */
         function closePosition(id) {
             const index = openPositions.findIndex(p => p.id === id);
             if (index === -1) return;
@@ -899,9 +873,6 @@
             playSound('success');
         }
 
-        /**
-         * Définit ou modifie le Stop Loss et le Take Profit.
-         */
         function setStopTP(id) {
             const position = openPositions.find(p => p.id === id);
             if (!position) return;
@@ -922,14 +893,10 @@
             updatePricesAndPnL();
         }
 
-        /**
-         * Vérifie si une position doit être fermée par Stop Loss ou Take Profit.
-         */
         function checkStopTP(position, currentClosePrice) {
             let triggered = false;
             let triggerType = '';
 
-            // SL (Fermeture en perte)
             if (position.stopLoss && position.stopLoss > 0) {
                 if ((position.type === 'BUY' && currentClosePrice <= position.stopLoss) ||
                     (position.type === 'SELL' && currentClosePrice >= position.stopLoss)) {
@@ -938,7 +905,6 @@
                 }
             }
             
-            // TP (Fermeture en profit)
             if (position.takeProfit && position.takeProfit > 0) {
                 if ((!triggered && position.type === 'BUY' && currentClosePrice >= position.takeProfit) ||
                     (!triggered && position.type === 'SELL' && currentClosePrice <= position.takeProfit)) {
@@ -953,9 +919,6 @@
             }
         }
 
-        /**
-         * Ferme toutes les positions quand les marchés sont fermés.
-         */
         function closeAllOnMarketClose() {
             if (openPositions.length === 0) {
                 alert("Aucune position ouverte.");
@@ -973,9 +936,6 @@
         // INTERFACE UTILISATEUR
         // ====================================================================
 
-        /**
-         * Gère le changement d'onglet.
-         */
         function openTab(tabId) {
             document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
             document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
@@ -988,9 +948,6 @@
             }
         }
 
-        /**
-         * Met à jour le tableau de l'historique.
-         */
         function updateHistoryTable() {
             const historyBody = document.getElementById('history-positions-table').querySelector('tbody');
             historyBody.innerHTML = '';
@@ -1011,14 +968,10 @@
             });
         }
 
-        /**
-         * Joue un son de succès ou de refus.
-         */
         function playSound(type) {
             const soundEl = document.getElementById(`order-${type}-sound`);
             if (soundEl) {
                 soundEl.currentTime = 0;
-                // Le son sera joué si l'utilisateur a déjà interagi avec la page.
                 soundEl.play().catch(e => console.log("Audio playback failed (interaction requise):", e)); 
             }
         }
