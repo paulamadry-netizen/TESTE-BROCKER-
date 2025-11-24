@@ -326,7 +326,7 @@
     // REST polling fallback (si WS indisponible) — garde intervalle raisonnable (3s)
     function startRestPolling(){
         if (restIntervalId) return;
-        restIntervalId = setInterval(()=>{
+        restIntervalId = // setInterval removed (()=>{
             ALL_ASSETS.forEach(a => {
                 // fetch but do not flood -> only update if no WS
                 if (!wsOpen) getInitialPriceRest(a.symbol);
@@ -447,6 +447,8 @@
     </script>
 </body>
 </html>
+
+
 
 
 
