@@ -229,6 +229,9 @@ input[type="number"]{background:#071023;border-radius:8px;border:1px solid rgba(
 const API_KEY='c9140c9a72264e82bb9f5235b86b2806';
 const API_BASE='https://api.twelvedata.com';
 
+// Intervalle de refresh en ms (modifie si besoin : 1000 = 1s)
+const REFRESH_INTERVAL_MS = 1000;
+
 const WATCHLIST=[
   {id:'EUR/USD',label:'EUR/USD'},
   {id:'USD/JPY',label:'USD/JPY'},
@@ -241,7 +244,7 @@ const WATCHLIST=[
 ];
 
 let currentSymbol='EUR/USD';
-let lastPrices={};
+let lastPrices={};          // map symbol -> number
 let tvWidget=null;
 
 let positions=[];
@@ -253,24 +256,42 @@ let cashBalance=50000;
 const fmt=(n,d=5)=>n==null?'--':Number(n).toLocaleString('en-US',{maximumFractionDigits:d});
 const now=()=>new Date().toLocaleTimeString('fr-FR');
 
-/* === SOUND === */
+/* === SOUNDS MINIMALES (désactivées) === */
 function playSuccessSound(){}
 function playFailSound(){}
 
 /* ============================================================================
    ===================  SUPPRESSION COMPLÈTE DU FALLBACK ======================
+   === apiGetPrice retourne Number | null (si erreur ou pas de price) =========
    ============================================================================ */
 
 async function apiGetPrice(symbol){
+  // Twelve Data /price endpoint accepts e.g. "EUR/USD"
   try{
-    const res = await fetch(`${API_BASE}/price?symbol=${encodeURIComponent(symbol)}&apikey=${API_KEY}`);
+    const url = `${API_BASE}/price?symbol=${encodeURIComponent(symbol)}&apikey=${API_KEY}`;
+    const res = await fetch(url, {cache: "no-store"});
+    if(!res.ok){
+      // status 4xx/5xx
+      console.warn('Twelve Data responded', res.status, res.statusText);
+      return null;
+    }
     const data = await res.json();
 
-    if(!data || !data.price) return null;
+    // La réponse attendue contient "price"
+    if(!data || typeof data.price === 'undefined' || data.price === null) {
+      // Possibilité : message d'erreur dans data.message
+      console.warn('Twelve Data response without price for', symbol, data);
+      return null;
+    }
 
-    return Number(data.price);
+    const price = Number(data.price);
+    if(Number.isNaN(price)) return null;
+    // Mise à jour immédiate pour que l'UI utilise ce prix
+    lastPrices[symbol] = price;
+    return price;
 
-  }catch(e){
+  }catch(err){
+    console.warn('apiGetPrice error for', symbol, err);
     return null;
   }
 }
@@ -287,7 +308,6 @@ function getTradingViewSymbol(sym){
 function initTradingView(sym){
   const tvSym = getTradingViewSymbol(sym);
   document.getElementById("tv_chart_container").innerHTML="";
-
   try{
     tvWidget = new TradingView.widget({
       autosize:true,
@@ -301,9 +321,8 @@ function initTradingView(sym){
   }catch(e){
     document.getElementById("tv_chart_container").innerHTML="<div style='padding:20px;color:var(--muted)'>Chart indisponible</div>";
   }
-
-  currentSymbol=sym;
-  document.getElementById("currentSymbol").textContent=sym;
+  currentSymbol = sym;
+  document.getElementById("currentSymbol").textContent = sym;
 }
 
 /* ============================================================================
@@ -317,36 +336,43 @@ function renderWatchlist(){
     const idSafe=w.label.replace(/[^A-Za-z0-9]/g,"_");
     const el=document.createElement("div");
     el.className="watch-item";
-    el.innerHTML=`<div><b>${w.label}</b></div><div id="price_${idSafe}" class="price-small">--</div>`;
+    el.innerHTML=`<div style="min-width:0"><div style="font-weight:700">${w.label}</div></div>
+      <div style="text-align:right;min-width:100px;"><div class="price-small" id="price_${idSafe}">--</div></div>`;
     el.onclick=()=>setChartSymbol(w.id);
     box.appendChild(el);
   });
 }
 
 async function refreshWatchPrices(){
+  // On lance les fetch en parallèle pour accélérer la mise à jour
+  const promises = WATCHLIST.map(w => apiGetPrice(w.id).then(p => ({symbol:w.id, price:p})).catch(e=>({symbol:w.id, price:null})));
+  const results = await Promise.allSettled(promises);
 
-  for(const w of WATCHLIST){
-
-    const price = await apiGetPrice(w.id);
-
-    if(price===null){
-      console.warn("Prix non disponible pour", w.id);
-      continue;
+  results.forEach(r=>{
+    if(r.status === 'fulfilled'){
+      const res = r.value;
+      if(res && typeof res.price === 'number'){
+        lastPrices[res.symbol] = res.price;
+        const idSafe = res.symbol.replace(/[^A-Za-z0-9]/g,"_");
+        const el = document.getElementById('price_'+idSafe);
+        if(el) el.textContent = fmt(res.price, res.price>100?2:5);
+      } else {
+        // pas de price pour ce symbole
+        // on laisse l'affichage inchangé (ou on peut marquer --)
+        // console.warn('No price for', res.symbol);
+      }
+    } else {
+      // promise rejected : log
+      console.warn('refreshWatchPrices - settled rejected', r.reason);
     }
+  });
 
-    lastPrices[w.id]=price;
-
-    const idSafe=w.label.replace(/[^A-Za-z0-9]/g,"_");
-    const el=document.getElementById("price_"+idSafe);
-
-    if(el) el.textContent=fmt(price, price>100?2:5);
-  }
-
-  document.getElementById("lastUpdate").textContent=now();
+  document.getElementById('lastUpdate').textContent = now();
 
   if(lastPrices[currentSymbol])
-    document.getElementById("currentPriceSmall").textContent="Prix : "+fmt(lastPrices[currentSymbol]);
+    document.getElementById('currentPriceSmall').textContent = 'Prix : '+fmt(lastPrices[currentSymbol], lastPrices[currentSymbol]>100?2:5);
 
+  // Vérifier ordres limite & SL/TP
   checkLimitOrders();
   checkStopsTakeProfits();
   renderPositions();
@@ -358,106 +384,83 @@ async function refreshWatchPrices(){
    ============================================================================ */
 
 function computePnl(p,price){
-  const sign=p.side==="BUY"?1:-1;
-  return (price - p.entryPrice)*p.qty*sign;
+  const sign = p.side === 'BUY' ? 1 : -1;
+  return (price - p.entryPrice) * p.qty * sign;
 }
 
 function computeTotalUnrealized(){
   return positions.reduce((s,p)=>{
-    const cur=lastPrices[p.symbol] ?? p.entryPrice;
-    return s+computePnl(p,cur);
+    const cur = lastPrices[p.symbol] ?? p.entryPrice;
+    return s + computePnl(p,cur);
   },0);
 }
 
 function renderBalanceUI(){
-  const unreal=computeTotalUnrealized();
-  const eq=cashBalance+unreal;
-
-  document.getElementById("displayBalance").textContent=fmt(cashBalance,2);
-  document.getElementById("displayUnrealized").textContent=(unreal>=0?'+':'')+fmt(unreal,2);
-  document.getElementById("displayEquity").textContent="Equity: "+fmt(eq,2);
+  const unreal = computeTotalUnrealized();
+  const equity = cashBalance + unreal;
+  document.getElementById('displayBalance').textContent = fmt(cashBalance,2);
+  document.getElementById('displayUnrealized').textContent = (unreal>=0?'+':'') + fmt(unreal,2);
+  document.getElementById('displayEquity').textContent = 'Equity: ' + fmt(equity,2);
 }
 
 function openPosition(o){
-  o.id="P_"+Date.now();
+  o.id = 'P_' + Date.now();
   positions.push(o);
   renderPositions();
   renderBalanceUI();
 }
 
 function closePosition(id){
-  const i=positions.findIndex(p=>p.id===id);
-  if(i===-1) return;
-  const p=positions[i];
-
-  const cur=lastPrices[p.symbol];
-  if(cur==null){ alert("Impossible de fermer : aucun prix réel."); return; }
-
+  const idx = positions.findIndex(x=>x.id===id);
+  if(idx === -1) return;
+  const p = positions[idx];
+  const cur = lastPrices[p.symbol];
+  if(cur == null){
+    alert('Impossible de fermer : prix réel indisponible.');
+    return;
+  }
   const pnl = computePnl(p,cur);
-  cashBalance+=pnl;
-
-  history.unshift({...p,exitPrice:cur,pnl});
-  positions.splice(i,1);
-
+  cashBalance = Number((cashBalance + pnl).toFixed(8));
+  history.unshift({...p, exitPrice:cur, pnl});
+  positions.splice(idx,1);
   renderPositions();
   renderHistory();
   renderBalanceUI();
 }
 
+/* ===== Rendu positions & historique ===== */
 function renderPositions(){
-  const l=document.getElementById("positionsList");
-  document.getElementById("countPos").textContent=positions.length;
-
-  if(!positions.length){
-    l.innerHTML='<div class="small-muted">Aucune position ouverte.</div>';
-    return;
-  }
-
-  l.innerHTML="";
+  const l=document.getElementById('positionsList');
+  document.getElementById('countPos').textContent = positions.length;
+  if(!positions.length){ l.innerHTML='<div class="small-muted">Aucune position ouverte.</div>'; return; }
+  l.innerHTML='';
   positions.forEach(p=>{
-    const cur=lastPrices[p.symbol] ?? p.entryPrice;
-    const pnl=computePnl(p,cur);
-
-    const div=document.createElement("div");
-    div.className="pos-row";
-
-    div.innerHTML=`
-      <div>
-        <b>${p.symbol}</b> <span>(${p.side})</span>
-        <div class="small-muted">Entrée ${fmt(p.entryPrice)} — Actuel ${fmt(cur)}</div>
-        <div class="small-muted">${p.sl?'SL:'+p.sl:'SL:-'} ${p.tp?'TP:'+p.tp:'TP:-'}</div>
+    const cur = lastPrices[p.symbol] ?? p.entryPrice;
+    const pnl = computePnl(p,cur);
+    const row=document.createElement('div');
+    row.className='pos-row';
+    row.innerHTML = `<div style="min-width:0">
+        <div style="font-weight:700">${p.symbol} <span style="font-weight:600;font-size:13px">(${p.side})</span></div>
+        <div class="small-muted">Entrée ${fmt(p.entryPrice,5)} — Actuel ${fmt(cur,5)}</div>
+        <div class="small-muted">${p.sl?('SL:'+fmt(p.sl,5)):'SL:-'} ${p.tp?(' TP:'+fmt(p.tp,5)):'TP:-'}</div>
       </div>
-      <div class="pnl" style="color:${pnl>=0?'var(--success)':'var(--danger)'}">${fmt(pnl,2)}</div>
-    `;
-
-    div.onclick=()=>openEditModal(p.id);
-    l.appendChild(div);
+      <div style="text-align:right;">
+        <div class="pnl" style="color:${pnl>=0?'var(--success)':'var(--danger)'}">${pnl>=0?'+':''}${fmt(pnl,2)}</div>
+      </div>`;
+    row.onclick = ()=>openEditModal(p.id);
+    l.appendChild(row);
   });
 }
 
 function renderHistory(){
-  const l=document.getElementById("historyList");
-
-  if(!history.length){
-    l.innerHTML='<div class="small-muted">Aucun historique.</div>';
-    return;
-  }
-
-  l.innerHTML="";
-
+  const l=document.getElementById('historyList');
+  if(!history.length){ l.innerHTML='<div class="small-muted">Aucun historique.</div>'; return; }
+  l.innerHTML='';
   history.forEach(h=>{
-    const div=document.createElement("div");
-    div.className="pos-row";
-
-    div.innerHTML=`
-      <div>
-        <b>${h.symbol}</b> (${h.side})
-        <div class="small-muted">${fmt(h.entryPrice)} → ${fmt(h.exitPrice)}</div>
-      </div>
-      <div class="pnl" style="color:${h.pnl>=0?'var(--success)':'var(--danger)'}">${fmt(h.pnl,2)}</div>
-    `;
-
-    l.appendChild(div);
+    const row=document.createElement('div');
+    row.className='pos-row';
+    row.innerHTML=`<div><b>${h.symbol}</b> (${h.side})<div class="small-muted">${fmt(h.entryPrice,5)} → ${fmt(h.exitPrice,5)}</div></div><div class="pnl" style="color:${h.pnl>=0?'var(--success)':'var(--danger)'}">${h.pnl>=0?'+':''}${fmt(h.pnl,2)}</div>`;
+    l.appendChild(row);
   });
 }
 
@@ -465,120 +468,39 @@ function renderHistory(){
    ============================= MODAL ========================================
    ============================================================================ */
 
-let editingPosId=null;
+const modalBackdrop = document.getElementById('modalBackdrop');
+let editingPosId = null;
 
 function openEditModal(id){
-  const p=positions.find(x=>x.id===id);
+  const p = positions.find(x=>x.id===id);
   if(!p) return;
-
-  editingPosId=id;
-
-  document.getElementById("modalSymbol").textContent=p.symbol;
-  document.getElementById("modalEntry").textContent=fmt(p.entryPrice);
-  document.getElementById("modalQty").textContent=p.qty;
-  document.getElementById("modalSide").textContent=p.side;
-
-  document.getElementById("modalSL").value=p.sl??"";
-  document.getElementById("modalTP").value=p.tp??"";
-
-  document.getElementById("modalBackdrop").style.display="flex";
+  editingPosId = id;
+  document.getElementById('modalSymbol').textContent = p.symbol;
+  document.getElementById('modalEntry').textContent = fmt(p.entryPrice,5);
+  document.getElementById('modalQty').textContent = p.qty;
+  document.getElementById('modalSide').textContent = p.side;
+  document.getElementById('modalSL').value = p.sl ?? '';
+  document.getElementById('modalTP').value = p.tp ?? '';
+  modalBackdrop.style.display = 'flex';
 }
-
-document.getElementById("modalClose").onclick=()=>{
-  editingPosId=null;
-  document.getElementById("modalBackdrop").style.display="none";
-};
-
-document.getElementById("modalSave").onclick=()=>{
-  if(!editingPosId) return;
-
-  const p=positions.find(x=>x.id===editingPosId);
-  if(!p) return;
-
-  p.sl=parseFloat(document.getElementById("modalSL").value)||null;
-  p.tp=parseFloat(document.getElementById("modalTP").value)||null;
-
-  editingPosId=null;
-  document.getElementById("modalBackdrop").style.display="none";
-  renderPositions();
-};
-
-document.getElementById("modalClosePos").onclick=()=>{
-  if(!editingPosId) return;
-  if(confirm("Confirmer fermeture ?")) closePosition(editingPosId);
-  editingPosId=null;
-  document.getElementById("modalBackdrop").style.display="none";
-};
+document.getElementById('modalClose').onclick = ()=>{ modalBackdrop.style.display='none'; editingPosId=null; };
+document.getElementById('modalSave').onclick = ()=>{ if(!editingPosId) return; const p=positions.find(x=>x.id===editingPosId); if(!p) return; p.sl = parseFloat(document.getElementById('modalSL').value) || null; p.tp = parseFloat(document.getElementById('modalTP').value) || null; modalBackdrop.style.display='none'; editingPosId=null; renderPositions(); };
+document.getElementById('modalClosePos').onclick = ()=>{ if(!editingPosId) return; if(confirm('Confirmer fermeture de la position ?')) closePosition(editingPosId); modalBackdrop.style.display='none'; editingPosId=null; };
 
 /* ============================================================================
    ================================ ORDRES LIMITE =============================
    ============================================================================ */
 
 function renderLimitOrders(){
-  const tbody=document.getElementById("limitOrdersBody");
-  tbody.innerHTML="";
-
-  if(!limitOrders.length){
-    tbody.innerHTML='<tr><td colspan="6" class="muted-mini">Aucun ordre limite.</td></tr>';
-    return;
-  }
-
-  limitOrders.forEach((o,i)=>{
-    const tr=document.createElement("tr");
-    tr.dataset.index=i;
-
-    tr.innerHTML=`
-      <td>${o.symbol}</td>
-      <td>${o.side.includes("BUY")?'<span style="color:var(--success)">BUY</span>':'<span style="color:var(--danger)">SELL</span>'}</td>
-      <td>${fmt(o.price)}</td>
-      <td>${o.qty}</td>
-      <td class="muted-mini">${o.sl?('SL:'+o.sl):'-'} ${o.tp?('TP:'+o.tp):'-'}</td>
-      <td><button class="btn ghost" data-cancel="${i}">🗑️</button></td>
-    `;
-
-    tbody.appendChild(tr);
-  });
-
-  tbody.querySelectorAll("[data-cancel]").forEach(btn=>{
-    btn.onclick=()=>{
-      const i=Number(btn.dataset.cancel);
-      if(confirm("Supprimer l'ordre ?")){
-        limitOrders.splice(i,1);
-        renderLimitOrders();
-      }
-    };
-  });
+  const tbody=document.getElementById('limitOrdersBody'); tbody.innerHTML='';
+  if(!limitOrders.length){ tbody.innerHTML='<tr><td colspan="6" class="muted-mini">Aucun ordre limite.</td></tr>'; return; }
+  limitOrders.forEach((o,i)=>{ const tr=document.createElement('tr'); tr.dataset.index=i; tr.innerHTML=`<td>${o.symbol}</td><td>${o.side.includes('BUY')?'<span style="color:var(--success)">BUY</span>':'<span style="color:var(--danger)">SELL</span>'}</td><td>${fmt(o.price,5)}</td><td>${o.qty}</td><td class="muted-mini">${o.sl?('SL:'+fmt(o.sl,5)):'-'} ${o.tp?('TP:'+fmt(o.tp,5)):'-'}</td><td style="white-space:nowrap"><div class="mini-actions"><button class="btn ghost" data-cancel="${i}">🗑️</button></div></td>`; tbody.appendChild(tr); });
+  tbody.querySelectorAll('[data-cancel]').forEach(btn=>btn.onclick=()=>{ const idx=Number(btn.dataset.cancel); if(confirm('Annuler cet ordre limite ?')){ limitOrders.splice(idx,1); renderLimitOrders(); } });
 }
 
-document.getElementById("btnAddLimit").onclick=()=>{
-  const side=document.getElementById("limitSide").value;
-  const price=parseFloat(document.getElementById("limitPrice").value);
-  const qty=parseFloat(document.getElementById("limitQty").value);
+document.getElementById('btnAddLimit').onclick = ()=>{ const side = document.getElementById('limitSide').value; const price = parseFloat(document.getElementById('limitPrice').value); const qty = parseFloat(document.getElementById('limitQty').value) || 0; const sl = (n=>isNaN(n)?null:n)(parseFloat(document.getElementById('limitSL').value)); const tp = (n=>isNaN(n)?null:n)(parseFloat(document.getElementById('limitTP').value)); if(!price || qty<=0){ playFailSound(); alert('Prix et quantité valides requis'); return; } limitOrders.push({ id:'L_'+Date.now(), symbol:currentSymbol, side, price, qty, sl, tp }); playSuccessSound(); renderLimitOrders(); document.getElementById('limitPrice').value=''; document.getElementById('limitQty').value=''; document.getElementById('limitSL').value=''; document.getElementById('limitTP').value=''; };
 
-  const sl=parseFloat(document.getElementById("limitSL").value)||null;
-  const tp=parseFloat(document.getElementById("limitTP").value)||null;
-
-  if(!price || !qty){ alert("Prix et quantité requis"); return; }
-
-  limitOrders.push({
-    id:"L_"+Date.now(),
-    symbol:currentSymbol,
-    side,
-    price,
-    qty,
-    sl,
-    tp
-  });
-
-  renderLimitOrders();
-};
-
-document.getElementById("btnCancelAllLimits").onclick=()=>{
-  if(limitOrders.length && confirm("Tout annuler ?")){
-    limitOrders=[];
-    renderLimitOrders();
-  }
-};
+document.getElementById('btnCancelAllLimits').onclick = ()=>{ if(!limitOrders.length) return; if(!confirm('Annuler tous les ordres limite ?')) return; limitOrders=[]; renderLimitOrders(); };
 
 /* ============================================================================
    =================== EXECUTION LIMIT, SL, TP AVEC PRIX RÉELS =================
@@ -586,44 +508,26 @@ document.getElementById("btnCancelAllLimits").onclick=()=>{
 
 function checkLimitOrders(){
   limitOrders.slice().forEach(o=>{
-    const cur=lastPrices[o.symbol];
+    const cur = lastPrices[o.symbol];
     if(cur==null) return;
-
     let exec=false;
-
-    if(o.side==="BUY_LIMIT" && cur<=o.price) exec=true;
-    if(o.side==="SELL_LIMIT" && cur>=o.price) exec=true;
-
+    if(o.side==='BUY_LIMIT' && cur <= o.price) exec=true;
+    if(o.side==='SELL_LIMIT' && cur >= o.price) exec=true;
     if(exec){
-      openPosition({
-        symbol:o.symbol,
-        side:o.side.includes("BUY")?"BUY":"SELL",
-        qty:o.qty,
-        entryPrice:o.price,
-        sl:o.sl,
-        tp:o.tp
-      });
-
+      openPosition({ id:'P_'+Date.now(), symbol:o.symbol, side:o.side.includes('BUY')?'BUY':'SELL', qty:o.qty, entryPrice:o.price, sl:o.sl, tp:o.tp });
       limitOrders = limitOrders.filter(x=>x.id!==o.id);
       renderLimitOrders();
+      playSuccessSound();
     }
   });
 }
 
 function checkStopsTakeProfits(){
   positions.slice().forEach(p=>{
-    const cur=lastPrices[p.symbol];
+    const cur = lastPrices[p.symbol];
     if(cur==null) return;
-
-    if(p.sl && ((p.side==="BUY" && cur<=p.sl) || (p.side==="SELL" && cur>=p.sl))){
-      closePosition(p.id);
-      return;
-    }
-
-    if(p.tp && ((p.side==="BUY" && cur>=p.tp) || (p.side==="SELL" && cur<=p.tp))){
-      closePosition(p.id);
-      return;
-    }
+    if(p.sl && ((p.side==='BUY' && cur<=p.sl) || (p.side==='SELL' && cur>=p.sl))){ closePosition(p.id); playSuccessSound(); return; }
+    if(p.tp && ((p.side==='BUY' && cur>=p.tp) || (p.side==='SELL' && cur<=p.tp))){ closePosition(p.id); playSuccessSound(); return; }
   });
 }
 
@@ -631,52 +535,44 @@ function checkStopsTakeProfits(){
    ============================= MARKET ORDERS ================================
    ============================================================================ */
 
-function lotsToQty(lot){
-  const l=parseFloat(lot);
-  if(!l || l<=0) return null;
-  return Math.max(1,Math.round(l*10000));
-}
+function lotsToQty(lots){ const l=parseFloat(lots); if(isNaN(l)||l<=0) return null; return Math.max(1, Math.round(l*10000)); }
 
-document.getElementById("btnBuy").onclick=()=>marketOrder("BUY");
-document.getElementById("btnSell").onclick=()=>marketOrder("SELL");
+document.getElementById('btnBuy').onclick = ()=>marketOrder('BUY');
+document.getElementById('btnSell').onclick = ()=>marketOrder('SELL');
 
 async function marketOrder(side){
-  const lots=document.getElementById("lotInput").value;
-  const qty=lotsToQty(lots);
+  const lotsVal = document.getElementById('lotInput').value;
+  const qty = lotsToQty(lotsVal);
+  if(!qty){ playFailSound(); alert('Lot invalide (ex : 0.1)'); return; }
 
-  if(!qty){ alert("Lot invalide."); return; }
-
+  // ⚠️ On force une récupération immédiate du prix avant exécution
   const price = await apiGetPrice(currentSymbol);
 
-  if(price===null){
-    alert("Prix indisponible. Impossible d'exécuter l'ordre.");
+  if(price === null){
+    playFailSound();
+    alert('Prix indisponible — impossible d\'exécuter l\'ordre (Twelve Data n\'a pas renvoyé de prix).');
     return;
   }
 
-  openPosition({
-    symbol:currentSymbol,
-    side,
-    qty,
-    entryPrice:price,
-    sl:null,
-    tp:null
-  });
+  // mettre à jour lastPrices explicitement (apiGetPrice l'a déjà fait, mais on s'assure)
+  lastPrices[currentSymbol] = price;
+  document.getElementById('currentPriceSmall').textContent = 'Prix : ' + fmt(price, price>100?2:5);
 
+  openPosition({ id:'P_'+Date.now(), symbol:currentSymbol, side, qty, entryPrice:price, sl:null, tp:null });
+  playSuccessSound();
   renderPositions();
+  renderBalanceUI();
 }
 
 /* ============================================================================
    ============================= TABS =========================================
    ============================================================================ */
 
-document.querySelectorAll(".tab-btn").forEach(btn=>{
-  btn.onclick=()=>{
-    document.querySelectorAll(".tab-btn").forEach(x=>x.classList.remove("active"));
-    btn.classList.add("active");
-
-    document.getElementById("panelPositions").style.display = btn.dataset.tab==="positions" ? "block" : "none";
-    document.getElementById("panelHistory").style.display = btn.dataset.tab==="history" ? "block" : "none";
-  };
+document.querySelectorAll('.tab-btn').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('.tab-btn').forEach(x=>x.classList.remove('active'));
+  b.classList.add('active');
+  document.getElementById('panelPositions').style.display = b.dataset.tab==='positions'?'block':'none';
+  document.getElementById('panelHistory').style.display = b.dataset.tab==='history'?'block':'none';
 });
 
 /* ============================================================================
@@ -684,27 +580,29 @@ document.querySelectorAll(".tab-btn").forEach(btn=>{
    ============================================================================ */
 
 function setChartSymbol(sym){
-  currentSymbol=sym;
+  currentSymbol = sym;
   initTradingView(sym);
-
-  if(lastPrices[sym])
-    document.getElementById("currentPriceSmall").textContent="Prix : "+fmt(lastPrices[sym]);
+  if(lastPrices[sym]) document.getElementById('currentPriceSmall').textContent='Prix : '+fmt(lastPrices[sym], lastPrices[sym]>100?2:5);
 }
 
 /* ============================================================================
    ================================= BOOT ====================================
    ============================================================================ */
 
-function boot(){
+document.getElementById('btnRefreshWatch').onclick = refreshWatchPrices;
+document.getElementById('refreshPrices').onclick = refreshWatchPrices;
+
+async function boot(){
   renderWatchlist();
   initTradingView(currentSymbol);
-  refreshWatchPrices();
+  await refreshWatchPrices();
   renderPositions();
   renderHistory();
   renderLimitOrders();
   renderBalanceUI();
 
-  setInterval(refreshWatchPrices,10000);
+  // Rafraîchissement continu (configurable)
+  setInterval(refreshWatchPrices, REFRESH_INTERVAL_MS);
 }
 
 boot();
@@ -712,6 +610,7 @@ boot();
 </script>
 </body>
 </html>
+
 
 
 
