@@ -1,134 +1,552 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-  <meta charset="UTF-8">
-  <title>AmA Trading</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <!-- TradingView Widget, styles modernes, icônes, etc. -->
-  <link rel="stylesheet" href="https://unpkg.com/modern-css-reset/dist/reset.min.css"/>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/css/bootstrap.min.css">
-  <style>
-    body { background: #111; color: #f8f8f8; font-family: 'Segoe UI', Arial, sans-serif;}
-    header { padding: 1rem; font-size: 2.2rem; font-weight: bold; background: linear-gradient(90deg, #0099ff, #09edb5); color:#fff;}
-    .main { display:flex; gap:1rem; min-height: 90vh; }
-    .sidebar, .chart, .order-book {background: #1d2131; border-radius:10px; padding:1rem;}
-    .sidebar { width: 340px; flex-shrink:0; display: flex; flex-direction: column;}
-    .watchlist { margin-bottom: 1rem;}
-    .watchlist-item { cursor:pointer; padding:7px; border-radius:6px; margin-bottom:3px; }
-    .watchlist-item.active, .watchlist-item:hover {background: #3569ec; color:#fff;}
-    .order-table, .positions-table {background:#20294a; border-radius:9px;}
-    .positions-tabs {display: flex; gap:14px; margin-bottom:14px;}
-    .positions-tabs .tab { cursor:pointer; padding:7px 16px; border-radius:7px; background: #233063; }
-    .positions-tabs .tab.active {background:#3fc1c9; color:#222;}
-    .fullscreen-btn {position:absolute; top:12px; right:12px; z-index:10; background:#2e385a; color:#fff; border:none; border-radius:8px; padding:8px 14px; cursor:pointer;}
-    .hidden {display:none;}
-    .expand-btn { color:#0ef2c6; cursor:pointer; float:right; font-size:1.2rem;}
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AmA Trading - Plateforme de Simulation</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Styles personnalisés pour l'interface pro */
+        body {
+            background-color: #111827; /* Gris très foncé pour un look pro */
+            color: #E5E7EB;
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            overflow: hidden; /* Géré par les conteneurs internes */
+        }
+        .container-grid {
+            display: grid;
+            height: calc(100vh - 4rem); /* 4rem pour le header */
+            grid-template-columns: 20rem 1fr; /* 20rem pour la Watchlist/Ordres, 1fr pour le Graphique */
+            grid-template-rows: 2fr 1fr; /* 2/3 pour le graphique, 1/3 pour les positions */
+            gap: 0.5rem;
+            padding: 0.5rem;
+        }
+        .resizable {
+            resize: both;
+            overflow: auto;
+            min-width: 150px;
+            min-height: 100px;
+            border: 1px solid #374151;
+            border-radius: 0.5rem;
+            background-color: #1F2937;
+        }
+        .tv-widget-container {
+            width: 100%;
+            height: 100%;
+        }
+        /* Masquer la scrollbar par défaut pour l'esthétique, mais conserver la fonctionnalité */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;  /* IE and Edge */
+            scrollbar-width: none;  /* Firefox */
+        }
+    </style>
 </head>
 <body>
-  <header>AmA Trading <span style="float:right;font-size:1.1rem;">Solde: <b>€50,000</b></span></header>
-  <div class="main">
-    <div class="sidebar">
-      <div class="watchlist">
-        <div style="font-size:1.15rem;margin-bottom:7px;">
-          <span>Watchlist Indices</span>
-          <span class="expand-btn" onclick="toggleSection('watchlist-indices')">&#9654;</span>
-        </div>
-        <div id="watchlist-indices">
-          <!-- Exemples – Les vrais legal names à annoter par JS : -->
-          <div class="watchlist-item" onclick="setChart('SPX')">S&P 500 <span>[finance:S&P 500]</span></div>
-          <div class="watchlist-item" onclick="setChart('DJI')">Dow Jones <span>[finance:Dow Jones Industrial Average]</span></div>
-          <div class="watchlist-item" onclick="setChart('NASDAQ')">Nasdaq 100 <span>[finance:NASDAQ 100]</span></div>
-          <div class="watchlist-item" onclick="setChart('DAX')">DAX <span>[finance:DAX 40]</span></div>
-          <div class="watchlist-item" onclick="setChart('FTSE')">FTSE 100 <span>[finance:FTSE 100]</span></div>
-        </div>
-        <div style="font-size:1.15rem;margin:12px 0 7px;">
-          <span>Watchlist Devises</span>
-          <span class="expand-btn" onclick="toggleSection('watchlist-fx')">&#9654;</span>
-        </div>
-        <div id="watchlist-fx">
-          <div class="watchlist-item" onclick="setChart('EURUSD')">EUR/USD <span>[finance:EUR/USD]</span></div>
-          <div class="watchlist-item" onclick="setChart('GBPUSD')">GBP/USD <span>[finance:GBP/USD]</span></div>
-          <div class="watchlist-item" onclick="setChart('USDJPY')">USD/JPY <span>[finance:USD/JPY]</span></div>
-          <div class="watchlist-item" onclick="setChart('USDCHF')">USD/CHF <span>[finance:USD/CHF]</span></div>
-          <div class="watchlist-item" onclick="setChart('USDCAD')">USD/CAD <span>[finance:USD/CAD]</span></div>
-        </div>
-        <div style="font-size:1.15rem;margin:12px 0 7px;">
-          <span>Or Spot</span>
-          <span class="expand-btn" onclick="toggleSection('watchlist-gold')">&#9654;</span>
-        </div>
-        <div id="watchlist-gold">
-          <div class="watchlist-item" onclick="setChart('XAUUSD')">Gold (XAU/USD) <span>[finance:XAU/USD]</span></div>
-        </div>
-      </div>
-      <div class="order-book">
-        <h5>Ordres Limite</h5>
-        <table class="order-table table table-dark">
-          <thead><tr><th>Actif</th><th>Acheter</th><th>Vendre</th><th>Prix</th><th>Lots</th><th></th></tr></thead>
-          <tbody id="order-list"></tbody>
-        </table>
-        <button class="btn btn-success btn-sm mt-2" onclick="showOrderSound('valide')">Effet sonore Validation</button>
-        <button class="btn btn-danger btn-sm" onclick="showOrderSound('refus')">Effet sonore Refus</button>
-      </div>
+
+<header class="bg-gray-900 shadow p-3 flex justify-between items-center h-16">
+    <div class="text-2xl font-bold text-indigo-400">AmA Trading</div>
+    <div class="flex items-center space-x-4">
+        <span class="text-sm">Solde:</span>
+        <span id="account-balance" class="text-lg font-bold text-green-400">50,000.00 USD</span>
+        <button class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-1 px-3 rounded text-sm transition duration-150">
+            DÉMO
+        </button>
     </div>
-    <div style="flex:1;display:flex;flex-direction:column;">
-      <div class="chart" style="position:relative;">
-        <button class="fullscreen-btn" onclick="toggleFullscreen('chart')">&#128470; Plein écran</button>
-        <div id="tradingview-widget" style="height:400px;"></div>
-      </div>
-      <div class="positions-tabs mt-3">
-        <div class="tab active" onclick="showTab('positions')">Positions</div>
-        <div class="tab" onclick="showTab('history')">Historique positions</div>
-        <div class="tab" onclick="showTab('pending')">Ordres en attente</div>
-      </div>
-      <div id="positions" class="positions-table p-3">
-        <!-- Table dynamique : positions en cours, TP/SL/Vente -->
-      </div>
-      <div id="history" class="positions-table p-3 hidden">
-        <!-- Table historique -->
-      </div>
-      <div id="pending" class="positions-table p-3 hidden">
-        <!-- Table ordres en attente -->
-      </div>
+</header>
+
+<div class="container-grid">
+
+    <div class="col-left resizable grid grid-rows-2 gap-2 p-1 no-scrollbar" style="grid-row: 1 / span 2;">
+        
+        <div class="watchlist-container resizable p-3 bg-gray-800 rounded-lg shadow-xl overflow-y-auto">
+            <h3 class="text-lg font-semibold mb-3 text-white">👀 Watchlist</h3>
+            <ul id="watchlist-ul" class="space-y-2">
+                </ul>
+        </div>
+
+        <div class="order-panel resizable p-3 bg-gray-800 rounded-lg shadow-xl overflow-y-auto">
+            <h3 class="text-lg font-semibold mb-3 text-white">📝 Placer un Ordre Limite</h3>
+            <div id="order-form-container">
+                </div>
+        </div>
     </div>
-  </div>
-  <audio id="sound-valide" src="https://assets.mixkit.co/sfx/download/mixkit-positive-interface-beep-221.mp3"></audio>
-  <audio id="sound-refus" src="https://assets.mixkit.co/sfx/download/mixkit-wrong-answer-fail-notification-946.mp3"></audio>
-  <audio id="sound-sortie" src="https://assets.mixkit.co/sfx/download/mixkit-select-click-1107.mp3"></audio>
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/js/bootstrap.bundle.min.js"></script>
-  <!-- TradingView Widget JS -->
-  <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
-  <script>
-    // JS d’intégration, initialisation du widget TradingView, gestion Watchlist/onglets/effets sonores...
-    function setChart(symbol) {
-      // Récupère la cotation via TwelveData, change le graphique TradingView
-      // ...
-      document.querySelectorAll('.watchlist-item').forEach(el=>el.classList.remove('active'))
-      document.querySelector(`[onclick="setChart('${symbol}')"]`).classList.add('active');
-      // Afficher/rafraichir le TradingView Widget sur l'actif choisi
-      // (Voir doc https://www.tradingview.com/widget/)
+
+    <div class="graph-container resizable p-1 bg-gray-800 rounded-lg shadow-xl overflow-hidden" style="grid-column: 2 / 3;">
+        <h3 class="text-lg font-semibold px-2 pt-1 pb-2 text-white border-b border-gray-700 flex justify-between items-center">
+            📈 Graphique - <span id="current-symbol">EURUSD</span>
+            <button onclick="toggleFullScreen()" class="text-sm text-indigo-400 hover:text-indigo-300">
+                [ ⛶ Plein Écran ]
+            </button>
+        </h3>
+        <div id="tradingview-widget-container" class="tv-widget-container">
+            </div>
+    </div>
+    
+    <div class="positions-container resizable p-3 bg-gray-800 rounded-lg shadow-xl overflow-hidden" style="grid-column: 2 / 3;">
+        
+        <div class="flex border-b border-gray-700 mb-3">
+            <button id="tab-positions" onclick="showTab('positions')" class="tab-button active bg-indigo-600 text-white font-bold py-2 px-4 transition duration-150">Positions</button>
+            <button id="tab-history" onclick="showTab('history')" class="tab-button text-gray-400 hover:bg-gray-700 py-2 px-4 transition duration-150">Historique</button>
+            <button id="tab-pending" onclick="showTab('pending')" class="tab-button text-gray-400 hover:bg-gray-700 py-2 px-4 transition duration-150">Ordres en Attente</button>
+        </div>
+
+        <div id="tab-content-positions" class="tab-content overflow-y-auto h-full pr-1">
+            <h4 class="font-semibold text-lg mb-2">Positions Actives</h4>
+            <table class="min-w-full divide-y divide-gray-700 text-sm">
+                <thead class="bg-gray-700 sticky top-0">
+                    <tr>
+                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-400 uppercase">Actif</th>
+                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-400 uppercase">Type</th>
+                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-400 uppercase">Lots</th>
+                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-400 uppercase">Entrée</th>
+                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-400 uppercase">Cours Actuel</th>
+                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-400 uppercase">PnL</th>
+                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-400 uppercase">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="active-positions-body" class="divide-y divide-gray-700">
+                    </tbody>
+            </table>
+        </div>
+
+        <div id="tab-content-history" class="tab-content hidden overflow-y-auto h-full">
+            <p class="text-gray-400">L'historique des positions clôturées s'afficherait ici.</p>
+        </div>
+
+        <div id="tab-content-pending" class="tab-content hidden overflow-y-auto h-full">
+            <p class="text-gray-400">Les ordres Limite en attente (non exécutés) s'afficheraient ici.</p>
+        </div>
+    </div>
+
+</div>
+
+<script src="https://s3.tradingview.com/tv.js"></script>
+<script>
+    // --- Configuration Globale ---
+    const API_KEY = '1fc6cd30be484552ad303afda1087501';
+    const TWELVE_DATA_URL = 'https://api.twelvedata.com';
+    let CURRENT_SYMBOL = 'EURUSD';
+    let ACCOUNT_BALANCE = 50000.00;
+    
+    // Structure de données pour stocker les positions (SIMULÉ)
+    let activePositions = [];
+
+    // Mapping des symboles et estimation de la valeur d'un lot (à confirmer avec XTB ou source fiable)
+    // 1 lot de FX = 100,000 unités de la devise de base. 1 lot de Gold (XAUUSD) = 100 onces.
+    const WATCHLIST_ASSETS = {
+        'Indices': {
+            'US500': { name: 'S&P 500', exchange: 'NYSE', lotValue: 200000 },
+            'NDX': { name: 'Nasdaq 100', exchange: 'NASDAQ', lotValue: 250000 },
+            'GDAXI': { name: 'DAX 40', exchange: 'XETRA', lotValue: 300000 },
+            'UK100': { name: 'FTSE 100', exchange: 'LSE', lotValue: 150000 },
+            'FCHI': { name: 'CAC 40', exchange: 'EURONEXT', lotValue: 100000 },
+        },
+        'Devises': {
+            'EURUSD': { name: 'Euro/Dollar', exchange: 'FX', lotValue: 100000 },
+            'GBPUSD': { name: 'Livre/Dollar', exchange: 'FX', lotValue: 100000 },
+            'USDJPY': { name: 'Dollar/Yen', exchange: 'FX', lotValue: 100000 },
+            'AUDUSD': { name: 'Dollar AUD/USD', exchange: 'FX', lotValue: 100000 },
+            'USDCAD': { name: 'Dollar/Dollar CAD', exchange: 'FX', lotValue: 100000 },
+        },
+        'Matières Premières': {
+            'XAUUSD': { name: 'Or/Dollar', exchange: 'COMEX', lotValue: 100000 }, // Lot de 100 onces, valeur d'environ 190,000 USD
+        }
+    };
+
+    // --- Fonctions de l'Interface (UI) ---
+
+    // 1. Initialisation du widget TradingView
+    function initializeTradingView(symbol) {
+        const container = document.getElementById('tradingview-widget-container');
+        container.innerHTML = ''; // Nettoyer l'ancien widget
+        
+        new TradingView.widget(
+            {
+                "symbol": symbol,
+                "interval": "60",
+                "timezone": "Europe/Paris",
+                "theme": "dark",
+                "style": "1",
+                "locale": "fr",
+                "toolbar_bg": "#1F2937",
+                "enable_publishing": false,
+                "hide_side_toolbar": true,
+                "allow_symbol_change": true,
+                "container_id": "tradingview-widget-container",
+                "autosize": true,
+                "studies": [
+                    "STD;SMA"
+                ]
+            }
+        );
+        document.getElementById('current-symbol').innerText = symbol;
+        CURRENT_SYMBOL = symbol;
+        renderOrderPanel(symbol);
     }
-    function toggleSection(id) { document.getElementById(id).classList.toggle('hidden');}
-    function showTab(tab) {
-      ['positions','history','pending'].forEach(t=>
-        document.getElementById(t).classList[t==tab?'remove':'add']('hidden'))
-      document.querySelectorAll('.positions-tabs .tab').forEach((t,i)=>
-        t.classList[t.innerText.toLowerCase().includes(tab)?'add':'remove']('active'))
+
+    // 2. Bascule en plein écran
+    function toggleFullScreen() {
+        const elem = document.getElementById('tradingview-widget-container');
+        const header = document.querySelector('header');
+        const containerGrid = document.querySelector('.container-grid');
+        const otherElements = [document.querySelector('.col-left'), document.querySelector('.positions-container')];
+
+        if (!document.fullscreenElement) {
+            // Passer en plein écran
+            if (elem.requestFullscreen) {
+                elem.requestFullscreen();
+            } else if (elem.webkitRequestFullscreen) { /* Safari */
+                elem.webkitRequestFullscreen();
+            }
+            
+            // Masquer les autres éléments
+            header.style.display = 'none';
+            containerGrid.style.gridTemplateColumns = '1fr';
+            containerGrid.style.gridTemplateRows = '1fr';
+            otherElements.forEach(el => el.style.display = 'none');
+            elem.style.height = '100vh';
+        } else {
+            // Sortir du plein écran
+            if (document.exitFullscreen) {
+                document.exitFullscreen();
+            } else if (document.webkitExitFullscreen) { /* Safari */
+                document.webkitExitFullscreen();
+            }
+
+            // Afficher les autres éléments
+            header.style.display = 'flex';
+            containerGrid.style.gridTemplateColumns = '20rem 1fr';
+            containerGrid.style.gridTemplateRows = '2fr 1fr';
+            otherElements.forEach(el => el.style.display = 'grid');
+            elem.style.height = '100%'; 
+        }
     }
-    function showOrderSound(type) {
-      document.getElementById('sound-'+type).play();
+
+    // 3. Rendre la Watchlist
+    function renderWatchlist() {
+        const ul = document.getElementById('watchlist-ul');
+        ul.innerHTML = '';
+
+        for (const category in WATCHLIST_ASSETS) {
+            const h4 = document.createElement('h4');
+            h4.className = 'text-sm font-bold mt-3 mb-1 text-indigo-300';
+            h4.innerText = category;
+            ul.appendChild(h4);
+
+            for (const symbol in WATCHLIST_ASSETS[category]) {
+                const asset = WATCHLIST_ASSETS[category][symbol];
+                const li = document.createElement('li');
+                li.className = 'flex justify-between items-center p-2 bg-gray-700 hover:bg-indigo-600 transition duration-150 rounded cursor-pointer';
+                li.innerHTML = `
+                    <span class="font-bold">${symbol}</span>
+                    <span class="text-xs text-gray-300">${asset.name}</span>
+                `;
+                li.onclick = () => initializeTradingView(symbol);
+                ul.appendChild(li);
+            }
+        }
     }
-    function toggleFullscreen(elementId) {
-      var elem = document.querySelector('.chart'); // à adapter si plein écran
-      if (!document.fullscreenElement) {
-        elem.requestFullscreen();
-      }
-      else {document.exitFullscreen()}
+
+    // 4. Rendre le formulaire d'ordre Limite
+    function renderOrderPanel(symbol) {
+        const container = document.getElementById('order-form-container');
+        const assetInfo = Object.values(WATCHLIST_ASSETS).flatMap(Object.values).find(a => a.symbol === symbol);
+        const lotValue = assetInfo ? assetInfo.lotValue : 100000; 
+
+        container.innerHTML = `
+            <form id="limit-order-form" class="space-y-3">
+                <p class="text-xl font-bold text-white mb-4">${symbol}</p>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-medium text-gray-400">Lots (Valeur estimée 1 lot: ${lotValue.toLocaleString()} USD)</label>
+                        <input type="number" id="lots" min="0.01" step="0.01" value="0.10" required class="w-full mt-1 p-2 bg-gray-700 border border-gray-600 rounded text-white focus:ring-indigo-500 focus:border-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-400">Prix Limite</label>
+                        <input type="number" id="limit-price" step="any" required class="w-full mt-1 p-2 bg-gray-700 border border-gray-600 rounded text-white focus:ring-indigo-500 focus:border-indigo-500">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-400">Stop Loss (SL)</label>
+                    <input type="number" id="sl-price" step="any" class="w-full mt-1 p-2 bg-gray-700 border border-gray-600 rounded text-white">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-400">Take Profit (TP)</label>
+                    <input type="number" id="tp-price" step="any" class="w-full mt-1 p-2 bg-gray-700 border border-gray-600 rounded text-white">
+                </div>
+                <div class="flex space-x-3 pt-2">
+                    <button type="button" onclick="placeOrder('${symbol}', 'BUY')" class="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-lg transition duration-150">Acheter (Market)</button>
+                    <button type="button" onclick="placeOrder('${symbol}', 'SELL')" class="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-lg transition duration-150">Vendre (Market)</button>
+                </div>
+            </form>
+        `;
     }
-    // À compléter : intégration TwelveData, validation lots sur XTB, dynamique ordres/positions
-  </script>
+    
+    // 5. Bascule des Onglets
+    function showTab(tabName) {
+        document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+        document.querySelectorAll('.tab-button').forEach(el => {
+            el.classList.remove('active', 'bg-indigo-600', 'text-white');
+            el.classList.add('text-gray-400', 'hover:bg-gray-700');
+        });
+
+        document.getElementById(`tab-content-${tabName}`).classList.remove('hidden');
+        document.getElementById(`tab-${tabName}`).classList.add('active', 'bg-indigo-600', 'text-white');
+        document.getElementById(`tab-${tabName}`).classList.remove('text-gray-400', 'hover:bg-gray-700');
+    }
+
+    // --- Logique de Trading et API TwelveData ---
+
+    // 6. Récupérer la cotation actuelle via TwelveData
+    async function getQuote(symbol) {
+        try {
+            const response = await fetch(`${TWELVE_DATA_URL}/price?symbol=${symbol}&apikey=${API_KEY}`);
+            const data = await response.json();
+            if (data.price) {
+                return parseFloat(data.price);
+            }
+            console.error('Erreur API TwelveData:', data.message);
+            return null;
+        } catch (error) {
+            console.error('Erreur de réseau lors de la récupération de la cotation:', error);
+            return null;
+        }
+    }
+
+    // 7. Passer un ordre (Achat/Vente)
+    async function placeOrder(symbol, type) {
+        const lotsInput = document.getElementById('lots');
+        const lots = parseFloat(lotsInput.value);
+        if (!lots || lots <= 0) {
+            alert('Veuillez entrer un nombre de lots valide.');
+            return;
+        }
+
+        // 7.1. Récupération du prix d'entrée
+        const entryPrice = await getQuote(symbol);
+        if (!entryPrice) {
+            playRefusedSound();
+            alert("Erreur: Impossible d'obtenir la cotation pour l'exécution de l'ordre.");
+            return;
+        }
+
+        // 7.2. Calcul de la marge requise et vérification du solde
+        const assetInfo = Object.values(WATCHLIST_ASSETS).flatMap(Object.values).find(a => a.symbol === symbol);
+        const lotValue = assetInfo ? assetInfo.lotValue : 100000;
+        const requiredMargin = lots * lotValue * 0.05; // Marge hypothétique de 5%
+
+        if (requiredMargin > ACCOUNT_BALANCE) {
+            playRefusedSound();
+            alert(`Ordre refusé: Marge requise (${requiredMargin.toFixed(2)} USD) supérieure au solde disponible.`);
+            return;
+        }
+
+        // 7.3. Création et ajout de la position
+        const position = {
+            id: Date.now(),
+            symbol: symbol,
+            type: type, // 'BUY' ou 'SELL'
+            lots: lots,
+            entryPrice: entryPrice,
+            currentPrice: entryPrice, 
+            sl: parseFloat(document.getElementById('sl-price').value) || null,
+            tp: parseFloat(document.getElementById('tp-price').value) || null,
+            openTime: new Date().toLocaleTimeString(),
+            lotValue: lotValue
+        };
+
+        activePositions.push(position);
+        ACCOUNT_BALANCE -= requiredMargin; // Déduire la marge du solde
+
+        renderPositions();
+        updateBalanceDisplay();
+        playValidatedSound();
+        
+        alert(`Ordre ${type} ${lots} lots sur ${symbol} exécuté à ${entryPrice.toFixed(5)}!`);
+    }
+
+    // 8. Rendre les positions actives et le PnL
+    function renderPositions() {
+        const tbody = document.getElementById('active-positions-body');
+        tbody.innerHTML = '';
+        
+        activePositions.forEach(pos => {
+            const pnl = calculatePnL(pos);
+            const pnlClass = pnl >= 0 ? 'text-green-400' : 'text-red-400';
+
+            const row = document.createElement('tr');
+            row.className = 'hover:bg-gray-700 cursor-pointer border-t border-gray-700';
+            row.innerHTML = `
+                <td class="px-3 py-2 font-bold">${pos.symbol}</td>
+                <td class="px-3 py-2 text-${pos.type === 'BUY' ? 'green' : 'red'}-400">${pos.type}</td>
+                <td class="px-3 py-2">${pos.lots.toFixed(2)}</td>
+                <td class="px-3 py-2">${pos.entryPrice.toFixed(5)}</td>
+                <td id="current-price-${pos.id}" class="px-3 py-2">${pos.currentPrice.toFixed(5)}</td>
+                <td id="pnl-${pos.id}" class="px-3 py-2 font-bold ${pnlClass}">${pnl.toFixed(2)}</td>
+                <td class="px-3 py-2 space-x-2">
+                    <button onclick="modifyPosition(${pos.id})" class="text-xs bg-yellow-600 hover:bg-yellow-700 py-1 px-2 rounded">TP/SL</button>
+                    <button onclick="closePosition(${pos.id})" class="text-xs bg-red-600 hover:bg-red-700 py-1 px-2 rounded">Fermer</button>
+                </td>
+            `;
+            tbody.appendChild(row);
+        });
+    }
+
+    // 9. Calcul du PnL (Profit and Loss)
+    function calculatePnL(position) {
+        // Pour les paires de devises (USD est la devise de cotation pour la plupart)
+        const priceDiff = position.currentPrice - position.entryPrice;
+        let pnl;
+
+        if (position.type === 'BUY') {
+            pnl = priceDiff * position.lots * position.lotValue;
+        } else { // SELL
+            pnl = -priceDiff * position.lots * position.lotValue;
+        }
+
+        return pnl;
+    }
+    
+    // 10. Mettre à jour le PnL en temps réel (SIMULÉ - nécessite WebSocket pour la vraie vie)
+    async function updateRealTimeData() {
+        if (activePositions.length === 0) {
+            setTimeout(updateRealTimeData, 5000); // Réessaye dans 5s
+            return;
+        }
+
+        const uniqueSymbols = [...new Set(activePositions.map(p => p.symbol))];
+
+        for (const symbol of uniqueSymbols) {
+            const currentPrice = await getQuote(symbol);
+            if (currentPrice) {
+                // Mettre à jour les positions pour ce symbole
+                activePositions = activePositions.map(pos => {
+                    if (pos.symbol === symbol) {
+                        pos.currentPrice = currentPrice;
+                    }
+                    return pos;
+                });
+            }
+        }
+        
+        // Rafraîchir l'affichage
+        renderPositions();
+
+        // Vérifier SL/TP (très basique)
+        activePositions.forEach(pos => {
+            const pnl = calculatePnL(pos);
+            const price = pos.currentPrice;
+
+            // Logique de clôture SL/TP
+            let shouldClose = false;
+            if (pos.type === 'BUY') {
+                if (pos.sl && price <= pos.sl) shouldClose = true;
+                if (pos.tp && price >= pos.tp) shouldClose = true;
+            } else { // SELL
+                if (pos.sl && price >= pos.sl) shouldClose = true;
+                if (pos.tp && price <= pos.tp) shouldClose = true;
+            }
+
+            if (shouldClose) {
+                closePosition(pos.id, true);
+            }
+        });
+
+        // Loop
+        setTimeout(updateRealTimeData, 5000); // Intervalle de 5 secondes pour TwelveData
+    }
+
+    // 11. Clôturer une position
+    function closePosition(positionId, isAutoClosure = false) {
+        const index = activePositions.findIndex(p => p.id === positionId);
+        if (index === -1) return;
+
+        const closedPosition = activePositions[index];
+        const pnl = calculatePnL(closedPosition);
+        
+        // Mettre à jour le solde (Solde + Marge libérée + PnL)
+        const assetInfo = Object.values(WATCHLIST_ASSETS).flatMap(Object.values).find(a => a.symbol === closedPosition.symbol);
+        const lotValue = assetInfo ? assetInfo.lotValue : 100000;
+        const requiredMargin = closedPosition.lots * lotValue * 0.05; 
+        
+        ACCOUNT_BALANCE += requiredMargin + pnl; // Libération de la marge + Ajout/Retrait du PnL
+
+        // Supprimer la position
+        activePositions.splice(index, 1);
+        
+        renderPositions();
+        updateBalanceDisplay();
+        playClosedSound();
+        
+        const closeType = isAutoClosure ? (pnl >= 0 ? 'TP' : 'SL') : 'Manuelle';
+        alert(`Position ${closedPosition.symbol} clôturée. PnL: ${pnl.toFixed(2)} USD. Clôture: ${closeType}.`);
+    }
+
+    // 12. Modifier SL/TP (Simulé par une simple boîte de dialogue)
+    function modifyPosition(positionId) {
+        const pos = activePositions.find(p => p.id === positionId);
+        if (!pos) return;
+
+        const newSL = prompt(`Modifier le Stop Loss pour ${pos.symbol} (actuel: ${pos.sl || 'N/A'}):`);
+        const newTP = prompt(`Modifier le Take Profit pour ${pos.symbol} (actuel: ${pos.tp || 'N/A'}):`);
+
+        if (newSL !== null) pos.sl = parseFloat(newSL) || null;
+        if (newTP !== null) pos.tp = parseFloat(newTP) || null;
+        
+        renderPositions();
+        alert('TP/SL mis à jour.');
+    }
+
+    // 13. Mettre à jour l'affichage du solde
+    function updateBalanceDisplay() {
+        document.getElementById('account-balance').innerText = `${ACCOUNT_BALANCE.toLocaleString('fr-FR', { style: 'currency', currency: 'USD' })}`;
+    }
+
+    // --- Gestion des Sons ---
+    // Note: L'ajout direct de fichiers audio sur GitHub ou un CDN serait nécessaire pour que ça marche réellement. Ici, on simule.
+
+    function playSound(type) {
+        // SIMULATION : En environnement réel, on utiliserait: new Audio('chemin/vers/son.mp3').play();
+        console.log(`[Sound Effect]: ${type} played.`);
+    }
+
+    function playValidatedSound() {
+        playSound('Order Validated');
+    }
+
+    function playRefusedSound() {
+        playSound('Order Refused');
+    }
+
+    function playClosedSound() {
+        playSound('Position Closed');
+    }
+
+    // --- Initialisation de l'Application ---
+    function initApp() {
+        initializeTradingView(CURRENT_SYMBOL);
+        renderWatchlist();
+        updateBalanceDisplay();
+        renderOrderPanel(CURRENT_SYMBOL);
+        renderPositions();
+        showTab('positions');
+        
+        // Lancement de la mise à jour des prix
+        updateRealTimeData();
+    }
+
+    initApp();
+
+</script>
 </body>
 </html>
+
 
 
 
