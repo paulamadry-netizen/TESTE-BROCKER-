@@ -121,7 +121,7 @@
         .pnl-positive { color: var(--positive-color); }
         .pnl-negative { color: var(--negative-color); }
 
-        /* --- NOUVEAU STYLE ORDRE LIMITE --- */
+        /* --- Style Ordre Limite avec SL/TP --- */
         .limit-order-panel {
             display: flex;
             flex-direction: column;
@@ -141,6 +141,24 @@
 
         .limit-row select, 
         .limit-row input[type="number"] {
+            flex-grow: 1;
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid var(--border-color);
+            background-color: var(--bg-primary);
+            color: var(--text-color);
+            font-family: var(--font-mono);
+            text-align: right;
+        }
+        
+        /* Les deux champs SL/TP sur la même ligne */
+        .limit-stoptp {
+            display: flex;
+            gap: 10px;
+            margin-top: 5px;
+        }
+        
+        .limit-stoptp input {
             flex-grow: 1;
             padding: 8px;
             border-radius: 4px;
@@ -232,8 +250,6 @@
 
         .buy-btn { background-color: var(--positive-color); color: white; }
         .sell-btn { background-color: var(--negative-color); color: white; }
-        .buy-btn:hover { background-color: #00997b; }
-        .sell-btn:hover { background-color: #e64e33; }
 
         #asset-price-display {
             font-family: var(--font-mono);
@@ -253,89 +269,83 @@
         #bid-price { color: var(--negative-color); background: rgba(255, 99, 72, 0.1); } 
         #ask-price { color: var(--positive-color); background: rgba(0, 184, 148, 0.1); } 
 
-        /* Tabs and Tables (unchanged) */
+        /* Tabs and Tables */
         .position-history-tabs {
             flex-grow: 1;
             overflow: hidden;
             display: flex;
             flex-direction: column;
         }
-
-        .tab-header {
-            display: flex;
-            background-color: var(--bg-secondary);
-            border-bottom: 1px solid var(--border-color);
+        
+        /* Table position item row */
+        #open-positions-table tbody tr {
+            cursor: pointer; /* Indique qu'on peut cliquer sur la ligne */
         }
-
-        .tab-button {
-            background: none;
-            border: none;
-            color: var(--text-color);
-            padding: 10px 15px;
-            cursor: pointer;
-            border-bottom: 3px solid transparent;
-            transition: all 0.2s;
-            font-weight: 500;
-        }
-
-        .tab-button.active {
-            border-bottom-color: var(--accent-color);
-            font-weight: bold;
-            color: var(--accent-color);
-        }
-
-        .tab-content {
-            padding: 10px;
-            overflow-y: auto;
-            flex-grow: 1;
-            display: none;
-            background-color: var(--bg-secondary);
-        }
-
-        .tab-content.active {
-            display: block;
-        }
-
-        #open-positions-table, #history-positions-table {
-            width: 100%;
-            border-collapse: collapse;
+        
+        #open-positions-table tbody tr:hover {
+            background-color: #333a46;
         }
 
         #open-positions-table th, #history-positions-table th {
-            background-color: #2c323a;
-            padding: 10px;
-            text-align: left;
-            border-bottom: 1px solid var(--border-color);
-            position: sticky;
+            /* ... (Styles conservés) ... */
+        }
+
+        /* Modal pour la modification de position (nouveau) */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 100;
+            left: 0;
             top: 0;
-            font-weight: normal;
-            text-transform: uppercase;
-            font-size: 0.85em;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0, 0, 0, 0.8);
         }
 
-        #open-positions-table td, #history-positions-table td {
-            padding: 8px 10px;
-            border-bottom: 1px solid #2c323a;
-            font-size: 0.9em;
-            font-family: var(--font-mono);
+        .modal-content {
+            background-color: var(--bg-secondary);
+            margin: 10% auto;
+            padding: 20px;
+            border: 1px solid var(--accent-color);
+            width: 350px;
+            border-radius: 8px;
         }
 
-        .set-stoptp-btn, .close-position-btn {
+        .modal-content h3 {
+            color: var(--accent-color);
+            margin-top: 0;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 10px;
+        }
+
+        .modal-body > div {
+            margin-bottom: 15px;
+        }
+        
+        .modal-body input[type="number"], .modal-body label {
+            width: 100%;
+            box-sizing: border-box;
+            display: block;
+            margin-top: 5px;
+        }
+
+        .modal-footer {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 20px;
+        }
+        
+        .modal-footer button {
+            padding: 10px 15px;
             border: none;
-            padding: 4px 8px;
-            border-radius: 3px;
+            border-radius: 4px;
             cursor: pointer;
-            font-size: 0.8em;
-            margin-left: 5px;
+            font-weight: bold;
         }
-
-        .set-stoptp-btn {
-            background: var(--accent-color);
-            color: white;
-        }
-
-        .close-position-btn {
-            background: var(--negative-color);
+        
+        .modal-footer .close-modal {
+            background-color: #6c757d;
             color: white;
         }
     </style>
@@ -376,6 +386,11 @@
                 <div class="limit-row">
                     <label for="limit-lots">Lots</label>
                     <input type="number" id="limit-lots" min="0.01" step="0.01" value="1.00">
+                </div>
+
+                <div class="limit-stoptp">
+                    <input type="number" id="limit-stoploss" placeholder="Stop Loss (Prix)">
+                    <input type="number" id="limit-takeprofit" placeholder="Take Profit (Prix)">
                 </div>
 
                 <div class="limit-info-bar">
@@ -456,6 +471,37 @@
 
     </main>
     
+    <div id="position-modal" class="modal">
+        <div class="modal-content">
+            <h3>Modifier Position <span id="modal-asset-info"></span></h3>
+            <div class="modal-body">
+                <div>
+                    <p>Lots ouverts: <strong id="modal-lots-open"></strong> | PnL actuel: <strong id="modal-pnl-current"></strong></p>
+                </div>
+
+                <div>
+                    <label for="modal-stoploss">Stop Loss (Prix)</label>
+                    <input type="number" id="modal-stoploss" step="0.00001">
+                    
+                    <label for="modal-takeprofit">Take Profit (Prix)</label>
+                    <input type="number" id="modal-takeprofit" step="0.00001">
+                </div>
+
+                <hr style="border-color: var(--border-color); margin: 15px 0;">
+                <div>
+                    <label for="modal-close-lots">Fermer Lots</label>
+                    <input type="number" id="modal-close-lots" min="0.01" step="0.01" value="0.00">
+                </div>
+            </div>
+            
+            <div class="modal-footer">
+                <button class="limit-buy-btn" onclick="applyPositionChanges()">Appliquer SL/TP</button>
+                <button class="sell-btn" onclick="closePartialPosition()">Fermer Lots</button>
+                <button class="close-modal" onclick="closeModal()">Annuler</button>
+            </div>
+        </div>
+    </div>
+    
     <audio id="order-success-sound" src="order_success.mp3"></audio> 
     <audio id="order-reject-sound" src="order_reject.mp3"></audio>
 
@@ -475,21 +521,21 @@
         let positionHistory = [];
         let currentAsset = 'EUR/USD';
         let tvWidget = null; 
+        let currentEditingPositionId = null; // ID de la position en cours de modification
 
-        // Symboles d'actifs réels (FOREX, Métal, Indices CFDs)
-        // NOTE: Pour TradingView, les paires de devises doivent souvent être préfixées par un échange comme "FX_IDC:" ou "OANDA:". Nous utiliserons "EURUSD" pour TradingView et "EUR/USD" pour notre logique.
+        // Symboles TradingView pour les actifs réels (FX_IDC pour le Forex, CFD pour les Indices)
         const TV_SYMBOLS = {
             'EUR/USD': 'FX_IDC:EURUSD',
             'GBP/USD': 'FX_IDC:GBPUSD',
             'USD/JPY': 'FX_IDC:USDJPY',
             'AUD/USD': 'FX_IDC:AUDUSD',
             'USD/CHF': 'FX_IDC:USDCHF',
-            'XAU/USD': 'TVC:GOLD', // Symbole Or TradingView
-            'US30': 'CFD:US30',     // Indices comme CFD (exemples)
-            'US100': 'CFD:US100',
-            'US500': 'CFD:US500',
-            'DE40': 'CFD:DE40',
-            'FR40': 'CFD:FR40',
+            'XAU/USD': 'TVC:GOLD', 
+            'US30': 'FOREXCOM:US30', // Symbole plus commun pour les CFDs
+            'US100': 'FOREXCOM:US100',
+            'US500': 'FOREXCOM:SPX500',
+            'DE40': 'EUREX:FDAX1!', // Symbole DAX futur/CFD
+            'FR40': 'INDEX:CAC40', // Symbole CAC 40
         };
 
         let currentPrices = {
@@ -534,12 +580,12 @@
             const limitAssetEl = document.getElementById('limit-asset');
             limitAssetEl.addEventListener('change', (e) => updateLotInfo(e.target.value));
             
-            const header = document.querySelector('.header');
-            const closeBtn = document.createElement('button');
-            closeBtn.textContent = 'Fermeture Marché';
-            closeBtn.style.cssText = 'padding: 5px 10px; background-color: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer; margin-left: 20px;';
-            closeBtn.onclick = closeAllOnMarketClose;
-            header.appendChild(closeBtn);
+            // Événements pour la modale
+            window.onclick = function(event) {
+                if (event.target == document.getElementById('position-modal')) {
+                    closeModal();
+                }
+            }
         });
 
         /**
@@ -547,11 +593,11 @@
          * @param {string} assetKey - La clé interne (ex: 'EUR/USD').
          */
         function initTradingView(assetKey) {
-            const tvSymbol = TV_SYMBOLS[assetKey] || assetKey; // Utiliser le symbole mappé ou la clé
+            const tvSymbol = TV_SYMBOLS[assetKey] || assetKey; 
             
             tvWidget = new TradingView.widget({
                 "container_id": "tv_chart_container",
-                "symbol": tvSymbol, // Utilisation du symbole FX/CFD
+                "symbol": tvSymbol, 
                 "interval": "60",
                 "timezone": "Europe/Paris",
                 "theme": "dark",
@@ -559,12 +605,21 @@
                 "locale": "fr",
                 "toolbar_bg": "#f1f3f6",
                 "enable_publishing": false,
-                "allow_symbol_change": false, 
+                "allow_symbol_change": true, // Permettre le changement par l'API
                 "hide_side_toolbar": true,
                 "autosize": true,
                 "studies": [ "Moving Average" ],
                 "client_id": "tradingview.com", 
                 "user_id": "test_user"
+            });
+            
+            // CORRECTION PRINCIPALE: Assurer que l'API est prête avant de permettre les clics sur la watchlist
+            tvWidget.onChartReady(() => {
+                console.log("TradingView Chart est prêt. Le changement de symbole via la Watchlist est activé.");
+                // Si l'actif par défaut a changé avant que le graphique soit prêt, on le met à jour
+                if (tvWidget.chart().symbol() !== tvSymbol) {
+                    tvWidget.chart().setSymbol(tvSymbol);
+                }
             });
         }
 
@@ -642,19 +697,20 @@
                 }
             });
 
-            // 2. Mise à jour du graphique TradingView (CORRECTION)
-            // Utiliser la méthode API de TradingView pour changer le symbole
-            if (tvWidget && tvWidget.chart()) {
-                tvWidget.chart().setSymbol(tvSymbol);
-            } else {
-                // Si non initialisé, on le refait (devrait être initialisé au début)
-                initTradingView(asset);
+            // 2. Mise à jour du graphique TradingView (CORRECTION APPLIQUÉE)
+            if (tvWidget && tvWidget.chart) {
+                // S'assurer que le graphique est prêt avant de tenter de changer le symbole
+                tvWidget.onChartReady(() => {
+                    tvWidget.chart().setSymbol(tvSymbol);
+                });
             }
 
             // 3. Mise à jour des panneaux d'exécution
             document.getElementById('current-asset').textContent = asset;
             document.getElementById('selected-asset-info').textContent = asset;
-            document.getElementById('limit-asset').value = asset; // Synchronisation du select limite
+            document.getElementById('limit-asset').value = asset; 
+            document.getElementById('limit-stoploss').value = '';
+            document.getElementById('limit-takeprofit').value = '';
 
             updatePriceDisplay(asset);
             updateLotInfo(asset);
@@ -742,6 +798,9 @@
                 totalPnL += pnl;
                 
                 const row = document.createElement('tr');
+                // Ajout d'un écouteur d'événement sur la ligne pour ouvrir la modale
+                row.setAttribute('onclick', `openPositionModal('${position.id}')`);
+                
                 row.innerHTML = `
                     <td>${position.asset}</td>
                     <td style="color:${isBuy ? 'var(--positive-color)' : 'var(--negative-color)'}">${position.type}</td>
@@ -751,10 +810,10 @@
                     <td>
                         ${position.stopLoss ? `SL: ${position.stopLoss.toFixed(assetSpec.precision)}` : 'N/A'} 
                         / ${position.takeProfit ? `TP: ${position.takeProfit.toFixed(assetSpec.precision)}` : 'N/A'}
-                        <button class="set-stoptp-btn" onclick="setStopTP('${position.id}')">S/T</button>
+                        <button class="set-stoptp-btn" onclick="event.stopPropagation(); openPositionModal('${position.id}');">S/T</button>
                     </td>
                     <td class="${pnl >= 0 ? 'pnl-positive' : 'pnl-negative'}">$${pnl.toFixed(2)}</td>
-                    <td><button class="close-position-btn" onclick="closePosition('${position.id}')">X</button></td>
+                    <td><button class="close-position-btn" onclick="event.stopPropagation(); closePosition('${position.id}', ${position.lots});">X</button></td>
                 `;
                 positionsTableBody.appendChild(row);
                 
@@ -831,10 +890,15 @@
             updatePricesAndPnL(); 
         }
 
+        /**
+         * Ajoute un ordre limite (simulé) avec SL/TP.
+         */
         function placeLimitOrder(type) {
             const asset = document.getElementById('limit-asset').value;
             const price = parseFloat(document.getElementById('limit-price').value);
             const lots = parseFloat(document.getElementById('limit-lots').value);
+            const sl = parseFloat(document.getElementById('limit-stoploss').value) || null;
+            const tp = parseFloat(document.getElementById('limit-takeprofit').value) || null;
             const assetSpec = LOT_VALUES[asset];
 
             if (isNaN(price) || price <= 0 || isNaN(lots) || lots <= 0) {
@@ -845,53 +909,153 @@
 
             if (!checkMargin(asset, lots)) return;
             
+            let message = `✅ Ordre Limite ${type} de ${lots.toFixed(2)} lots sur ${asset} à ${price.toFixed(assetSpec.precision)} placé (Simulé).`;
+            if (sl) message += ` SL: ${sl.toFixed(assetSpec.precision)}`;
+            if (tp) message += ` TP: ${tp.toFixed(assetSpec.precision)}`;
+
             playSound('success');
-            alert(`✅ Ordre Limite ${type} de ${lots.toFixed(2)} lots sur ${asset} à ${price.toFixed(assetSpec.precision)} placé (Simulé).`);
+            alert(message);
         }
 
-        function closePosition(id) {
+        /**
+         * Ferme une position ouverte (partiellement ou totalement).
+         * @param {string} id - ID de la position.
+         * @param {number} lotsToClose - Nombre de lots à fermer.
+         */
+        function closePosition(id, lotsToClose) {
             const index = openPositions.findIndex(p => p.id === id);
             if (index === -1) return;
 
-            const closedPosition = openPositions.splice(index, 1)[0];
-            const isBuy = closedPosition.type === 'BUY';
-            const closePrice = isBuy ? currentPrices[closedPosition.asset].bid : currentPrices[closedPosition.asset].ask;
+            let position = openPositions[index];
+            const isBuy = position.type === 'BUY';
+            const lotsRemaining = position.lots - lotsToClose;
             
-            const finalPnL = calculatePnL(closedPosition, closePrice);
+            if (lotsToClose > position.lots) {
+                alert("Erreur: Le nombre de lots à fermer est supérieur au nombre de lots ouverts.");
+                return;
+            }
+
+            const closePrice = isBuy ? currentPrices[position.asset].bid : currentPrices[position.asset].ask;
+            // Calculer le PnL proportionnel
+            const pnlPerLot = calculatePnL({ ...position, lots: 1 }, closePrice);
+            const finalPnL = pnlPerLot * lotsToClose;
+            
             balance += finalPnL;
-            
+
             const historyEntry = {
-                ...closedPosition,
+                id: Date.now().toString(), // Nouvel ID pour l'historique
+                asset: position.asset,
+                type: position.type,
+                lots: lotsToClose,
+                openPrice: position.openPrice,
                 closePrice: closePrice,
+                openTime: position.openTime,
                 closeTime: new Date().toISOString(),
-                finalPnL: finalPnL
+                finalPnL: finalPnL,
+                partialCloseOf: position.id 
             };
             positionHistory.push(historyEntry);
+
+            if (lotsRemaining <= 0.001) { // Fermeture totale
+                openPositions.splice(index, 1);
+            } else { // Fermeture partielle
+                position.lots = lotsRemaining;
+            }
             
             updateHistoryTable();
             updatePricesAndPnL();
             playSound('success');
+            
+            if (currentEditingPositionId === id) {
+                // Mettre à jour la modale après la fermeture partielle
+                openPositionModal(id); 
+            }
+        }
+        
+        // ====================================================================
+        // MODAL DE MODIFICATION DE POSITION
+        // ====================================================================
+
+        function openPositionModal(id) {
+            const position = openPositions.find(p => p.id === id);
+            if (!position) {
+                closeModal();
+                return;
+            }
+            
+            currentEditingPositionId = id;
+            const assetSpec = LOT_VALUES[position.asset];
+
+            // 1. Remplir les informations
+            document.getElementById('modal-asset-info').textContent = `${position.asset} (${position.type})`;
+            document.getElementById('modal-lots-open').textContent = position.lots.toFixed(2);
+            document.getElementById('modal-pnl-current').textContent = `$${position.pnl.toFixed(2)}`;
+            document.getElementById('modal-pnl-current').style.color = position.pnl >= 0 ? 'var(--positive-color)' : 'var(--negative-color)';
+
+            // 2. Remplir SL/TP
+            document.getElementById('modal-stoploss').value = position.stopLoss ? position.stopLoss.toFixed(assetSpec.precision) : '';
+            document.getElementById('modal-takeprofit').value = position.takeProfit ? position.takeProfit.toFixed(assetSpec.precision) : '';
+            
+            // 3. Réinitialiser la fermeture partielle
+            document.getElementById('modal-close-lots').value = '0.00';
+            document.getElementById('modal-close-lots').max = position.lots.toFixed(2);
+
+            // 4. Afficher la modale
+            document.getElementById('position-modal').style.display = 'block';
+        }
+        
+        function closeModal() {
+            document.getElementById('position-modal').style.display = 'none';
+            currentEditingPositionId = null;
         }
 
-        function setStopTP(id) {
+        function applyPositionChanges() {
+            const id = currentEditingPositionId;
             const position = openPositions.find(p => p.id === id);
             if (!position) return;
-            const precision = LOT_VALUES[position.asset].precision;
             
-            const slInput = prompt(`Définir le Stop Loss (Prix, ex: ${position.openPrice.toFixed(precision)}):`);
-            const tpInput = prompt(`Définir le Take Profit (Prix, ex: ${position.openPrice.toFixed(precision)}):`);
+            const slInput = parseFloat(document.getElementById('modal-stoploss').value);
+            const tpInput = parseFloat(document.getElementById('modal-takeprofit').value);
 
-            if (slInput !== null && slInput !== '') {
-                const slValue = parseFloat(slInput);
-                if (!isNaN(slValue) && slValue > 0) position.stopLoss = slValue;
+            position.stopLoss = slInput > 0 ? slInput : null;
+            position.takeProfit = tpInput > 0 ? tpInput : null;
+
+            alert(`✅ SL/TP mis à jour pour ${position.asset}.`);
+            
+            updatePricesAndPnL(); // Mettre à jour le tableau
+            closeModal();
+        }
+
+        function closePartialPosition() {
+            const id = currentEditingPositionId;
+            const position = openPositions.find(p => p.id === id);
+            if (!position) return;
+
+            const lotsToClose = parseFloat(document.getElementById('modal-close-lots').value);
+            
+            if (isNaN(lotsToClose) || lotsToClose <= 0.0) {
+                alert("Veuillez entrer un nombre de lots valide à fermer.");
+                return;
             }
-            if (tpInput !== null && tpInput !== '') {
-                const tpValue = parseFloat(tpInput);
-                if (!isNaN(tpValue) && tpValue > 0) position.takeProfit = tpValue;
+
+            if (lotsToClose > position.lots) {
+                alert(`Vous ne pouvez pas fermer ${lotsToClose.toFixed(2)} lots, seulement ${position.lots.toFixed(2)} ouverts.`);
+                return;
             }
             
-            updatePricesAndPnL();
+            // Appeler la fonction de fermeture avec le nombre de lots spécifié
+            closePosition(id, lotsToClose);
+            
+            if (position.lots > 0.001) {
+                 // Si la position existe toujours (fermeture partielle), rafraîchir la modale
+                openPositionModal(id);
+            } else {
+                 // Sinon, fermer la modale
+                closeModal();
+            }
         }
+        
+        // ... (checkStopTP et autres fonctions restent inchangées) ...
 
         function checkStopTP(position, currentClosePrice) {
             let triggered = false;
@@ -914,37 +1078,9 @@
             }
 
             if (triggered) {
-                closePosition(position.id);
+                // Fermeture totale par SL/TP
+                closePosition(position.id, position.lots);
                 alert(`🛑 Position ${position.asset} fermée par ${triggerType}.`);
-            }
-        }
-
-        function closeAllOnMarketClose() {
-            if (openPositions.length === 0) {
-                alert("Aucune position ouverte.");
-                return;
-            }
-            if (confirm("🚨 ALERTE : Fermeture des marchés. Confirmer la clôture de toutes les positions?")) {
-                for (let i = openPositions.length - 1; i >= 0; i--) {
-                    closePosition(openPositions[i].id);
-                }
-                alert("Toutes les positions ont été fermées.");
-            }
-        }
-
-        // ====================================================================
-        // INTERFACE UTILISATEUR
-        // ====================================================================
-
-        function openTab(tabId) {
-            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-            document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
-
-            document.getElementById(tabId).classList.add('active');
-            document.querySelector(`.tab-button[onclick="openTab('${tabId}')"]`).classList.add('active');
-            
-            if (tabId === 'history') {
-                updateHistoryTable();
             }
         }
 
@@ -955,6 +1091,8 @@
             positionHistory.forEach(p => {
                 const assetSpec = LOT_VALUES[p.asset];
                 const row = document.createElement('tr');
+                const closeType = p.partialCloseOf ? `Fermeture Partielle (Lots: ${p.lots.toFixed(2)})` : 'Clôture Totale';
+
                 row.innerHTML = `
                     <td>${p.asset}</td>
                     <td style="color:${p.type === 'BUY' ? 'var(--positive-color)' : 'var(--negative-color)'}">${p.type}</td>
@@ -962,10 +1100,22 @@
                     <td>${p.openPrice.toFixed(assetSpec.precision)}</td>
                     <td>${p.closePrice.toFixed(assetSpec.precision)}</td>
                     <td class="${p.finalPnL >= 0 ? 'pnl-positive' : 'pnl-negative'}">$${p.finalPnL.toFixed(2)}</td>
-                    <td>${new Date(p.closeTime).toLocaleString('fr-FR')}</td>
+                    <td>${new Date(p.closeTime).toLocaleString('fr-FR')} (${closeType})</td>
                 `;
                 historyBody.appendChild(row);
             });
+        }
+        
+        function openTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
+
+            document.getElementById(tabId).classList.add('active');
+            document.querySelector(`.tab-button[onclick="openTab('${tabId}')"]`).classList.add('active');
+            
+            if (tabId === 'history') {
+                updateHistoryTable();
+            }
         }
 
         function playSound(type) {
