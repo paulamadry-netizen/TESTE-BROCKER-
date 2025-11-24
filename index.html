@@ -3,833 +3,693 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mini Broker Pro - Prop Firm</title>
-    <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
-
+    <title>Mini Broker Pro Firm - Trading Interface</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;700&display=swap" rel="stylesheet">
     <style>
-        /* ==========================================================
-           STYLE (CSS)
-           ========================================================== */
+        /* CSS */
         :root {
-            --bg-primary: #121419;
-            --bg-secondary: #1e2129;
-            --text-color: #e5e9f0;
-            --accent-color: #5d5dff;
-            --positive-color: #00b894;
-            --negative-color: #ff6348;
-            --border-color: #3f444c;
-            --font-mono: 'Roboto Mono', monospace;
+            --bg-dark: #1e2126;
+            --bg-medium: #2a2e35;
+            --bg-light: #3a3f47;
+            --color-text: #e0e0e0;
+            --color-green: #00a859;
+            --color-red: #ff3347;
+            --color-primary: #1e88e5;
+            --border-color: #444;
+            --font-family: 'Roboto', sans-serif;
         }
 
         body {
-            font-family: 'Inter', sans-serif;
-            background-color: var(--bg-primary);
-            color: var(--text-color);
+            font-family: var(--font-family);
+            background-color: var(--bg-dark);
+            color: var(--color-text);
             margin: 0;
             padding: 0;
-            font-size: 14px;
             display: flex;
-            flex-direction: column;
             height: 100vh;
+            overflow: hidden;
+            font-size: 14px;
         }
 
-        /* Header & Footer */
-        .header {
-            background-color: var(--bg-secondary);
-            padding: 10px 20px;
+        /* --- LAYOUT GRID --- */
+        .container {
+            display: grid;
+            grid-template-columns: 280px 1fr;
+            grid-template-rows: 1fr auto; /* Row 1: Main Content, Row 2: Tabs */
+            width: 100%;
+            height: 100%;
+        }
+
+        .left-panel {
+            grid-area: 1 / 1 / 3 / 2; /* Full height on the left */
+            display: flex;
+            flex-direction: column;
+            background-color: var(--bg-medium);
+            border-right: 1px solid var(--border-color);
+        }
+
+        .main-chart {
+            grid-area: 1 / 2 / 2 / 3;
+            background-color: black;
+        }
+
+        .bottom-tabs {
+            grid-area: 2 / 2 / 3 / 3;
+            background-color: var(--bg-medium);
+            border-top: 1px solid var(--border-color);
+            height: 250px;
+        }
+
+        /* --- WATCHLIST --- */
+        .watchlist-header {
+            padding: 10px;
+            background-color: var(--bg-light);
+            font-weight: bold;
+            font-size: 1.1em;
+            text-align: center;
+        }
+
+        .watchlist {
+            flex-grow: 1;
+            overflow-y: auto;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .asset-item {
             display: flex;
             justify-content: space-between;
-            align-items: center;
-            border-bottom: 2px solid var(--accent-color);
-            flex-shrink: 0;
-        }
-        
-        .footer {
-            background-color: var(--bg-primary);
-            color: #6c757d;
-            padding: 5px 20px;
-            text-align: right;
-            font-size: 0.75em;
-            border-top: 1px solid var(--border-color);
-            flex-shrink: 0;
-        }
-
-        .header h1 {
-            font-size: 1.5em;
-            margin: 0;
-            color: var(--accent-color);
-        }
-
-        #account-info {
-            font-family: var(--font-mono);
-            font-size: 1.1em;
-        }
-
-        /* Layout Principal */
-        .trading-interface {
-            display: flex;
-            flex-grow: 1;
-            overflow: hidden;
-        }
-
-        /* Sidebar (Watchlist & Ordres) */
-        .sidebar {
-            width: 320px;
-            background-color: var(--bg-secondary);
-            padding: 15px;
-            border-right: 1px solid var(--border-color);
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-            overflow-y: auto;
-            flex-shrink: 0;
-        }
-
-        .panel {
-            border: 1px solid var(--border-color);
-            border-radius: 6px;
-            padding: 10px;
-            background-color: #1a1e26;
-        }
-
-        .panel h3 {
-            margin-top: 0;
-            color: var(--accent-color);
-            border-bottom: 1px dashed var(--border-color);
-            padding-bottom: 5px;
-            font-size: 1.1em;
-        }
-
-        /* Watchlist */
-        #watchlist {
-            list-style: none;
-            padding: 0;
-        }
-
-        .watchlist-item {
-            display: grid;
-            grid-template-columns: 2fr 1fr;
-            padding: 8px 10px;
+            padding: 10px 15px;
             cursor: pointer;
-            border-bottom: 1px solid #2c323a;
-            transition: background-color 0.1s, border-left 0.1s;
-        }
-        
-        .watchlist-item.selected, .watchlist-item:hover {
-            background-color: #2c323a;
-            border-left: 3px solid var(--accent-color);
+            border-bottom: 1px solid var(--bg-light);
+            transition: background-color 0.2s;
         }
 
-        .asset-symbol { font-weight: bold; }
-        .asset-price { 
-            font-family: var(--font-mono); 
-            text-align: right;
-            font-weight: 500;
-            color: var(--text-color);
+        .asset-item:hover, .asset-item.active {
+            background-color: var(--bg-light);
         }
 
-        .price-up { color: var(--positive-color); }
-        .price-down { color: var(--negative-color); }
-        .pnl-positive { color: var(--positive-color); }
-        .pnl-negative { color: var(--negative-color); }
+        .asset-item .symbol {
+            font-weight: bold;
+        }
 
-        /* Style Ordre Limite (Réintégré) */
+        .asset-item .price {
+            color: var(--color-green); /* Simulating price change */
+        }
+
+        /* --- LIMIT ORDER TABLE --- */
         .limit-order-panel {
-            display: flex;
-            flex-direction: column;
+            padding: 15px;
+            background-color: var(--bg-medium);
+            border-top: 1px solid var(--border-color);
+        }
+
+        .limit-order-panel h3 {
+            margin-top: 0;
+            margin-bottom: 10px;
+            font-size: 1em;
+            text-transform: uppercase;
+            color: var(--color-primary);
+        }
+
+        .order-form {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
             gap: 10px;
         }
 
-        .limit-row {
-            display: flex;
-            gap: 8px;
-            align-items: center;
-        }
-
-        .limit-row label {
-            width: 80px;
-            flex-shrink: 0;
-        }
-
-        .limit-row select, 
-        .limit-row input[type="number"] {
-            flex-grow: 1;
+        .order-form input, .order-form select {
             padding: 8px;
-            border-radius: 4px;
             border: 1px solid var(--border-color);
-            background-color: var(--bg-primary);
-            color: var(--text-color);
-            font-family: var(--font-mono);
-            text-align: right;
+            background-color: var(--bg-light);
+            color: var(--color-text);
+            border-radius: 4px;
+            font-size: 14px;
+            outline: none;
         }
-        
-        .limit-stoptp {
-            display: flex;
-            gap: 10px;
+
+        .order-form button {
+            padding: 10px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: opacity 0.2s;
+        }
+
+        .order-form button:hover {
+            opacity: 0.9;
+        }
+
+        .buy-btn {
+            background-color: var(--color-green);
+        }
+
+        .sell-btn {
+            background-color: var(--color-red);
+        }
+
+        .lot-info {
+            grid-column: span 2;
+            text-align: center;
+            padding: 8px 0;
+            background-color: var(--bg-light);
+            border-radius: 4px;
             margin-top: 5px;
         }
         
-        .limit-stoptp input {
-            flex-grow: 1;
-            padding: 8px;
-            border-radius: 4px;
-            border: 1px solid var(--border-color);
-            background-color: var(--bg-primary);
-            color: var(--text-color);
-            font-family: var(--font-mono);
-            text-align: right;
-        }
-
-        .limit-actions {
+        /* --- BOTTOM TABS (POSITIONS/HISTORY) --- */
+        .tabs-header {
             display: flex;
-            gap: 10px;
-            margin-top: 10px;
-        }
-
-        .limit-actions button {
-            flex-grow: 1;
-            padding: 10px 15px;
-            font-weight: bold;
-            cursor: pointer;
-            border: none;
-            border-radius: 4px;
-            transition: background-color 0.2s;
-        }
-        
-        .limit-buy-btn { background-color: var(--positive-color); color: white; }
-        .limit-sell-btn { background-color: var(--negative-color); color: white; }
-        .limit-info-bar {
-            font-size: 0.85em;
-            color: #9aa5b1;
-            padding-top: 5px;
-            text-align: center;
-        }
-
-        /* Main Content (Chart & Tabs) */
-        .main-content {
-            flex-grow: 1;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-            background-color: var(--bg-primary);
-        }
-
-        /* Chart */
-        .chart-container {
-            height: 60%; 
-            min-height: 400px;
-            background-color: black;
-            flex-shrink: 0;
-        }
-
-        /* Trade Execution Panel */
-        .trade-execution-panel {
-            padding: 10px 20px;
-            background-color: var(--bg-secondary);
-            border-top: 1px solid var(--border-color);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-shrink: 0;
-        }
-        
-        .execution-controls {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-        }
-        
-        .execution-controls input[type="number"] {
-            width: 80px;
-            text-align: center;
-            padding: 8px;
-            border-radius: 4px;
-            border: 1px solid var(--border-color);
-            background-color: var(--bg-primary);
-            color: var(--text-color);
-            font-family: var(--font-mono);
-        }
-
-        .execution-controls button {
-            padding: 10px 20px;
-            font-weight: bold;
-            cursor: pointer;
-            border: none;
-            border-radius: 4px;
-        }
-
-        .buy-btn { background-color: var(--positive-color); color: white; }
-        .sell-btn { background-color: var(--negative-color); color: white; }
-
-        #asset-price-display {
-            font-family: var(--font-mono);
-            font-size: 1.3em;
-            font-weight: bold;
-            display: flex;
-            gap: 15px;
-            align-items: center;
-        }
-
-        #bid-price, #ask-price {
-            padding: 5px 8px;
-            border-radius: 4px;
-            font-weight: bold;
-        }
-
-        #bid-price { color: var(--negative-color); background: rgba(255, 99, 72, 0.1); } 
-        #ask-price { color: var(--positive-color); background: rgba(0, 184, 148, 0.1); } 
-
-        /* Tabs and Tables (Réintégré) */
-        .position-history-tabs {
-            flex-grow: 1;
-            overflow: hidden;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .tab-header {
-            display: flex;
-            background-color: var(--bg-secondary);
+            background-color: var(--bg-light);
             border-bottom: 1px solid var(--border-color);
         }
 
         .tab-button {
-            background: none;
-            border: none;
-            color: var(--text-color);
-            padding: 10px 15px;
+            padding: 10px 20px;
             cursor: pointer;
+            border: none;
+            background-color: transparent;
+            color: var(--color-text);
+            font-weight: bold;
             border-bottom: 3px solid transparent;
-            transition: all 0.2s;
-            font-weight: 500;
+            transition: border-bottom 0.2s;
         }
 
         .tab-button.active {
-            border-bottom-color: var(--accent-color);
-            font-weight: bold;
-            color: var(--accent-color);
+            border-bottom-color: var(--color-primary);
+            color: var(--color-primary);
         }
 
-        .tab-content {
-            padding: 10px;
+        .tabs-content {
+            padding: 15px;
             overflow-y: auto;
-            flex-grow: 1;
-            display: none;
-            background-color: var(--bg-secondary);
+            height: calc(100% - 40px); /* Adjust height based on header */
         }
 
-        .tab-content.active {
+        .tab-pane {
+            display: none;
+        }
+
+        .tab-pane.active {
             display: block;
         }
 
-        #open-positions-table, #history-positions-table {
+        /* --- TABLE STYLES --- */
+        .data-table {
             width: 100%;
             border-collapse: collapse;
         }
 
-        #open-positions-table th, #history-positions-table th {
-            background-color: #2c323a;
+        .data-table th, .data-table td {
             padding: 10px;
             text-align: left;
             border-bottom: 1px solid var(--border-color);
-            position: sticky;
-            top: 0;
-            font-weight: normal;
+        }
+
+        .data-table th {
+            background-color: var(--bg-light);
             text-transform: uppercase;
-            font-size: 0.85em;
-        }
-
-        #open-positions-table td, #history-positions-table td {
-            padding: 8px 10px;
-            border-bottom: 1px solid #2c323a;
             font-size: 0.9em;
-            font-family: var(--font-mono);
         }
-        
-        .pnl-positive { color: var(--positive-color); }
-        .pnl-negative { color: var(--negative-color); }
-        .pnl-neutral { color: var(--text-color); }
 
+        .pnl-positive { color: var(--color-green); font-weight: bold; }
+        .pnl-negative { color: var(--color-red); font-weight: bold; }
+        .action-button {
+            padding: 5px 10px;
+            background-color: var(--color-primary);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9em;
+        }
+
+        /* --- BALANCE INFO --- */
+        .balance-bar {
+            padding: 10px 15px;
+            background-color: var(--bg-light);
+            display: flex;
+            justify-content: space-between;
+            font-weight: bold;
+            border-top: 1px solid var(--border-color);
+        }
+
+        .balance-bar span {
+            color: var(--color-green);
+        }
     </style>
 </head>
 <body>
 
-    <header class="header">
-        <h1>Broker Prop Firm 📈</h1>
-        <div id="account-info">
-            Solde: <span id="balance" class="pnl-positive">$50,000.00</span> | PnL Total: <span id="total-pnl" class="pnl-neutral">$0.00</span>
+    <audio id="orderTakenSound" src="[Placeholder for Order Taken Sound - E.g., a short 'ding']" preload="auto"></audio>
+    <audio id="orderRejectedSound" src="[Placeholder for Order Rejected Sound - E.g., a short 'buzz']" preload="auto"></audio>
+
+    <div class="container">
+        
+        <div class="left-panel">
+            <div class="balance-bar">
+                SOLDE DISPONIBLE: <span id="currentBalance">50,000.00 $</span>
+            </div>
+
+            <div class="watchlist-header">
+                WATCHLIST
+            </div>
+            <div class="watchlist" id="watchlist">
+                </div>
+
+            <div class="limit-order-panel">
+                <h3 id="order-panel-asset">Prendre un Ordre (EURUSD)</h3>
+                
+                <form id="orderForm" class="order-form">
+                    <input type="number" id="lotSize" value="1" min="0.1" step="0.1" required>
+                    <select id="orderType" required>
+                        <option value="market">Au Marché</option>
+                        <option value="limit">Ordre Limite</option>
+                    </select>
+
+                    <input type="number" id="limitPrice" placeholder="Prix Limite (si Limit)" disabled>
+                    <input type="number" id="stopLoss" placeholder="Stop Loss (Optionnel)">
+                    <input type="number" id="takeProfit" placeholder="Take Profit (Optionnel)">
+                    <div id="lotInfo" class="lot-info">1 Lot sur EURUSD ≈ 100,000 $</div>
+
+                    <button type="button" class="buy-btn" onclick="placeOrder('buy')">ACHETER</button>
+                    <button type="button" class="sell-btn" onclick="placeOrder('sell')">VENDRE</button>
+                </form>
+            </div>
         </div>
-    </header>
 
-    <main class="trading-interface">
+        <div class="main-chart">
+            <iframe id="tradingViewChart"
+                src="https://fr.tradingview.com/widgetembed/?symbol=FX_IDC%3AEURUSD&interval=60&theme=dark&style=1&locale=fr&toolbar_bg=%23f1f3f6&enable_publishing=false&allow_symbol_change=true&container_id=tradingview_widget"
+                frameborder="0"
+                allowfullscreen
+                style="width: 100%; height: 100%;">
+            </iframe>
+        </div>
 
-        <section class="sidebar">
-            
-            <div class="panel watchlist-panel">
-                <h3>Watchlist (Actif Sélectionné : <span id="selected-asset-info">EUR/USD</span>)</h3>
-                <ul id="watchlist">
-                    </ul>
-            </div>
-
-            <div class="panel limit-order-panel">
-                <h3>Passer un Ordre Limite</h3>
-                
-                <div class="limit-row">
-                    <label for="limit-asset">Actif</label>
-                    <select id="limit-asset">
-                        </select>
-                </div>
-                
-                <div class="limit-row">
-                    <label for="limit-price">Prix Limite</label>
-                    <input type="number" id="limit-price" step="0.00001" placeholder="Prix d'exécution">
-                </div>
-                
-                <div class="limit-row">
-                    <label for="limit-lots">Lots</label>
-                    <input type="number" id="limit-lots" min="0.01" step="0.01" value="1.00">
-                </div>
-
-                <div class="limit-stoptp">
-                    <input type="number" id="limit-stoploss" placeholder="Stop Loss (Prix)">
-                    <input type="number" id="limit-takeprofit" placeholder="Take Profit (Prix)">
-                </div>
-
-                <div class="limit-info-bar">
-                    <span id="limit-asset-type-info">1.00 Lot sur <span id="selected-lot-asset"></span>: Valeur notionnelle ~ <span id="lot-value-usd"></span> USD.</span>
-                </div>
-                
-                <div class="limit-actions">
-                    <button class="limit-buy-btn" onclick="placeLimitOrder('BUY')">Acheter Limite</button>
-                    <button class="limit-sell-btn" onclick="placeLimitOrder('SELL')">Vendre Limite</button>
-                </div>
-
+        <div class="bottom-tabs">
+            <div class="tabs-header">
+                <button class="tab-button active" onclick="showTab('positions')">Positions (0)</button>
+                <button class="tab-button" onclick="showTab('history')">Historique de Position (0)</button>
             </div>
             
-        </section>
-
-        <section class="main-content">
-            
-            <div id="tv_chart_container" class="chart-container">
-                </div>
-
-            <div class="trade-execution-panel">
-                <div class="execution-controls">
-                    <input type="number" id="market-lots" min="0.01" step="0.01" value="1.00" style="width: 80px; text-align: center;">
-                    <button class="sell-btn" onclick="executeMarketOrder('SELL')">VENDRE</button>
-                    <button class="buy-btn" onclick="executeMarketOrder('BUY')">ACHETER</button>
-                </div>
-                <div id="asset-price-display">
-                    <span id="current-asset">EUR/USD</span>
-                    BID: <span id="bid-price">1.10000</span> 
-                    ASK: <span id="ask-price">1.10005</span>
-                </div>
-            </div>
-
-            <div class="position-history-tabs">
-                <div class="tab-header">
-                    <button class="tab-button active" onclick="openTab('positions')">Positions (0)</button>
-                    <button class="tab-button" onclick="openTab('history')">Historique (0)</button>
-                </div>
-                
-                <div id="positions" class="tab-content active">
-                    <table id="open-positions-table">
+            <div class="tabs-content">
+                <div id="positions" class="tab-pane active">
+                    <table class="data-table">
                         <thead>
                             <tr>
-                                <th>Symbole</th>
-                                <th>Type</th>
+                                <th>Actif</th>
+                                <th>Sens</th>
                                 <th>Lots</th>
                                 <th>Ouverture</th>
-                                <th>Actuel</th>
-                                <th>S/L - T/P</th>
-                                <th>PnL ($)</th>
+                                <th>Stop Loss</th>
+                                <th>Take Profit</th>
+                                <th>PnL (USD)</th>
                                 <th>Action</th>
                             </tr>
                         </thead>
-                        <tbody>
-                            </tbody>
+                        <tbody id="activePositionsTable">
+                            <tr><td colspan="8" style="text-align: center;">Aucune position ouverte.</td></tr>
+                        </tbody>
                     </table>
                 </div>
 
-                <div id="history" class="tab-content">
-                    <table id="history-positions-table">
+                <div id="history" class="tab-pane">
+                    <table class="data-table">
                         <thead>
                             <tr>
-                                <th>Symbole</th>
-                                <th>Type</th>
+                                <th>Actif</th>
+                                <th>Sens</th>
                                 <th>Lots</th>
                                 <th>Ouverture</th>
                                 <th>Fermeture</th>
-                                <th>PnL Final ($)</th>
-                                <th>Date Ferm.</th>
+                                <th>Résultat</th>
                             </tr>
                         </thead>
-                        <tbody>
-                            </tbody>
+                        <tbody id="positionHistoryTable">
+                            <tr><td colspan="6" style="text-align: center;">Aucun historique de position.</td></tr>
+                        </tbody>
                     </table>
                 </div>
             </div>
-        </section>
+        </div>
 
-    </main>
-    
-    <footer class="footer">
-        Version du Code : **V11 (Fonctionnalités + Fiabilité TradingView)**
-    </footer>
-    
+    </div>
+
     <script>
-        // ====================================================================
-        // LOGIQUE (JAVASCRIPT)
-        // ====================================================================
+        // JAVASCRIPT
 
-        // Variables Globales (Simplifiées)
+        // ----------------------------------------------------
+        // --- CONFIGURATION & DATA SIMULATION ---
+        // ----------------------------------------------------
+        const ASSETS = {
+            'EURUSD': { group: 'Forex', tv_symbol: 'FX_IDC:EURUSD', lot_value_usd: 100000, market_coherence: 1.0, current_price: 1.0750 },
+            'GBPUSD': { group: 'Forex', tv_symbol: 'FX_IDC:GBPUSD', lot_value_usd: 100000, market_coherence: 1.2, current_price: 1.2500 },
+            'USDJPY': { group: 'Forex', tv_symbol: 'FX_IDC:USDJPY', lot_value_usd: 100000, market_coherence: 0.9, current_price: 150.00 },
+            'AUDUSD': { group: 'Forex', tv_symbol: 'FX_IDC:AUDUSD', lot_value_usd: 100000, market_coherence: 0.8, current_price: 0.6500 },
+            'USDCAD': { group: 'Forex', tv_symbol: 'FX_IDC:USDCAD', lot_value_usd: 100000, market_coherence: 1.1, current_price: 1.3500 },
+            'US100':  { group: 'Index', tv_symbol: 'NASDAQ:NDX', lot_value_usd: 20, market_coherence: 20.0, current_price: 17500.00 }, // Mini lot value approx.
+            'US30':   { group: 'Index', tv_symbol: 'DOWJONES:DJI', lot_value_usd: 10, market_coherence: 15.0, current_price: 38000.00 },
+            'DE40':   { group: 'Index', tv_symbol: 'XETR:DAX', lot_value_usd: 25, market_coherence: 18.0, current_price: 18000.00 },
+            'UK100':  { group: 'Index', tv_symbol: 'LSE:UKX', lot_value_usd: 50, market_coherence: 10.0, current_price: 7800.00 },
+            'FR40':   { group: 'Index', tv_symbol: 'EURONEXT:PX1', lot_value_usd: 10, market_coherence: 12.0, current_price: 8000.00 },
+            'XAUUSD': { group: 'Metal', tv_symbol: 'TVC:GOLD', lot_value_usd: 100000, market_coherence: 1.0, current_price: 2000.00 } // GOLD
+        };
+
+        const TV_BASE_URL = "https://fr.tradingview.com/widgetembed/?interval=60&theme=dark&style=1&locale=fr&toolbar_bg=%23f1f3f6&enable_publishing=false&allow_symbol_change=true&container_id=tradingview_widget&symbol=";
+        
+        // J'utilise une clé API bidon ici. L'API KEY NE DOIT JAMAIS ÊTRE EXPOSÉE CÔTÉ CLIENT.
+        const API_KEY_SIMULATION = '1fc6cd30be484552ad303afda1087501'; 
+        
+        let currentAsset = 'EURUSD';
         let balance = 50000.00;
-        let totalPnL = 0.00;
-        let openPositions = [];
-        let positionHistory = [];
-        let currentAsset = 'EUR/USD';
-        let tvWidget = null; 
-        let isChartInitialized = false; // Le drapeau de fiabilité TradingView
+        let positions = [];
+        let history = [];
+        let positionIdCounter = 1;
+        let pnlInterval;
 
-        // Mapping des symboles TradingView (inchangé)
-        const TV_SYMBOLS = {
-            'EUR/USD': 'FX_IDC:EURUSD',
-            'GBP/USD': 'FX_IDC:GBPUSD',
-            'USD/JPY': 'FX_IDC:USDJPY',
-            'AUD/USD': 'FX_IDC:AUDUSD',
-            'USD/CHF': 'FX_IDC:USDCHF',
-            'XAU/USD': 'TVC:GOLD', 
-            'US30': 'FOREXCOM:US30', 
-            'US100': 'FOREXCOM:US100',
-            'US500': 'FOREXCOM:SPX500',
-            'DE40': 'EUREX:FDAX1!', 
-            'FR40': 'INDEX:CAC40', 
-        };
+        // ----------------------------------------------------
+        // --- UTILITY FUNCTIONS ---
+        // ----------------------------------------------------
 
-        // Données des prix (inchangé)
-        let currentPrices = {
-            'EUR/USD': { bid: 1.08000, ask: 1.08005 },
-            'GBP/USD': { bid: 1.25000, ask: 1.25005 },
-            'USD/JPY': { bid: 145.000, ask: 145.005 },
-            'AUD/USD': { bid: 0.65000, ask: 0.65005 },
-            'USD/CHF': { bid: 0.90000, ask: 0.90005 },
-            'XAU/USD': { bid: 1950.00, ask: 1950.50 }, 
-            'US30': { bid: 34500.00, ask: 34505.00 },
-            'US100': { bid: 15000.00, ask: 15005.00 },
-            'US500': { bid: 4400.00, ask: 4400.50 },
-            'DE40': { bid: 16000.00, ask: 16005.00 },
-            'FR40': { bid: 7300.00, ask: 7303.00 },
-        };
-
-        const LOT_VALUES = {
-            'EUR/USD': { units: 100000, pipValueUSD: 10.00, isForex: true, precision: 5 }, 
-            'GBP/USD': { units: 100000, pipValueUSD: 10.00, isForex: true, precision: 5 },
-            'USD/JPY': { units: 100000, pipValueUSD: 10.00, isForex: true, precision: 3 }, 
-            'AUD/USD': { units: 100000, pipValueUSD: 10.00, isForex: true, precision: 5 },
-            'USD/CHF': { units: 100000, pipValueUSD: 10.00, isForex: true, precision: 5 },
-            'XAU/USD': { units: 100, pipValueUSD: 1.00, isForex: false, precision: 2 }, 
-            'US30': { units: 1, pipValueUSD: 1.00, isForex: false, precision: 2 }, 
-            'US100': { units: 1, pipValueUSD: 2.00, isForex: false, precision: 2 },
-            'US500': { units: 1, pipValueUSD: 50.00, isForex: false, precision: 2 },
-            'DE40': { units: 1, pipValueUSD: 1.00, isForex: false, precision: 2 },
-            'FR40': { units: 1, pipValueUSD: 1.00, isForex: false, precision: 2 },
-        };
-
-        // ====================================================================
-        // INITIALISATION & WATCHLIST
-        // ====================================================================
-
-        document.addEventListener('DOMContentLoaded', () => {
-            updateWatchlist();
-            initTradingView(Object.keys(currentPrices)[0]); 
-            
-            updateAccountInfo();
-            selectAsset(currentAsset); 
-            
-            // Mise à jour des listes déroulantes des ordres limites
-            const limitAssetEl = document.getElementById('limit-asset');
-            limitAssetEl.innerHTML = '';
-            Object.keys(currentPrices).forEach(asset => {
-                const option = document.createElement('option');
-                option.value = asset;
-                option.textContent = asset;
-                limitAssetEl.appendChild(option);
-            });
-            limitAssetEl.addEventListener('change', (e) => updateLotInfo(e.target.value));
-            
-            setInterval(updatePricesAndPnL, 2000); 
-        });
-
-        /**
-         * Initialise le widget TradingView.
-         * @param {string} assetKey - La clé interne (ex: 'EUR/USD').
-         */
-        function initTradingView(assetKey) {
-            const tvSymbol = TV_SYMBOLS[assetKey] || assetKey; 
-            
-            tvWidget = new TradingView.widget({
-                "container_id": "tv_chart_container",
-                "symbol": tvSymbol, 
-                "interval": "60",
-                "timezone": "Europe/Paris",
-                "theme": "dark",
-                "style": "1",
-                "locale": "fr",
-                "toolbar_bg": "#f1f3f6",
-                "enable_publishing": false,
-                "allow_symbol_change": true, // Doit être true
-                "hide_side_toolbar": true,
-                "autosize": true,
-                "client_id": "tradingview.com", 
-                "user_id": "test_user"
-            });
-            
-            // L'événement le plus fiable
-            tvWidget.onChartReady(() => {
-                console.log("TradingView Chart est prêt à recevoir des commandes.");
-                isChartInitialized = true; 
-                // Assurez-vous que le symbole actuel est bien chargé si le graphique a pris du retard
-                if (currentAsset !== assetKey) {
-                    selectAsset(currentAsset); 
-                }
-            });
+        function updateBalance(amount) {
+            balance += amount;
+            document.getElementById('currentBalance').textContent = balance.toFixed(2) + ' $';
         }
 
-        function updateWatchlist() {
+        function playSound(type) {
+            const soundElement = document.getElementById(type === 'taken' ? 'orderTakenSound' : 'orderRejectedSound');
+            if (soundElement) {
+                // Pour que ça marche, il faut des fichiers audio valides. Ici, on simule l'action.
+                console.log(`Playing sound: ${type}`);
+                // soundElement.play().catch(e => console.error("Audio playback error:", e));
+            }
+        }
+
+        // Simule le prix actuel (remplace l'appel API)
+        function fetchCurrentPrice(symbol) {
+            // Dans un vrai scénario, cela appellerait TwelveData ou IG Markets.
+            // Ici, on simule une petite fluctuation aléatoire autour du prix de base.
+            const basePrice = ASSETS[symbol].current_price;
+            const fluctuation = (Math.random() - 0.5) * 0.001 * ASSETS[symbol].market_coherence; 
+            return basePrice + fluctuation;
+        }
+
+        // ----------------------------------------------------
+        // --- WATCHLIST & CHART LOGIC ---
+        // ----------------------------------------------------
+
+        function renderWatchlist() {
             const watchlistEl = document.getElementById('watchlist');
             watchlistEl.innerHTML = '';
 
-            const assets = Object.keys(currentPrices);
-
-            assets.forEach(asset => {
-                const assetSpec = LOT_VALUES[asset];
-                const price = currentPrices[asset];
-                
-                const item = document.createElement('li');
-                item.className = 'watchlist-item';
-                item.dataset.asset = asset;
-                item.setAttribute('onclick', `selectAsset('${asset}')`);
-                
-                if (asset === currentAsset) {
-                    item.classList.add('selected');
-                }
-
+            Object.keys(ASSETS).forEach(symbol => {
+                const asset = ASSETS[symbol];
+                const item = document.createElement('div');
+                item.className = `asset-item ${symbol === currentAsset ? 'active' : ''}`;
+                item.setAttribute('data-symbol', symbol);
                 item.innerHTML = `
-                    <span class="asset-symbol">${asset}</span>
-                    <span class="asset-price" id="price-${asset}">${price.bid.toFixed(assetSpec.precision)}</span>
+                    <span class="symbol">${symbol}</span>
+                    <span class="price" id="price-${symbol}">${asset.current_price.toFixed(4)}</span>
                 `;
+                item.onclick = () => selectAsset(symbol);
                 watchlistEl.appendChild(item);
             });
+            // Simuler la fluctuation des prix dans la Watchlist
+            setInterval(updateWatchlistPrices, 3000);
         }
 
-        /**
-         * Change l'actif actuellement regardé et sélectionné.
-         * C'est la fonction la plus critique.
-         * @param {string} asset - Le nouveau symbole.
-         */
-        function selectAsset(asset) {
-            currentAsset = asset;
-            const tvSymbol = TV_SYMBOLS[asset] || asset;
-
-            // 1. Mise à jour de la classe CSS pour la watchlist
-            document.querySelectorAll('.watchlist-item').forEach(item => {
-                item.classList.remove('selected');
-                if (item.dataset.asset === asset) {
-                    item.classList.add('selected');
-                }
-            });
-
-            // 2. Mise à jour du graphique TradingView (La solution critique)
-            // On vérifie que le widget est là, qu'il est initialisé et que la fonction setSymbol existe.
-            if (isChartInitialized && tvWidget && typeof tvWidget.chart === 'function' && typeof tvWidget.chart().setSymbol === 'function') {
-                tvWidget.chart().setSymbol(tvSymbol);
-                console.log(`Symbole changé avec succès pour : ${asset}`);
-            } else {
-                console.warn(`Le graphique TradingView n'est pas encore prêt. Attente du chargement initial.`);
-            }
-
-            // 3. Mise à jour des panneaux d'exécution et des ordres limites
-            document.getElementById('current-asset').textContent = asset;
-            document.getElementById('selected-asset-info').textContent = asset;
-            
-            // Assurez-vous que le sélecteur d'ordre limite est synchronisé
-            const limitAssetEl = document.getElementById('limit-asset');
-            if (limitAssetEl) limitAssetEl.value = asset;
-            
-            updatePriceDisplay(asset);
-            updateLotInfo(asset);
-        }
-        
-        // ====================================================================
-        // GESTION DE L'INTERFACE (PnL, Prix, Tabs)
-        // ====================================================================
-        
-        function updateAccountInfo() {
-            document.getElementById('balance').textContent = `$${balance.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",")}`;
-            document.getElementById('total-pnl').textContent = `$${totalPnL.toFixed(2)}`;
-            document.getElementById('total-pnl').className = totalPnL >= 0 ? 'pnl-positive' : 'pnl-negative';
-            
-            document.querySelector('.tab-header button:nth-child(1)').textContent = `Positions (${openPositions.length})`;
-            // Le second bouton sera mis à jour par la fonction updateHistoryTable
-        }
-
-        function updateLotInfo(asset) {
-            const lotInfo = LOT_VALUES[asset];
-            const currentPrice = currentPrices[asset]?.ask || 1;
-            
-            let lotValueInUSD;
-            if (lotInfo.isForex || asset === 'XAU/USD') {
-                lotValueInUSD = (lotInfo.units * currentPrice).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-            } else {
-                lotValueInUSD = 'Variable (selon effet de levier)'; 
-            }
-
-            document.getElementById('selected-lot-asset').textContent = asset;
-            document.getElementById('lot-value-usd').textContent = lotValueInUSD;
-        }
-
-        function updatePriceDisplay(asset) {
-            const prices = currentPrices[asset] || { bid: 0, ask: 0 };
-            const precision = LOT_VALUES[asset]?.precision || 5;
-
-            document.getElementById('current-asset').textContent = asset;
-            document.getElementById('bid-price').textContent = prices.bid.toFixed(precision);
-            document.getElementById('ask-price').textContent = prices.ask.toFixed(precision);
-        }
-
-        function updatePricesAndPnL() {
-            totalPnL = 0;
-            
-            // Mise à jour des prix de la Watchlist
-            Object.keys(currentPrices).forEach(asset => {
-                const newPrice = fetchPriceSimulation(asset);
-                const precision = LOT_VALUES[asset]?.precision || 5;
-
-                const priceEl = document.getElementById(`price-${asset}`);
+        function updateWatchlistPrices() {
+            Object.keys(ASSETS).forEach(symbol => {
+                const price = fetchCurrentPrice(symbol);
+                ASSETS[symbol].current_price = price;
+                const priceEl = document.getElementById(`price-${symbol}`);
                 if (priceEl) {
-                    const oldPrice = parseFloat(priceEl.textContent);
-                    const priceToDisplay = newPrice.bid.toFixed(precision);
-                    priceEl.textContent = priceToDisplay;
-                    priceEl.className = newPrice.bid > oldPrice ? 'asset-price price-up' : (newPrice.bid < oldPrice ? 'asset-price price-down' : 'asset-price');
+                    priceEl.textContent = price.toFixed(ASSETS[symbol].group === 'Index' ? 2 : 4);
+                }
+            });
+            // Si le marché est fermé (simulation), arrêter les mises à jour
+            if (isMarketClosed()) {
+                // log.message("Market closed. PnL stopped.");
+                // Arrêter aussi le PnL des positions
+            }
+        }
+
+        function selectAsset(symbol) {
+            // Mettre à jour la variable globale
+            currentAsset = symbol;
+            
+            // 1. Mettre à jour l'iFrame TradingView
+            const tvSymbol = ASSETS[symbol].tv_symbol;
+            document.getElementById('tradingViewChart').src = TV_BASE_URL + tvSymbol;
+
+            // 2. Mettre à jour l'affichage de la Watchlist (actif)
+            document.querySelectorAll('.asset-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            document.querySelector(`.asset-item[data-symbol="${symbol}"]`).classList.add('active');
+
+            // 3. Mettre à jour le panneau de prise d'ordre
+            const assetInfo = ASSETS[symbol];
+            document.getElementById('order-panel-asset').textContent = `Prendre un Ordre (${symbol})`;
+            document.getElementById('lotInfo').textContent = 
+                `1 Lot sur ${symbol} ≈ ${assetInfo.lot_value_usd.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}`;
+        }
+
+        // ----------------------------------------------------
+        // --- ORDER MANAGEMENT ---
+        // ----------------------------------------------------
+        
+        function placeOrder(direction) {
+            const symbol = currentAsset;
+            const lotSize = parseFloat(document.getElementById('lotSize').value);
+            const orderType = document.getElementById('orderType').value;
+            const limitPrice = parseFloat(document.getElementById('limitPrice').value);
+            const stopLoss = parseFloat(document.getElementById('stopLoss').value);
+            const takeProfit = parseFloat(document.getElementById('takeProfit').value);
+            const assetInfo = ASSETS[symbol];
+            const currentPrice = fetchCurrentPrice(symbol);
+
+            // 1. Vérification des Lots/Marge
+            const requiredMargin = lotSize * assetInfo.lot_value_usd;
+            if (requiredMargin > balance) {
+                alert(`REFUSÉ: Marge insuffisante. ${lotSize} Lots sur ${symbol} nécessite ${requiredMargin.toFixed(2)}$ de capital, mais votre solde est de ${balance.toFixed(2)}$.`);
+                playSound('rejected');
+                return;
+            }
+
+            // 2. Traitement de l'Ordre
+            if (orderType === 'market') {
+                const newPosition = {
+                    id: positionIdCounter++,
+                    symbol: symbol,
+                    direction: direction,
+                    lots: lotSize,
+                    openPrice: currentPrice,
+                    sl: isNaN(stopLoss) ? null : stopLoss,
+                    tp: isNaN(takeProfit) ? null : takeProfit,
+                    openTime: new Date(),
+                    pnl: 0.00
+                };
+                positions.push(newPosition);
+                updatePositionsDisplay();
+                playSound('taken');
+            } else if (orderType === 'limit') {
+                if (isNaN(limitPrice) || limitPrice <= 0) {
+                     alert("REFUSÉ: Vous devez spécifier un Prix Limite valide pour un ordre Limite.");
+                     playSound('rejected');
+                     return;
+                }
+                // Dans une vraie app, on ajouterait l'ordre à une liste d'ordres en attente
+                alert(`Ordre Limite de ${lotSize} lots ${direction.toUpperCase()} sur ${symbol} au prix de ${limitPrice.toFixed(4)} placé.`);
+                // On pourrait ajouter une fonction pour simuler l'exécution d'ordre limite
+                playSound('taken');
+            }
+        }
+        
+        // ----------------------------------------------------
+        // --- PnL, STOP & TP LOGIC ---
+        // ----------------------------------------------------
+        
+        function calculateAndCheckPnL() {
+            if (positions.length === 0) return;
+
+            const currentPrices = {}; // Cache des prix pour éviter les appels multiples
+
+            positions = positions.filter(pos => {
+                let currentPrice;
+                // Fetch price only for assets in active positions
+                if (currentPrices[pos.symbol] === undefined) {
+                    currentPrice = fetchCurrentPrice(pos.symbol);
+                    currentPrices[pos.symbol] = currentPrice;
+                } else {
+                    currentPrice = currentPrices[pos.symbol];
+                }
+                
+                const assetInfo = ASSETS[pos.symbol];
+                const multiplier = assetInfo.lot_value_usd * assetInfo.market_coherence / 100000; // Simplification pour la simulation
+                
+                let pipsChange;
+                if (pos.direction === 'buy') {
+                    pipsChange = currentPrice - pos.openPrice;
+                } else {
+                    pipsChange = pos.openPrice - currentPrice;
+                }
+
+                // Calcul du PnL (simplifié pour la démo)
+                let pnl = pipsChange * pos.lots * multiplier * 10000; // Multiplier par 10000 pour simuler le pips
+                pos.pnl = pnl;
+
+                // 1. Check Stop Loss
+                if (pos.sl && pos.direction === 'buy' && currentPrice <= pos.sl) {
+                    closePosition(pos.id, 'SL', currentPrice);
+                    return false; // Remove position
+                }
+                if (pos.sl && pos.direction === 'sell' && currentPrice >= pos.sl) {
+                    closePosition(pos.id, 'SL', currentPrice);
+                    return false; // Remove position
+                }
+                
+                // 2. Check Take Profit
+                if (pos.tp && pos.direction === 'buy' && currentPrice >= pos.tp) {
+                    closePosition(pos.id, 'TP', currentPrice);
+                    return false; // Remove position
+                }
+                if (pos.tp && pos.direction === 'sell' && currentPrice <= pos.tp) {
+                    closePosition(pos.id, 'TP', currentPrice);
+                    return false; // Remove position
+                }
+
+                return true; // Keep position
+            });
+
+            updatePositionsDisplay();
+        }
+
+        function closePosition(id, reason = 'Manuelle', closePrice = null) {
+            const index = positions.findIndex(p => p.id === id);
+            if (index === -1) return;
+
+            const closedPos = positions.splice(index, 1)[0];
+            const finalPnl = closedPos.pnl; // PnL déjà calculé
+
+            // Mettre à jour le solde
+            updateBalance(finalPnl);
+
+            // Ajouter à l'historique
+            history.push({
+                ...closedPos,
+                closePrice: closePrice || fetchCurrentPrice(closedPos.symbol),
+                closeTime: new Date(),
+                result: finalPnl,
+                reason: reason
+            });
+
+            updatePositionsDisplay();
+            updateHistoryDisplay();
+            alert(`Position #${id} (${closedPos.symbol}) fermée (${reason}). PnL: ${finalPnl.toFixed(2)}$`);
+        }
+        
+        function isMarketClosed() {
+            // Implémentation réelle nécessiterait de vérifier les heures d'ouverture/fermeture par actif.
+            // Pour la démo: Marché fermé le weekend (simulé).
+            const day = new Date().getDay();
+            // return day === 0 || day === 6; // Dimanche ou Samedi
+            return false; // Simulé toujours ouvert pour la démo
+        }
+
+        // ----------------------------------------------------
+        // --- DISPLAY UPDATES (POSITIONS & HISTORY) ---
+        // ----------------------------------------------------
+
+        function updatePositionsDisplay() {
+            const tableBody = document.getElementById('activePositionsTable');
+            tableBody.innerHTML = '';
+            
+            if (positions.length === 0) {
+                tableBody.innerHTML = '<tr><td colspan="8" style="text-align: center;">Aucune position ouverte.</td></tr>';
+            } else {
+                positions.forEach(pos => {
+                    const row = tableBody.insertRow();
+                    row.innerHTML = `
+                        <td>${pos.symbol}</td>
+                        <td style="color: ${pos.direction === 'buy' ? 'var(--color-green)' : 'var(--color-red)'}; font-weight: bold;">${pos.direction.toUpperCase()}</td>
+                        <td>${pos.lots}</td>
+                        <td>${pos.openPrice.toFixed(4)}</td>
+                        <td>${pos.sl ? pos.sl.toFixed(4) : 'N/A'}</td>
+                        <td>${pos.tp ? pos.tp.toFixed(4) : 'N/A'}</td>
+                        <td class="${pos.pnl >= 0 ? 'pnl-positive' : 'pnl-negative'}">${pos.pnl.toFixed(2)}</td>
+                        <td><button class="action-button" onclick="closePosition(${pos.id})">Fermer</button></td>
+                    `;
+                });
+            }
+            // Mettre à jour le compteur dans l'onglet
+            document.querySelector('.tabs-header button:nth-child(1)').textContent = `Positions (${positions.length})`;
+        }
+
+        function updateHistoryDisplay() {
+            const tableBody = document.getElementById('positionHistoryTable');
+            tableBody.innerHTML = '';
+            
+            if (history.length === 0) {
+                tableBody.innerHTML = '<tr><td colspan="6" style="text-align: center;">Aucun historique de position.</td></tr>';
+            } else {
+                history.forEach(pos => {
+                    const row = tableBody.insertRow();
+                    row.innerHTML = `
+                        <td>${pos.symbol}</td>
+                        <td style="color: ${pos.direction === 'buy' ? 'var(--color-green)' : 'var(--color-red)'}; font-weight: bold;">${pos.direction.toUpperCase()}</td>
+                        <td>${pos.lots}</td>
+                        <td>${pos.openPrice.toFixed(4)}</td>
+                        <td>${pos.closePrice.toFixed(4)}</td>
+                        <td class="${pos.result >= 0 ? 'pnl-positive' : 'pnl-negative'}">${pos.result.toFixed(2)}$ (${pos.reason})</td>
+                    `;
+                });
+            }
+            // Mettre à jour le compteur dans l'onglet
+            document.querySelector('.tabs-header button:nth-child(2)').textContent = `Historique de Position (${history.length})`;
+        }
+
+        function showTab(tabId) {
+            document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.tab-pane').forEach(pane => pane.classList.remove('active'));
+            
+            document.querySelector(`.tabs-header button[onclick="showTab('${tabId}')"]`).classList.add('active');
+            document.getElementById(tabId).classList.add('active');
+        }
+
+        // ----------------------------------------------------
+        // --- INITIALIZATION ---
+        // ----------------------------------------------------
+
+        document.addEventListener('DOMContentLoaded', () => {
+            renderWatchlist();
+            selectAsset(currentAsset); // Initialise le graphique et l'info lot
+            updateBalance(0); // Affiche le solde initial (50K)
+
+            // Démarrer la boucle de calcul PnL (toutes les 1 seconde)
+            pnlInterval = setInterval(calculateAndCheckPnL, 1000); 
+
+            // Événement pour le champ Prix Limite
+            document.getElementById('orderType').addEventListener('change', (e) => {
+                const limitPriceInput = document.getElementById('limitPrice');
+                limitPriceInput.disabled = e.target.value !== 'limit';
+                if (e.target.value !== 'limit') {
+                    limitPriceInput.value = '';
                 }
             });
 
-            // Calcul du PnL et mise à jour du tableau des positions (simplifié)
-            const positionsTableBody = document.getElementById('open-positions-table').querySelector('tbody');
-            positionsTableBody.innerHTML = '';
-            
-            openPositions.forEach(position => {
-                const isBuy = position.type === 'BUY';
-                const assetSpec = LOT_VALUES[position.asset];
-                const currentClosePrice = isBuy ? currentPrices[position.asset].bid : currentPrices[position.asset].ask;
-                
-                // Fonction de calcul PnL (stub)
-                const pnl = currentPrices[position.asset].bid * 10 - position.openPrice * 10;
-                position.pnl = pnl;
-                totalPnL += pnl;
-                
-                const row = document.createElement('tr');
-                row.innerHTML = `
-                    <td>${position.asset}</td>
-                    <td style="color:${isBuy ? 'var(--positive-color)' : 'var(--negative-color)'}">${position.type}</td>
-                    <td>${position.lots.toFixed(2)}</td>
-                    <td>${position.openPrice.toFixed(assetSpec.precision)}</td>
-                    <td>${currentClosePrice.toFixed(assetSpec.precision)}</td>
-                    <td>N/A - N/A</td>
-                    <td class="${pnl >= 0 ? 'pnl-positive' : 'pnl-negative'}">$${pnl.toFixed(2)}</td>
-                    <td><button class="sell-btn" onclick="console.log('Fermer position');">X</button></td>
-                `;
-                positionsTableBody.appendChild(row);
-            });
-            
-            updatePriceDisplay(currentAsset);
-            updateAccountInfo();
-        }
-
-        function fetchPriceSimulation(asset) {
-            const current = currentPrices[asset];
-            if (!current) return { bid: 0, ask: 0 };
-            const volatility = LOT_VALUES[asset].isForex ? 0.00005 : 0.5; 
-            const change = (Math.random() - 0.5) * volatility;
-            current.bid += change;
-            current.ask = current.bid + (current.ask - current.bid); 
-            return current;
-        }
-
-
-        function openTab(tabId) {
-            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-            document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
-
-            document.getElementById(tabId).classList.add('active');
-            document.querySelector(`.tab-button[onclick="openTab('${tabId}')"]`).classList.add('active');
-            
-            if (tabId === 'history') {
-                updateHistoryTable();
-            }
-        }
-        
-        function updateHistoryTable() {
-            const historyBody = document.getElementById('history-positions-table').querySelector('tbody');
-            historyBody.innerHTML = '';
-            
-            // Ici, vous inséreriez les lignes de positionHistory
-            // Pour le moment, on affiche un message si vide
-            if (positionHistory.length === 0) {
-                 historyBody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #6c757d;">Aucune position dans l\'historique.</td></tr>';
-            }
-            
-            document.querySelector('.tab-header button:nth-child(2)').textContent = `Historique (${positionHistory.length})`;
-        }
-
-
-        // ====================================================================
-        // FONCTIONS D'ORDRE (Simplifiées pour la concision)
-        // ====================================================================
-        
-        function executeMarketOrder(type) {
-             const lots = parseFloat(document.getElementById('market-lots').value);
-             const asset = currentAsset;
-             const price = type === 'BUY' ? currentPrices[asset].ask : currentPrices[asset].bid;
-             const assetSpec = LOT_VALUES[asset];
-
-             if (isNaN(lots) || lots <= 0) {
-                console.log("Lots invalides.");
-                return;
-             }
-
-             const newPosition = {
-                id: Date.now().toString(),
-                asset: asset,
-                type: type,
-                lots: lots,
-                openPrice: price,
-                pnl: 0,
-                openTime: new Date().toISOString()
-            };
-            openPositions.push(newPosition);
-            updatePricesAndPnL(); 
-            console.log(`Ordre de marché ${type} de ${lots} lots sur ${asset} exécuté à ${price.toFixed(assetSpec.precision)}.`);
-        }
-        
-        function placeLimitOrder(type) {
-            const asset = document.getElementById('limit-asset').value;
-            const price = parseFloat(document.getElementById('limit-price').value);
-            const lots = parseFloat(document.getElementById('limit-lots').value);
-            
-            if (isNaN(price) || isNaN(lots) || lots <= 0) {
-                console.log("Veuillez vérifier le prix limite et le nombre de lots.");
-                return;
-            }
-            
-            console.log(`Ordre Limite ${type} de ${lots.toFixed(2)} lots sur ${asset} à ${price.toFixed(5)} placé.`);
-            alert(`Ordre Limite ${type} placé pour ${asset} à ${price.toFixed(5)} (simulé).`);
-        }
+            // Fermeture des positions si le marché est fermé (vérification toutes les heures)
+            // setInterval(() => {
+            //     if (isMarketClosed()) {
+            //         positions.forEach(pos => closePosition(pos.id, 'Market Close'));
+            //     }
+            // }, 3600000); // 1 heure
+        });
 
     </script>
 </body>
 </html>
-
 
 
 
