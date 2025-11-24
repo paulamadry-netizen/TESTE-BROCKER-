@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Mini Broker Pro (Fonctionnel)</title>
     <style>
-        /* --- CSS for Modern Dark Theme --- */
+        /* --- CSS for Modern Dark Theme (Inchangé) --- */
         :root {
             --bg-dark: #1e212b;
             --bg-card: #282c37;
@@ -71,7 +71,6 @@
             flex-direction: column;
             min-width: 320px;
             max-width: 400px;
-            /* Correction pour le défilement vertical du panneau droit */
             overflow-y: auto; 
         }
 
@@ -147,7 +146,6 @@
             color: var(--bg-dark);
         }
 
-        /* --- Chart Container (Corrigé) --- */
         .chart-container {
             flex: 1;
             min-height: 400px;
@@ -155,12 +153,9 @@
             padding: 0; 
             border-radius: 8px;
             overflow: hidden;
-            background-color: var(--bg-dark); /* Assurer que le fond est sombre */
+            background-color: var(--bg-dark);
         }
         
-        /* Pour le titre au-dessus du widget, on le remet dans le HTML de la toolbar/en-tête */
-
-        /* --- Watchlist --- */
         .watchlist-item {
             display: flex;
             justify-content: space-between;
@@ -188,7 +183,6 @@
             transition: color 0.05s ease-in-out; 
         }
 
-        /* --- Order Form Limite --- */
         .order-form-container h3 {
             margin-top: 0;
             padding-bottom: 10px;
@@ -391,8 +385,11 @@
     <script>
         // --- JavaScript pour la logique et les API ---
 
+        // CLÉ API UTILISÉE : 8906aa7f29ca470da317f72ae7efab51
         const API_KEY = '8906aa7f29ca470da317f72ae7efab51'; 
         const TWELVEDATA_WSS = (symbol) => `wss://ws.twelvedata.com/v1/quotes/price?symbol=${symbol}&apikey=${API_KEY}`;
+        // Nouvelle URL REST pour la récupération initiale
+        const TWELVEDATA_PRICE_REST = (symbol) => `https://api.twelvedata.com/price?symbol=${symbol}&apikey=${API_KEY}`;
         
         const ALL_ASSETS = [
             { symbol: 'EUR/USD', tv_symbol: 'EURUSD', name: 'Euro/Dollar', type: 'FOREX', multiplier: 100000 }, 
@@ -414,7 +411,7 @@
         let positionHistory = []; 
         let websocket = null; 
 
-        // Références DOM
+        // Références DOM (Inchagées)
         const watchlistBody = document.getElementById('watchlist-body');
         const positionsBody = document.getElementById('positions-body');
         const historyBody = document.getElementById('history-body');
@@ -426,7 +423,7 @@
         const soundRejected = document.getElementById('sound-rejected');
         const lotsInput = document.getElementById('lots'); 
 
-        // --- Fonctions d'Utilitaires ---
+        // --- Fonctions d'Utilitaires (Inchagées) ---
 
         const formatUSD = (amount) => {
             const color = amount >= 0 ? 'var(--buy-color)' : 'var(--sell-color)';
@@ -460,7 +457,6 @@
             
             updateNotionalValue(); 
 
-            // Mise à jour de la classe active
             document.querySelectorAll('.watchlist-item').forEach(item => {
                 item.classList.remove('active');
             });
@@ -497,6 +493,38 @@
              }
         }
 
+        // --- Récupération de Prix via REST (Nouvelle fonction pour la stabilité) ---
+        async function getInitialPriceRest(symbol) {
+            const assetData = getAssetData(symbol);
+            if (!assetData) return null;
+
+            try {
+                // Twelve Data REST API utilise le symbole sans slash
+                const response = await fetch(TWELVEDATA_PRICE_REST(assetData.tv_symbol)); 
+                const data = await response.json();
+                
+                if (data.price && !isNaN(parseFloat(data.price))) {
+                    const price = parseFloat(data.price);
+                    // Stocker le prix sous le symbole interne (ex: EUR/USD)
+                    assetPrices[symbol] = price; 
+                    
+                    // Mise à jour visuelle pour la watchlist
+                    const priceElement = document.getElementById(`price-${assetData.tv_symbol}`);
+                    if (priceElement && priceElement.textContent === '---') {
+                         priceElement.textContent = formatPrice(price, symbol);
+                    }
+                    
+                    console.log(`Prix initial récupéré par REST pour ${symbol}: ${price}`);
+                    return price;
+                } else {
+                    console.error(`Erreur REST API: Impossible d'obtenir le prix pour ${symbol}.`, data.message);
+                    return null;
+                }
+            } catch (error) {
+                console.error('Erreur lors de la requête REST pour le prix:', error);
+                return null;
+            }
+        }
 
         // --- TradingView et WebSocket ---
         function loadTradingViewWidget(tv_symbol) {
@@ -524,6 +552,8 @@
             if (websocket) {
                 websocket.close(); 
             }
+            // Récupère d'abord un prix par REST au cas où le WS serait lent ou échouerait
+            getInitialPriceRest(currentSymbol); 
 
             const WSS_URL = TWELVEDATA_WSS(tv_symbol);
             websocket = new WebSocket(WSS_URL);
@@ -535,7 +565,6 @@
             websocket.onmessage = (event) => {
                 const data = JSON.parse(event.data);
                 if (data.event === 'price') {
-                    // Trouver le symbole interne (EUR/USD) à partir du symbole TV (EURUSD)
                     const assetData = ALL_ASSETS.find(a => a.tv_symbol === data.symbol);
                     if (!assetData) return;
                     
@@ -544,7 +573,6 @@
                     
                     if (isNaN(price)) return;
 
-                    // STOCKER LE PRIX EN UTILISANT LE SYMBOLE INTERNE (ex: EUR/USD)
                     assetPrices[symbol] = price; 
                     
                     // Mise à jour Watchlist (visuel)
@@ -574,7 +602,57 @@
             };
         }
         
-        function calculateAndUpdatePnL() {
+        // --- Passer un Ordre Market (Amélioré) ---
+        async function placeOrder(type) {
+            const lots = parseFloat(lotsInput.value);
+            
+            if (isNaN(lots) || lots <= 0.01) {
+                alert('Veuillez saisir un volume de Lots valide (min 0.01).');
+                playSound('rejected');
+                return;
+            }
+            
+            let openPrice = assetPrices[currentSymbol];
+
+            // 🚨 Tenter de récupérer le prix une dernière fois via REST si le WS est toujours muet
+            if (!openPrice) {
+                console.warn('Le prix n\'est pas encore disponible via WS. Tentative de récupération via REST...');
+                // Le symbole de l'actif actuel est utilisé
+                openPrice = await getInitialPriceRest(currentSymbol); 
+            }
+            
+            if (!openPrice) {
+                alert('Erreur: Le prix actuel n\'a pas pu être récupéré via WebSocket ou REST API. Vérifiez votre clé API et la connexion.');
+                playSound('rejected');
+                return;
+            }
+            
+            // Ordre Market
+            const newPosition = {
+                id: Date.now(), 
+                symbol: currentSymbol,
+                type: type, 
+                lots: lots.toFixed(2),
+                openPrice: openPrice, 
+                sl: null, 
+                tp: null, 
+                openTime: new Date().toLocaleTimeString(),
+                currentPrice: openPrice,
+                pnl: 0
+            };
+            
+            positions.push(newPosition);
+            renderPositions();
+            playSound('accepted');
+            
+            // Nettoyage des champs pour les ordres limites
+            document.getElementById('limit-price').value = '';
+            document.getElementById('stop-loss').value = '';
+            document.getElementById('take-profit').value = '';
+        }
+        
+        // --- Fonctions de Rendu et de Logique (Inchagées) ---
+        function calculateAndUpdatePnL() { /* ... Inchangé ... */
             let totalPnL = 0;
 
             positions.forEach(pos => {
@@ -595,7 +673,6 @@
                 pos.pnl = pnl;
                 totalPnL += pnl;
 
-                // Mise à jour de la ligne dans le tableau des positions
                 const row = document.getElementById(`pos-${pos.id}`);
                 if (row) {
                     row.querySelector('.pnl-cell').innerHTML = formatUSD(pnl);
@@ -609,83 +686,7 @@
             tabPositions.textContent = `Positions (${positions.length})`;
         }
 
-
-        // --- Passer un Ordre Market (Corrigé) ---
-        function placeOrder(type) {
-            const lots = parseFloat(lotsInput.value);
-            
-            if (isNaN(lots) || lots <= 0.01) {
-                alert('Veuillez saisir un volume de Lots valide (min 0.01).');
-                playSound('rejected');
-                return;
-            }
-            
-            // Correction ici: On vérifie que le prix est disponible pour le SYMBOL ACTUEL
-            const openPrice = assetPrices[currentSymbol];
-            
-            if (!openPrice) {
-                // Ce message apparaît si le WebSocket n'a pas encore envoyé le premier prix.
-                alert('Erreur: Prix actuel non disponible. Veuillez attendre les données API.');
-                playSound('rejected');
-                return;
-            }
-            
-            // Ordre Market
-            const newPosition = {
-                id: Date.now(), 
-                symbol: currentSymbol,
-                type: type, 
-                lots: lots.toFixed(2),
-                openPrice: openPrice, // Utilise le prix récupéré
-                sl: null, 
-                tp: null, 
-                openTime: new Date().toLocaleTimeString(),
-                currentPrice: openPrice,
-                pnl: 0
-            };
-            
-            positions.push(newPosition);
-            renderPositions();
-            playSound('accepted');
-            
-            document.getElementById('limit-price').value = '';
-            document.getElementById('stop-loss').value = '';
-            document.getElementById('take-profit').value = '';
-        }
-        
-        // --- Passer un Ordre Limite ---
-        function placeLimitOrder(type) {
-            const limitPriceInput = document.getElementById('limit-price');
-            const stopLossInput = document.getElementById('stop-loss');
-            const takeProfitInput = document.getElementById('take-profit');
-            
-            const lots = parseFloat(lotsInput.value);
-            const limitPrice = parseFloat(limitPriceInput.value);
-            const sl = parseFloat(stopLossInput.value) || null;
-            const tp = parseFloat(takeProfitInput.value) || null;
-
-            if (isNaN(limitPrice) || limitPrice <= 0) {
-                alert("Veuillez saisir un Prix Limite valide pour placer un ordre pending.");
-                playSound('rejected');
-                return;
-            }
-            
-            if (isNaN(lots) || lots <= 0.01) {
-                alert('Veuillez saisir un volume de Lots valide (min 0.01).');
-                playSound('rejected');
-                return;
-            }
-
-            alert(`Ordre Limite ${type} pour ${currentSymbol} à ${limitPrice} placé. (Simulé)`);
-            playSound('accepted');
-            
-            limitPriceInput.value = '';
-            stopLossInput.value = '';
-            takeProfitInput.value = '';
-        }
-
-        // --- Fermer une Position et Rendu (Inchagés) ---
-        function checkStopLossTakeProfit(position, currentPrice) {
+        function checkStopLossTakeProfit(position, currentPrice) { /* ... Inchangé ... */
             let shouldClose = false;
             let closeReason = '';
 
@@ -710,7 +711,7 @@
             }
         }
         
-        function closePosition(id, closePrice = null, closeReason = 'Closed by User') {
+        function closePosition(id, closePrice = null, closeReason = 'Closed by User') { /* ... Inchangé ... */
             const index = positions.findIndex(pos => pos.id === id);
             if (index === -1) return;
 
@@ -749,7 +750,7 @@
             playSound('accepted');
         }
 
-        function renderPositions() {
+        function renderPositions() { /* ... Inchangé ... */
             positionsBody.innerHTML = '';
             positions.forEach(pos => {
                 const row = positionsBody.insertRow();
@@ -771,7 +772,7 @@
             tabPositions.textContent = `Positions (${positions.length})`;
         }
 
-        function renderHistory() {
+        function renderHistory() { /* ... Inchangé ... */
             historyBody.innerHTML = '';
             positionHistory.sort((a, b) => b.id - a.id).forEach(hist => {
                 const row = historyBody.insertRow();
@@ -786,13 +787,44 @@
             });
         }
         
-        function openTab(evt, tabName) {
+        function openTab(evt, tabName) { /* ... Inchangé ... */
             document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
             document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
             
             document.getElementById(tabName).classList.add('active');
             evt.currentTarget.classList.add('active');
         }
+        
+        function placeLimitOrder(type) { /* ... Inchangé ... */
+            const limitPriceInput = document.getElementById('limit-price');
+            const stopLossInput = document.getElementById('stop-loss');
+            const takeProfitInput = document.getElementById('take-profit');
+            
+            const lots = parseFloat(lotsInput.value);
+            const limitPrice = parseFloat(limitPriceInput.value);
+            const sl = parseFloat(stopLossInput.value) || null;
+            const tp = parseFloat(takeProfitInput.value) || null;
+
+            if (isNaN(limitPrice) || limitPrice <= 0) {
+                alert("Veuillez saisir un Prix Limite valide pour placer un ordre pending.");
+                playSound('rejected');
+                return;
+            }
+            
+            if (isNaN(lots) || lots <= 0.01) {
+                alert('Veuillez saisir un volume de Lots valide (min 0.01).');
+                playSound('rejected');
+                return;
+            }
+
+            alert(`Ordre Limite ${type} pour ${currentSymbol} à ${limitPrice} placé. (Simulé)`);
+            playSound('accepted');
+            
+            limitPriceInput.value = '';
+            stopLossInput.value = '';
+            takeProfitInput.value = '';
+        }
+
 
         // --- Initialisation ---
         function initializeBroker() {
