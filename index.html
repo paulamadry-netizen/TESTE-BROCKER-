@@ -3,22 +3,24 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AmA Trading - Prop Firm Broker</title>
+    <title>AmA Trading - Prop Firm Broker (Updated)</title>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
-        /* CSS V2.1 */
         :root {
-            --bg-dark: #121417; /* Presque noir */
-            --bg-medium: #1c2025; /* Arrière-plan des panneaux */
-            --bg-light: #2c3138; /* Couleur des headers/input */
-            --color-text: #e0e0e0;
-            --color-text-light: #9aa0a6;
-            --color-green: #00a859;
-            --color-red: #ff3347;
-            --color-primary: #3b82f6; /* Bleu moderne */
-            --border-color: #3e444d;
+            --bg-dark: #0f1316;
+            --bg-medium: #15181c;
+            --bg-light: #212429;
+            --color-text: #e6eef7;
+            --color-text-light: #9aa3ad;
+            --color-green: #00c176;
+            --color-red: #ff5c6c;
+            --color-primary: #3b82f6;
+            --border-color: #2a2f36;
             --font-family: 'Montserrat', sans-serif;
+            --radius: 10px;
         }
+
+        *{box-sizing: border-box}
 
         body {
             font-family: var(--font-family);
@@ -29,301 +31,136 @@
             display: flex;
             height: 100vh;
             overflow: hidden;
-            font-size: 13px;
+            font-size: 14px;
         }
 
-        /* --- LAYOUT & HEADER --- */
-        .header {
-            grid-area: 1 / 1 / 2 / 3;
-            background-color: var(--bg-medium);
-            padding: 10px 20px;
-            border-bottom: 1px solid var(--border-color);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            font-size: 1.5em;
-            font-weight: 700;
-            color: var(--color-primary);
-        }
-        
         .container {
             display: grid;
-            grid-template-columns: 300px 1fr;
-            grid-template-rows: auto 1fr 280px; /* Row 1: Header, Row 2: Chart, Row 3: Tabs */
+            grid-template-columns: 320px 1fr;
+            grid-template--rows: auto 1fr 300px;
             width: 100%;
             height: 100%;
         }
 
-        .left-panel {
-            grid-area: 2 / 1 / 4 / 2; /* Chart + Tabs height */
+        .header {
+            grid-column: 1 / 3;
+            background-color: var(--bg-medium);
+            padding: 14px 22px;
+            border-bottom: 1px solid var(--border-color);
             display: flex;
-            flex-direction: column;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--color-primary);
+        }
+
+        .left-panel {
             background-color: var(--bg-medium);
             border-right: 1px solid var(--border-color);
-            /* overflow-y: auto; */ /* Retiré pour éviter le scroll sur ce panneau s'il est petit */
-        }
-
-        .main-chart {
-            grid-area: 2 / 2 / 3 / 3;
-            background-color: black;
-        }
-
-        .bottom-tabs {
-            grid-area: 3 / 2 / 4 / 3;
-            background-color: var(--bg-medium);
-            border-top: 1px solid var(--border-color);
-        }
-
-        /* --- BALANCE & WATCHLIST --- */
-        .balance-bar {
-            padding: 15px;
-            background-color: var(--bg-light);
-            font-weight: 600;
-            border-bottom: 1px solid var(--border-color);
-            color: var(--color-primary);
-            text-align: center;
-            flex-shrink: 0; /* Empêche de rétrécir */
-        }
-
-        .watchlist-header {
-            padding: 10px 15px;
-            background-color: var(--bg-medium);
-            font-weight: 700;
-            font-size: 1em;
-            text-transform: uppercase;
-            border-bottom: 1px solid var(--border-color);
-            flex-shrink: 0;
-        }
-
-        .watchlist {
-            flex-grow: 1; /* Prend l'espace restant */
-            overflow-y: auto; /* Permet le scroll si trop d'éléments */
-            border-bottom: 1px solid var(--border-color); /* Ajouté pour séparer visuellement */
-        }
-
-        .asset-item {
-            display: grid;
-            grid-template-columns: 1fr 100px;
-            align-items: center;
-            padding: 10px 15px;
-            cursor: pointer;
-            border-bottom: 1px solid var(--bg-medium);
-            transition: background-color 0.15s, color 0.15s;
-        }
-
-        .asset-item:hover, .asset-item.active {
-            background-color: var(--bg-light);
-            color: white;
-        }
-        
-        .asset-item .symbol {
-            font-weight: 600;
-        }
-
-        .asset-item .price {
-            font-weight: 600;
-            text-align: right;
-            color: var(--color-green);
-        }
-        
-        /* --- LIMIT ORDER TABLE (Amélioré V2.1) --- */
-        .limit-order-panel {
-            padding: 15px;
-            background-color: var(--bg-medium);
-            border-top: 5px solid var(--border-color);
-            flex-shrink: 0; /* Empêche de rétrécir et maintient sa taille */
-            /* Suppression de flex-grow: 1 pour qu'il soit compact */
-        }
-
-        .limit-order-panel h3 {
-            margin-top: 0;
-            margin-bottom: 15px;
-            font-size: 1.1em;
-            text-align: center;
-            color: white;
-            padding-bottom: 5px;
-            border-bottom: 2px solid var(--color-primary);
-        }
-
-        .order-form {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 8px; /* Réduction du gap */
-        }
-        
-        .form-group {
-            grid-column: span 2;
             display: flex;
             flex-direction: column;
+            padding: 0;
         }
 
-        .form-group.split {
-            grid-column: span 1;
+        .main-chart { background-color: #000; }
+
+        .bottom-tabs { background-color: var(--bg-medium); border-top: 1px solid var(--border-color); }
+
+        /* balance/watchlist */
+        .balance-bar{ padding: 14px; background: linear-gradient(90deg,var(--bg-light),transparent); font-weight:700; color:var(--color-primary);}
+        .watchlist-header{ padding:10px 14px; font-weight:700; text-transform:uppercase; color:var(--color-text-light);}
+        .watchlist{ flex:1; overflow:auto; padding:6px; }
+
+        .asset-item{
+            display:flex; justify-content:space-between; align-items:center;
+            padding:10px 12px; margin:6px 4px; border-radius:8px; cursor:pointer;
+            background:transparent; transition:background 0.12s, transform 0.08s;
+        }
+        .asset-item:hover{ background:var(--bg-light); transform:translateY(-2px); }
+        .asset-item.active{ background:linear-gradient(90deg, rgba(59,130,246,0.08), transparent); border:1px solid var(--border-color); }
+        .symbol{ font-weight:700 }
+        .price{ font-weight:700; min-width:90px; text-align:right; }
+
+        /* limit order panel: reduced height and responsive */
+        .limit-order-panel{
+            padding:12px; background:var(--bg-medium); border-top:1px solid var(--border-color);
+            border-radius:0 0 var(--radius) 0; margin:10px; box-shadow: 0 6px 18px rgba(0,0,0,0.45);
         }
 
-        .form-group label {
-            font-size: 0.8em;
-            margin-bottom: 4px;
-            color: var(--color-text-light);
-            font-weight: 600;
-        }
+        .limit-order-panel h3{ margin:0 0 10px 0; font-size:1rem; text-align:center; color:var(--color-text); border-bottom:2px solid rgba(59,130,246,0.12); padding-bottom:8px }
 
-        .order-form input, .order-form select {
-            padding: 8px; /* Réduction du padding */
-            border: 1px solid var(--border-color);
-            background-color: var(--bg-light);
-            color: var(--color-text);
-            border-radius: 6px;
-            font-size: 13px; /* Réduction de la taille de police */
-            outline: none;
-            transition: border-color 0.2s;
-        }
+        .order-form{ display:grid; grid-template-columns: 1fr 1fr; gap:8px; align-items:end; }
+        .form-group{ display:flex; flex-direction:column; }
+        label{ font-size:12px; color:var(--color-text-light); margin-bottom:6px; font-weight:700 }
+        input, select{ padding:10px; border-radius:8px; background:var(--bg-light); border:1px solid var(--border-color); color:var(--color-text); outline:none; font-size:13px }
+        input:focus, select:focus{ box-shadow:0 0 0 3px rgba(59,130,246,0.08); border-color:var(--color-primary) }
 
-        .order-form input:focus, .order-form select:focus {
-            border-color: var(--color-primary);
-        }
+        .order-actions{ grid-column: 1 / -1; display:flex; gap:8px; }
+        .order-actions button{ flex:1; padding:10px; border-radius:8px; border:none; font-weight:800; cursor:pointer }
+        .buy-btn{ background:var(--color-green); color:#041014 }
+        .sell-btn{ background:var(--color-red); color:#fff }
 
-        .order-form button {
-            padding: 10px; /* Réduction du padding */
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            font-weight: 700;
-            font-size: 1em; /* Réduction de la taille de police */
-            transition: transform 0.1s, opacity 0.2s;
-        }
+        .lot-info{ grid-column:1 / -1; text-align:center; padding:8px; background:var(--bg-light); border-radius:8px; color:var(--color-text-light); font-weight:700; margin-top:6px }
 
-        .order-form button:hover {
-            opacity: 0.9;
-            transform: translateY(-1px);
-        }
+        /* bottom tabs */
+        .tabs-header{ display:flex; gap:8px; padding:10px; background:linear-gradient(90deg,var(--bg-light),transparent); }
+        .tab-button{ padding:8px 14px; border-radius:8px; border:none; cursor:pointer; background:transparent; color:var(--color-text-light); font-weight:700 }
+        .tab-button.active{ background:linear-gradient(90deg, rgba(59,130,246,0.12), transparent); color:var(--color-text) }
+        .tabs-content{ padding:12px; height:calc(100% - 50px); overflow:auto }
 
-        .buy-btn {
-            background-color: var(--color-green);
-        }
+        table{ width:100%; border-collapse:collapse; font-size:13px }
+        thead th{ text-align:left; padding:8px; color:var(--color-text-light); font-weight:700 }
+        tbody td{ padding:8px; border-top:1px solid var(--border-color) }
+        .pnl-positive{ color:var(--color-green); font-weight:800 }
+        .pnl-negative{ color:var(--color-red); font-weight:800 }
 
-        .sell-btn {
-            background-color: var(--color-red);
-        }
+        .action-button{ padding:6px 10px; border-radius:8px; border:none; cursor:pointer; background:var(--color-primary); color:white }
 
-        .lot-info {
-            grid-column: span 2;
-            text-align: center;
-            padding: 8px; /* Réduction du padding */
-            background-color: var(--bg-light);
-            border-radius: 6px;
-            margin-top: 8px; /* Réduction de la marge */
-            font-size: 0.85em; /* Réduction de la taille de police */
-            font-weight: 600;
-        }
-        
-        /* --- BOTTOM TABS (POSITIONS/HISTORY) --- */
-        .tabs-header {
-            display: flex;
-            background-color: var(--bg-light);
-            border-bottom: 1px solid var(--border-color);
-            flex-shrink: 0;
-        }
+        /* modal for editing position */
+        .modal-backdrop{ position:fixed; inset:0; background:rgba(0,0,0,0.6); display:none; align-items:center; justify-content:center; z-index:60 }
+        .modal{ background:var(--bg-medium); padding:16px; border-radius:12px; width:420px; max-width:92%; box-shadow:0 10px 30px rgba(0,0,0,0.6) }
+        .modal h4{ margin:0 0 10px 0 }
+        .modal .row{ display:flex; gap:8px }
+        .modal input{ flex:1 }
+        .modal .modal-actions{ display:flex; gap:8px; margin-top:12px }
+        .btn-ghost{ background:transparent; border:1px solid var(--border-color); color:var(--color-text) }
 
-        .tab-button {
-            padding: 12px 20px;
-            cursor: pointer;
-            border: none;
-            background-color: transparent;
-            color: var(--color-text-light);
-            font-weight: 600;
-            border-bottom: 3px solid transparent;
-            transition: border-bottom-color 0.2s, color 0.2s;
+        /* responsive */
+        @media (max-width:900px){
+            .container{ grid-template-columns: 1fr; grid-template-rows: auto 360px 1fr }
+            .left-panel{ order:2 }
+            .main-chart{ order:1; height:360px }
+            .limit-order-panel{ margin:10px 12px }
+            .order-form{ grid-template-columns:1fr }
+            .price{ min-width:70px }
         }
-
-        .tab-button.active {
-            border-bottom-color: var(--color-primary);
-            color: white;
-        }
-
-        .tabs-content {
-            padding: 15px;
-            overflow-y: auto;
-            height: calc(100% - 40px);
-        }
-
-        .tab-pane {
-            display: none;
-        }
-
-        .tab-pane.active {
-            display: block;
-        }
-
-        /* --- TABLE STYLES --- */
-        .data-table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 0.9em;
-        }
-
-        .data-table th, .data-table td {
-            padding: 10px;
-            text-align: left;
-            border-bottom: 1px solid var(--border-color);
-        }
-
-        .data-table th {
-            background-color: var(--bg-light);
-            text-transform: uppercase;
-            font-size: 0.8em;
-            color: var(--color-text-light);
-        }
-
-        .pnl-positive { color: var(--color-green); font-weight: 700; }
-        .pnl-negative { color: var(--color-red); font-weight: 700; }
-        .action-button {
-            padding: 5px 10px;
-            background-color: var(--color-primary);
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 0.9em;
-            transition: background-color 0.2s;
-        }
-        .action-button:hover { background-color: #3172d5; }
 
     </style>
 </head>
 <body>
 
-    <audio id="orderTakenSound" src="[Placeholder for Order Taken Sound - E.g., a short 'ding']" preload="auto"></audio>
-    <audio id="orderRejectedSound" src="[Placeholder for Order Rejected Sound - E.g., a short 'buzz']" preload="auto"></audio>
+    <audio id="orderTakenSound" src="" preload="auto"></audio>
+    <audio id="orderRejectedSound" src="" preload="auto"></audio>
 
     <div class="container">
-        
-        <div class="header">
-            AmA Trading 🚀
-        </div>
+        <div class="header">AmA Trading 🚀</div>
 
         <div class="left-panel">
-            <div class="balance-bar">
-                SOLDE DISPONIBLE: <span id="currentBalance">50,000.00 $</span>
-            </div>
-
-            <div class="watchlist-header">
-                WATCHLIST
-            </div>
-            <div class="watchlist" id="watchlist">
-                </div>
+            <div class="balance-bar">SOLDE DISPONIBLE: <span id="currentBalance">50,000.00 $</span></div>
+            <div class="watchlist-header">WATCHLIST</div>
+            <div class="watchlist" id="watchlist"></div>
 
             <div class="limit-order-panel">
                 <h3 id="order-panel-asset">Passer un Ordre (EURUSD)</h3>
-                
-                <form id="orderForm" class="order-form">
-                    
-                    <div class="form-group split">
+
+                <form id="orderForm" class="order-form" onsubmit="return false">
+                    <div class="form-group">
                         <label for="lotSize">Lots (Volume)</label>
                         <input type="number" id="lotSize" value="1.0" min="0.01" step="0.01" required>
                     </div>
 
-                    <div class="form-group split">
+                    <div class="form-group">
                         <label for="orderType">Type d'Ordre</label>
                         <select id="orderType" required>
                             <option value="market">Au Marché</option>
@@ -336,20 +173,22 @@
                         <input type="number" id="limitPrice" placeholder="Prix d'exécution cible" disabled>
                     </div>
 
-                    <div class="form-group split">
+                    <div class="form-group">
                         <label for="stopLoss">Stop Loss (SL)</label>
                         <input type="number" id="stopLoss" placeholder="Prix SL (Optionnel)">
                     </div>
-                    
-                    <div class="form-group split">
+
+                    <div class="form-group">
                         <label for="takeProfit">Take Profit (TP)</label>
                         <input type="number" id="takeProfit" placeholder="Prix TP (Optionnel)">
                     </div>
 
                     <div id="lotInfo" class="lot-info">1.0 Lot EURUSD ≈ 100,000.00 $</div>
 
-                    <button type="button" class="buy-btn" onclick="placeOrder('buy')">ACHETER</button>
-                    <button type="button" class="sell-btn" onclick="placeOrder('sell')">VENDRE</button>
+                    <div class="order-actions">
+                        <button type="button" class="buy-btn" onclick="placeOrder('buy')">ACHETER</button>
+                        <button type="button" class="sell-btn" onclick="placeOrder('sell')">VENDRE</button>
+                    </div>
                 </form>
             </div>
         </div>
@@ -357,10 +196,7 @@
         <div class="main-chart">
             <iframe id="tradingViewChart"
                 src="https://fr.tradingview.com/widgetembed/?symbol=FX_IDC%3AEURUSD&interval=60&theme=dark&style=1&locale=fr&toolbar_bg=%231c2025&enable_publishing=false&allow_symbol_change=true&container_id=tradingview_widget"
-                frameborder="0"
-                allowfullscreen
-                style="width: 100%; height: 100%;">
-            </iframe>
+                frameborder="0" allowfullscreen style="width:100%; height:100%;"></iframe>
         </div>
 
         <div class="bottom-tabs">
@@ -368,343 +204,219 @@
                 <button class="tab-button active" onclick="showTab('positions')">Positions (0)</button>
                 <button class="tab-button" onclick="showTab('history')">Historique (0)</button>
             </div>
-            
             <div class="tabs-content">
                 <div id="positions" class="tab-pane active">
-                    <table class="data-table">
+                    <table>
                         <thead>
-                            <tr>
-                                <th>Actif</th>
-                                <th>Sens</th>
-                                <th>Lots</th>
-                                <th>Ouverture</th>
-                                <th>Stop/Take</th>
-                                <th>PnL (USD)</th>
-                                <th>Action</th>
-                            </tr>
+                            <tr><th>Actif</th><th>Sens</th><th>Lots</th><th>Ouverture</th><th>Stop/Take</th><th>PnL (USD)</th><th>Action</th></tr>
                         </thead>
-                        <tbody id="activePositionsTable">
-                            <tr><td colspan="7" style="text-align: center; color: var(--color-text-light);">Aucune position ouverte.</td></tr>
-                        </tbody>
+                        <tbody id="activePositionsTable"><tr><td colspan="7" class="text-light" style="text-align:center;color:var(--color-text-light);">Aucune position ouverte.</td></tr></tbody>
                     </table>
                 </div>
 
                 <div id="history" class="tab-pane">
-                    <table class="data-table">
+                    <table>
                         <thead>
-                            <tr>
-                                <th>Actif</th>
-                                <th>Sens</th>
-                                <th>Lots</th>
-                                <th>Ouverture</th>
-                                <th>Fermeture</th>
-                                <th>Résultat</th>
-                            </tr>
+                            <tr><th>Actif</th><th>Sens</th><th>Lots</th><th>Ouverture</th><th>Fermeture</th><th>Résultat</th></tr>
                         </thead>
-                        <tbody id="positionHistoryTable">
-                            <tr><td colspan="6" style="text-align: center; color: var(--color-text-light);">Aucun historique de position.</td></tr>
-                        </tbody>
+                        <tbody id="positionHistoryTable"><tr><td colspan="6" style="text-align:center;color:var(--color-text-light);">Aucun historique de position.</td></tr></tbody>
                     </table>
                 </div>
             </div>
         </div>
+    </div>
 
+    <!-- Modal for editing position SL/TP/Reduce sell -->
+    <div id="modalBackdrop" class="modal-backdrop">
+        <div class="modal" role="dialog" aria-modal="true">
+            <h4 id="modalTitle">Modifier la position</h4>
+            <div style="margin-top:8px; font-size:13px; color:var(--color-text-light)" id="modalSub"></div>
+            <div style="margin-top:10px">
+                <label>Stop Loss (SL)</label>
+                <input id="modalSL" type="number" placeholder="Prix SL">
+            </div>
+            <div style="margin-top:8px">
+                <label>Take Profit (TP)</label>
+                <input id="modalTP" type="number" placeholder="Prix TP">
+            </div>
+            <div style="margin-top:8px">
+                <label>Lots (pour réduire/vendre partiellement)</label>
+                <input id="modalLots" type="number" step="0.01" placeholder="Nouveau lots (ex: 0.5 pour réduire)">
+            </div>
+            <div class="modal-actions">
+                <button class="action-button" onclick="saveModal()">Enregistrer</button>
+                <button class="btn-ghost" onclick="closeModal()">Annuler</button>
+                <button class="btn-ghost" style="margin-left:auto;" onclick="closePositionFromModal()">Vendre / Fermer</button>
+            </div>
+        </div>
     </div>
 
     <script>
-        // JAVASCRIPT
-        
-        // ----------------------------------------------------
-        // --- CONFIGURATION & DATA SIMULATION V2.1 ---
-        // ----------------------------------------------------
+        // CONFIG
         const ASSETS = {
-            // Forex: 1 Lot standard = 100,000 unités de la devise de base. Valeur nominale en USD.
-            'EURUSD': { group: 'Forex', tv_symbol: 'FX_IDC:EURUSD', lot_value_usd: 100000.00, market_coherence: 1.0, current_price: 1.0750, currency: 'USD' },
-            'GBPUSD': { group: 'Forex', tv_symbol: 'FX_IDC:GBPUSD', lot_value_usd: 100000.00, market_coherence: 1.2, current_price: 1.2500, currency: 'USD' },
-            'USDJPY': { group: 'Forex', tv_symbol: 'FX_IDC:USDJPY', lot_value_usd: 100000.00, market_coherence: 0.9, current_price: 150.00, currency: 'USD' },
-            'AUDUSD': { group: 'Forex', tv_symbol: 'FX_IDC:AUDUSD', lot_value_usd: 100000.00, market_coherence: 0.8, current_price: 0.6500, currency: 'USD' },
-            'USDCAD': { group: 'Forex', tv_symbol: 'FX_IDC:USDCAD', lot_value_usd: 100000.00, market_coherence: 1.1, current_price: 1.3500, currency: 'USD' },
-            // Indices: Valeur de contrat (basée sur 1 point par lot, souvent $1, mais varie pour les indices européens)
-            'US100':  { group: 'Index', tv_symbol: 'NASDAQ:NDX', lot_value_usd: 100.00, market_coherence: 20.0, current_price: 17500.00, currency: 'USD' }, // $1/point * 100 points (approximation pour simuler valeur lot)
-            'US30':   { group: 'Index', tv_symbol: 'DOWJONES:DJI', lot_value_usd: 100.00, market_coherence: 15.0, current_price: 38000.00, currency: 'USD' }, // $1/point
-            'DE40':   { group: 'Index', tv_symbol: 'XETR:DAX', lot_value_usd: 135.00, market_coherence: 18.0, current_price: 18000.00, currency: 'EUR' }, // ~€1/point * 100 (approximation pour simuler valeur lot)
-            'UK100':  { group: 'Index', tv_symbol: 'LSE:UKX', lot_value_usd: 120.00, market_coherence: 10.0, current_price: 7800.00, currency: 'GBP' }, // ~£1/point * 100 (approximation pour simuler valeur lot)
-            'FR40':   { group: 'Index', tv_symbol: 'EURONEXT:PX1', lot_value_usd: 110.00, market_coherence: 12.0, current_price: 8000.00, currency: 'EUR' }, // ~€1/point * 100 (approximation pour simuler valeur lot)
-            // Or: 1 Lot standard = 100 onces (troy)
-            'XAUUSD': { group: 'Metal', tv_symbol: 'TVC:GOLD', lot_value_usd: 200000.00, market_coherence: 1.0, current_price: 2000.00, currency: 'USD' } // 100 oz * $2000/oz (simulé)
+            'EURUSD': { group: 'Forex', tv_symbol: 'FX_IDC:EURUSD', lot_value_usd: 100000.00, market_coherence: 1.0, current_price: 1.0750 },
+            'GBPUSD': { group: 'Forex', tv_symbol: 'FX_IDC:GBPUSD', lot_value_usd: 100000.00, market_coherence: 1.2, current_price: 1.2500 },
+            'USDJPY': { group: 'Forex', tv_symbol: 'FX_IDC:USDJPY', lot_value_usd: 100000.00, market_coherence: 0.9, current_price: 150.00 },
+            'AUDUSD': { group: 'Forex', tv_symbol: 'FX_IDC:AUDUSD', lot_value_usd: 100000.00, market_coherence: 0.8, current_price: 0.6500 },
+            'USDCAD': { group: 'Forex', tv_symbol: 'FX_IDC:USDCAD', lot_value_usd: 100000.00, market_coherence: 1.1, current_price: 1.3500 },
+            'US100':  { group: 'Index', tv_symbol: 'NASDAQ:NDX', lot_value_usd: 100.00, market_coherence: 20.0, current_price: 17500.00 },
+            'US30':   { group: 'Index', tv_symbol: 'DOWJONES:DJI', lot_value_usd: 10.00, market_coherence: 15.0, current_price: 38000.00 },
+            'DE40':   { group: 'Index', tv_symbol: 'XETR:DAX', lot_value_usd: 25.00, market_coherence: 18.0, current_price: 18000.00 },
+            'UK100':  { group: 'Index', tv_symbol: 'LSE:UKX', lot_value_usd: 1.00, market_coherence: 10.0, current_price: 7800.00 },
+            'FR40':   { group: 'Index', tv_symbol: 'EURONEXT:PX1', lot_value_usd: 1.00, market_coherence: 12.0, current_price: 8000.00 },
+            'XAUUSD': { group: 'Metal', tv_symbol: 'TVC:GOLD', lot_value_usd: 100.00*1.0, market_coherence: 1.0, current_price: 2000.00 }
         };
 
-        // --- Variables Globales ---
         const TV_BASE_URL = "https://fr.tradingview.com/widgetembed/?interval=60&theme=dark&style=1&locale=fr&toolbar_bg=%231c2025&enable_publishing=false&allow_symbol_change=true&container_id=tradingview_widget&symbol=";
+
         let currentAsset = 'EURUSD';
-        let balance = 50000.00; // Solde initial 50 K
+        let balance = 50000.00;
         let positions = [];
         let history = [];
         let positionIdCounter = 1;
-        let pnlInterval;
-        
-        // --- Fonctions Utilitaires ---
+        let pnlInterval; let watchlistPriceInterval;
 
-        function updateBalance(amount) {
-            balance += amount;
-            document.getElementById('currentBalance').textContent = balance.toFixed(2) + ' $';
-        }
+        const DOM = {
+            balance: document.getElementById('currentBalance'),
+            watchlist: document.getElementById('watchlist'),
+            chart: document.getElementById('tradingViewChart'),
+            orderPanelAsset: document.getElementById('order-panel-asset'),
+            lotInfo: document.getElementById('lotInfo'),
+            orderType: document.getElementById('orderType'),
+            limitPrice: document.getElementById('limitPrice'),
+            lotSize: document.getElementById('lotSize'),
+            positionsTable: document.getElementById('activePositionsTable'),
+            historyTable: document.getElementById('positionHistoryTable'),
+            posBtn: document.querySelector('.tabs-header button:nth-child(1)'),
+            histBtn: document.querySelector('.tabs-header button:nth-child(2)'),
+            modalBackdrop: document.getElementById('modalBackdrop'),
+            modalTitle: document.getElementById('modalTitle'),
+            modalSub: document.getElementById('modalSub'),
+            modalSL: document.getElementById('modalSL'),
+            modalTP: document.getElementById('modalTP'),
+            modalLots: document.getElementById('modalLots')
+        };
 
-        function playSound(type) {
-            // Implémentation du son (nécessite des fichiers audio valides)
-            const soundElement = document.getElementById(type === 'taken' ? 'orderTakenSound' : 'orderRejectedSound');
-            if (soundElement && soundElement.src && soundElement.src.includes('http')) {
-                 soundElement.play().catch(e => console.error("Audio playback error:", e));
-            } else {
-                 console.log(`Sound (${type}) simulation: You need to set valid audio files.`);
-            }
-        }
-        
-        function formatLotValue(value) {
-            // Formate pour l'affichage (avec K, M, etc.)
-            if (value >= 1000000) return (value / 1000000).toFixed(1) + ' M $';
-            if (value >= 1000) return (value / 1000).toFixed(1) + ' K $';
-            return value.toFixed(2) + ' $';
-        }
+        function updateBalance(amount){ balance += amount; DOM.balance.textContent = balance.toFixed(2) + ' $'; }
+        function playSound(type){ /* placeholder */ }
 
-        // Simule le prix actuel (remplace l'appel API)
-        function fetchCurrentPrice(symbol) {
-            const asset = ASSETS[symbol];
-            const basePrice = asset.current_price;
-            
-            // Simule une fluctuation basée sur la cohérence du marché
-            let fluctuation = (Math.random() - 0.5) * 0.001; 
-            if (asset.group === 'Index') {
-                 fluctuation = (Math.random() - 0.5) * 5; // Variation plus importante pour les indices
-            }
-            
-            const newPrice = basePrice + (fluctuation * asset.market_coherence);
+        function fetchCurrentPrice(symbol){
+            const asset = ASSETS[symbol]; const basePrice = asset.current_price;
+            let fluctuation = (Math.random() - 0.5) * 0.002;
+            if (asset.group === 'Index') fluctuation = (Math.random() - 0.5) * 4;
+            const newPrice = Math.max( (basePrice + (fluctuation * asset.market_coherence)), 0.00001);
             asset.current_price = newPrice;
             return newPrice;
         }
 
-        // --- Watchlist & Chart ---
-
-        function renderWatchlist() {
-            const watchlistEl = document.getElementById('watchlist');
-            watchlistEl.innerHTML = '';
-
-            Object.keys(ASSETS).forEach(symbol => {
+        function renderWatchlist(){
+            let html='';
+            for(const symbol in ASSETS){
                 const asset = ASSETS[symbol];
-                const item = document.createElement('div');
-                item.className = `asset-item ${symbol === currentAsset ? 'active' : ''}`;
-                item.setAttribute('data-symbol', symbol);
-                
-                // Détermine le nombre de décimales
-                const decimals = (asset.group === 'Index' || asset.group === 'Metal') ? 2 : 5; 
-
-                item.innerHTML = `
+                const decimals = (asset.group === 'Index' || asset.group === 'Metal')?2:5;
+                html += `<div class="asset-item ${symbol===currentAsset? 'active':''}" data-symbol="${symbol}" onclick="selectAsset('${symbol}')">
                     <span class="symbol">${symbol}</span>
                     <span class="price" id="price-${symbol}">${asset.current_price.toFixed(decimals)}</span>
-                `;
-                item.onclick = () => selectAsset(symbol);
-                watchlistEl.appendChild(item);
-            });
-            // Démarre la simulation des prix en direct
-            setInterval(updateWatchlistPrices, 3000);
+                </div>`;
+            }
+            DOM.watchlist.innerHTML = html;
+            if (watchlistPriceInterval) clearInterval(watchlistPriceInterval);
+            watchlistPriceInterval = setInterval(updateWatchlistPrices, 3000);
         }
 
-        function updateWatchlistPrices() {
-            Object.keys(ASSETS).forEach(symbol => {
+        function updateWatchlistPrices(){
+            for(const symbol in ASSETS){
                 const price = fetchCurrentPrice(symbol);
+                const asset = ASSETS[symbol];
                 const priceEl = document.getElementById(`price-${symbol}`);
-                if (priceEl) {
-                    const decimals = (ASSETS[symbol].group === 'Index' || ASSETS[symbol].group === 'Metal') ? 2 : 5;
-                    priceEl.textContent = price.toFixed(decimals);
-                    // Simuler la couleur de changement
-                    const lastPrice = parseFloat(priceEl.getAttribute('data-last-price') || price);
-                    if (price > lastPrice) {
-                        priceEl.style.color = 'var(--color-green)';
-                    } else if (price < lastPrice) {
-                        priceEl.style.color = 'var(--color-red)';
-                    }
-                    priceEl.setAttribute('data-last-price', price);
-                }
-            });
+                if(!priceEl) continue;
+                const decimals = (asset.group === 'Index' || asset.group === 'Metal')?2:5;
+                const lastPrice = parseFloat(priceEl.getAttribute('data-last-price')||price);
+                priceEl.textContent = price.toFixed(decimals);
+                if(price>lastPrice) priceEl.style.color='var(--color-green)'; else if(price<lastPrice) priceEl.style.color='var(--color-red)';
+                priceEl.setAttribute('data-last-price', price);
+            }
         }
 
-        function selectAsset(symbol) {
-            currentAsset = symbol;
-            
-            // 1. Mettre à jour l'iFrame TradingView
-            const tvSymbol = ASSETS[symbol].tv_symbol;
-            document.getElementById('tradingViewChart').src = TV_BASE_URL + tvSymbol;
+        function selectAsset(symbol){ currentAsset = symbol; const assetInfo = ASSETS[symbol]; const tvSymbol = assetInfo.tv_symbol; DOM.chart.src = TV_BASE_URL + tvSymbol; document.querySelectorAll('.asset-item').forEach(i=>i.classList.remove('active')); const el = document.querySelector(`.asset-item[data-symbol="${symbol}"]`); if(el) el.classList.add('active'); DOM.orderPanelAsset.textContent = `Passer un Ordre (${symbol})`; DOM.lotInfo.textContent = `1.0 Lot ${symbol} ≈ ${assetInfo.lot_value_usd.toLocaleString('fr-FR', { style:'currency', currency:'USD', minimumFractionDigits:2 })}`; }
 
-            // 2. Mettre à jour l'affichage de la Watchlist
-            document.querySelectorAll('.asset-item').forEach(item => {
-                item.classList.remove('active');
-            });
-            document.querySelector(`.asset-item[data-symbol="${symbol}"]`).classList.add('active');
-
-            // 3. Mettre à jour le panneau de prise d'ordre
-            const assetInfo = ASSETS[symbol];
-            document.getElementById('order-panel-asset').textContent = `Passer un Ordre (${symbol})`;
-            document.getElementById('lotInfo').textContent = 
-                `1.0 Lot ${symbol} ≈ ${assetInfo.lot_value_usd.toLocaleString('fr-FR', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 })}`;
-        }
-
-        // --- Gestion des Ordres ---
-        
-        function placeOrder(direction) {
-            const symbol = currentAsset;
-            const lotSize = parseFloat(document.getElementById('lotSize').value);
-            const orderType = document.getElementById('orderType').value;
-            const limitPrice = parseFloat(document.getElementById('limitPrice').value);
+        function placeOrder(direction){
+            const symbol = currentAsset; const lotSize = parseFloat(DOM.lotSize.value); const orderType = DOM.orderType.value; const limitPrice = parseFloat(DOM.limitPrice.value);
             const stopLoss = parseFloat(document.getElementById('stopLoss').value);
             const takeProfit = parseFloat(document.getElementById('takeProfit').value);
-            const assetInfo = ASSETS[symbol];
-            const currentPrice = assetInfo.current_price;
+            const assetInfo = ASSETS[symbol]; const currentPrice = assetInfo.current_price;
+            if(isNaN(lotSize)||lotSize<=0){ alert('REFUSÉ: Le volume (Lots) doit être positif.'); return; }
+            const requiredNotional = lotSize * assetInfo.lot_value_usd;
+            if(requiredNotional > balance){ alert(`REFUSÉ: Marge insuffisante. ${lotSize} lots sur ${symbol} nécessite une exposition de ${requiredNotional.toFixed(2)}$ qui dépasse votre solde de ${balance.toFixed(2)}$.`); return; }
 
-            if (isNaN(lotSize) || lotSize <= 0.0) {
-                 alert("REFUSÉ: Le volume (Lots) doit être positif.");
-                 playSound('rejected');
-                 return;
-            }
-
-            // 1. Vérification Marge (Valeur Nominale)
-            // On vérifie que l'exposition totale ne dépasse pas le solde (vérification simplifiée pour la prop firm)
-            const requiredMargin = lotSize * assetInfo.lot_value_usd; 
-            if (requiredMargin > balance) {
-                alert(`REFUSÉ: Marge insuffisante. ${lotSize} Lots sur ${symbol} nécessite une exposition de ${requiredMargin.toFixed(2)}$ qui dépasse votre solde de ${balance.toFixed(2)}$.`);
-                playSound('rejected');
-                return;
-            }
-
-            // 2. Traitement de l'Ordre
-            if (orderType === 'market') {
-                const newPosition = {
-                    id: positionIdCounter++,
-                    symbol: symbol,
-                    direction: direction,
-                    lots: lotSize,
-                    openPrice: currentPrice,
-                    sl: isNaN(stopLoss) ? null : stopLoss,
-                    tp: isNaN(takeProfit) ? null : takeProfit,
-                    openTime: new Date(),
-                    pnl: 0.00
-                };
-                positions.push(newPosition);
-                updatePositionsDisplay();
-                playSound('taken');
-            } else if (orderType === 'limit') {
-                if (isNaN(limitPrice) || limitPrice <= 0) {
-                     alert("REFUSÉ: Vous devez spécifier un Prix Limite valide pour un ordre Limite.");
-                     playSound('rejected');
-                     return;
-                }
-                // Simulation d'Ordre Limite
-                alert(`Ordre Limite de ${lotSize} lots ${direction.toUpperCase()} sur ${symbol} au prix de ${limitPrice.toFixed(4)} est en attente.`);
-                playSound('taken');
-            }
-        }
-        
-        // --- PnL, Stop/TP & Fermeture ---
-        
-        function calculateAndCheckPnL() {
-            if (positions.length === 0) return;
-
-            // Mettre à jour les prix une fois pour tous les actifs
-            updateWatchlistPrices(); 
-
-            positions = positions.filter(pos => {
-                const currentPrice = ASSETS[pos.symbol].current_price;
-                const assetInfo = ASSETS[pos.symbol];
-                
-                // Facteur de cohérence du marché pour le PnL (plus la coherence est élevée, plus le PnL fluctue rapidement)
-                // C'est la valeur du pip/point pour 1 lot dans la devise du compte ($)
-                let pipsValue; 
-                if (assetInfo.group === 'Forex') {
-                    // 1 pip (0.0001) vaut 10$ pour un lot standard (approximation)
-                    pipsValue = 10.0; 
-                } else if (assetInfo.group === 'Metal') {
-                    // 1 point (0.01) vaut 10$ pour 1 lot standard (approximation)
-                    pipsValue = 10.0;
-                } else {
-                    // Indices (Valeur du point approx. $1 * market_coherence)
-                    pipsValue = 1.0 * (assetInfo.lot_value_usd / 100); 
-                }
-
-                let priceChange;
-                if (pos.direction === 'buy') {
-                    priceChange = currentPrice - pos.openPrice;
-                } else {
-                    priceChange = pos.openPrice - currentPrice;
-                }
-                
-                // PnL = (Changement de prix / Taille du pas de prix) * (Valeur du pip/point * Lots)
-                // Pour Forex (pas de 0.0001)
-                const priceStep = (assetInfo.group === 'Forex') ? 0.0001 : (assetInfo.group === 'Index' ? 1.0 : 0.01); 
-
-                let pnl = (priceChange / priceStep) * pipsValue * pos.lots;
-                pos.pnl = pnl;
-
-                // 1. Check Stop Loss / Take Profit (Logique maintenue)
-                if ((pos.sl && pos.direction === 'buy' && currentPrice <= pos.sl) || 
-                    (pos.sl && pos.direction === 'sell' && currentPrice >= pos.sl)) {
-                    closePosition(pos.id, 'SL', currentPrice);
-                    return false; 
-                }
-                if ((pos.tp && pos.direction === 'buy' && currentPrice >= pos.tp) || 
-                    (pos.tp && pos.direction === 'sell' && currentPrice <= pos.tp)) {
-                    closePosition(pos.id, 'TP', currentPrice);
-                    return false; 
-                }
-                return true; 
-            });
-
-            updatePositionsDisplay();
-        }
-
-        function closePosition(id, reason = 'Manuelle', closePrice = null) {
-            const index = positions.findIndex(p => p.id === id);
-            if (index === -1) return;
-
-            const closedPos = positions.splice(index, 1)[0];
-            const finalPnl = closedPos.pnl; 
-
-            updateBalance(finalPnl);
-
-            history.push({
-                ...closedPos,
-                closePrice: closePrice || ASSETS[closedPos.symbol].current_price,
-                closeTime: new Date(),
-                result: finalPnl,
-                reason: reason
-            });
-
-            updatePositionsDisplay();
-            updateHistoryDisplay();
-            console.log(`Position #${id} (${closedPos.symbol}) fermée (${reason}). PnL: ${finalPnl.toFixed(2)}$`);
-        }
-        
-        function isMarketClosed() {
-            // Logique de vérification de fermeture des marchés (simplifiée)
-            const day = new Date().getDay();
-            return day === 0 || day === 6; // Dimanche ou Samedi
-        }
-        
-        // --- Display Updates ---
-
-        function updatePositionsDisplay() {
-            const tableBody = document.getElementById('activePositionsTable');
-            tableBody.innerHTML = '';
-            
-            if (positions.length === 0) {
-                tableBody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--color-text-light);">Aucune position ouverte.</td></tr>';
+            if(orderType==='market'){
+                const newPosition = { id: positionIdCounter++, symbol, direction, lots: lotSize, openPrice: currentPrice, sl: isNaN(stopLoss)?null:stopLoss, tp: isNaN(takeProfit)?null:takeProfit, openTime: new Date(), pnl:0 };
+                positions.push(newPosition); updatePositionsDisplay(); playSound('taken');
             } else {
-                positions.forEach(pos => {
-                    const row = tableBody.insertRow();
-                    const slText = pos.sl ? `SL: ${pos.sl.toFixed(4)}` : 'N/A';
-                    const tpText = pos.tp ? `TP: ${pos.tp.toFixed(4)}` : 'N/A';
-                    
-                    row.innerHTML = `
+                if(isNaN(limitPrice) || limitPrice <= 0){ alert('REFUSÉ: Vous devez spécifier un Prix Limite valide pour un ordre Limite.'); return; }
+                alert(`Ordre Limite de ${lotSize} lots ${direction.toUpperCase()} sur ${symbol} au prix de ${limitPrice} est en attente.`);
+            }
+        }
+
+        function calculateAndCheckPnL(){ if(positions.length===0) return; updateWatchlistPrices(); const remaining = [];
+            for(const pos of positions){ const currentPrice = ASSETS[pos.symbol].current_price; const assetInfo = ASSETS[pos.symbol]; let pipsValue, priceStep;
+                if(assetInfo.group==='Forex'){ pipsValue = 10.0; priceStep = 0.0001; }
+                else if(assetInfo.group==='Metal'){ pipsValue = assetInfo.lot_value_usd / 100; priceStep = 0.01; }
+                else { pipsValue = assetInfo.lot_value_usd; priceStep = 1.0; }
+                const priceChange = pos.direction==='buy' ? (currentPrice - pos.openPrice) : (pos.openPrice - currentPrice);
+                const pnl = (priceChange/priceStep) * pipsValue * pos.lots; pos.pnl = pnl;
+                let isClosed=false;
+                if(pos.sl && ((pos.direction==='buy' && currentPrice<=pos.sl) || (pos.direction==='sell' && currentPrice>=pos.sl))){ closePosition(pos.id,'SL', currentPrice); isClosed=true; }
+                else if(pos.tp && ((pos.direction==='buy' && currentPrice>=pos.tp) || (pos.direction==='sell' && currentPrice<=pos.tp))){ closePosition(pos.id,'TP', currentPrice); isClosed=true; }
+                if(!isClosed) remaining.push(pos);
+            }
+            positions = remaining; updatePositionsDisplay(); }
+
+        function closePosition(id, reason='Manuelle', closePrice=null){ const idx = positions.findIndex(p=>p.id===id); if(idx===-1) return; const closed = positions.splice(idx,1)[0]; const finalPnl = closed.pnl; updateBalance(finalPnl); history.push({...closed, closePrice: closePrice||ASSETS[closed.symbol].current_price, closeTime:new Date(), result: finalPnl, reason}); updateHistoryDisplay(); console.log(`Position #${id} fermée (${reason}) PnL: ${finalPnl.toFixed(2)}$`); }
+
+        function updatePositionsDisplay(){ let html=''; if(positions.length===0){ html = '<tr><td colspan="7" style="text-align:center;color:var(--color-text-light);">Aucune position ouverte.</td></tr>' } else {
+                for(const pos of positions){ const slText = pos.sl?`SL: ${pos.sl}`:'N/A'; const tpText = pos.tp?`TP: ${pos.tp}`:'N/A'; const directionColor = pos.direction==='buy'? 'var(--color-green)' : 'var(--color-red)'; const pnlClass = pos.pnl>=0? 'pnl-positive':'pnl-negative';
+                    html += `<tr data-id="${pos.id}" onclick="openEditModal(${pos.id})" style="cursor:pointer">
                         <td>${pos.symbol}</td>
-                        <td style="color: ${pos.
+                        <td style="color:${directionColor}; font-weight:700">${pos.direction.toUpperCase()}</td>
+                        <td>${pos.lots.toFixed(2)}</td>
+                        <td>${pos.openPrice.toFixed(4)}</td>
+                        <td>${slText} / ${tpText}</td>
+                        <td class="${pnlClass}">${pos.pnl.toFixed(2)} $</td>
+                        <td><button class="action-button" onclick="event.stopPropagation(); closePosition(${pos.id}, 'Manuelle')">Fermer</button></td>
+                    </tr>`;
+                }
+            }
+            DOM.positionsTable.innerHTML = html; DOM.posBtn.textContent = `Positions (${positions.length})`; }
+
+        function updateHistoryDisplay(){ let html=''; if(history.length===0){ html = '<tr><td colspan="6" style="text-align:center;color:var(--color-text-light);">Aucun historique de position.</td></tr>' } else {
+                for(let i=history.length-1;i>=0;i--){ const pos=history[i]; const dirColor = pos.direction==='buy'? 'var(--color-green)':'var(--color-red)'; const pnlClass = pos.result>=0? 'pnl-positive':'pnl-negative'; html += `<tr><td>${pos.symbol}</td><td style="color:${dirColor}; font-weight:700">${pos.direction.toUpperCase()}</td><td>${pos.lots.toFixed(2)}</td><td>${pos.openPrice.toFixed(4)}</td><td>${pos.closePrice.toFixed(4)}</td><td class="${pnlClass}">${pos.result.toFixed(2)}$ (${pos.reason})</td></tr>` }
+            }
+            DOM.historyTable.innerHTML = html; DOM.histBtn.textContent = `Historique (${history.length})`; }
+
+        function showTab(tabId){ document.querySelectorAll('.tab-button').forEach(b=>b.classList.remove('active')); document.querySelectorAll('.tab-pane').forEach(p=>p.classList.remove('active')); document.querySelector(`.tabs-header button[onclick="showTab('${tabId}')"]`).classList.add('active'); document.getElementById(tabId).classList.add('active'); }
+
+        // Modal handling: openEditModal, saveModal, closeModal, closePositionFromModal
+        let modalEditingId = null;
+        function openEditModal(id){ const pos = positions.find(p=>p.id===id); if(!pos) return; modalEditingId = id; DOM.modalTitle.textContent = `Modifier / Gérer Position #${id}`; DOM.modalSub.textContent = `${pos.symbol} • ${pos.direction.toUpperCase()} • ${pos.lots.toFixed(2)} lots • Ouverture ${pos.openPrice.toFixed(4)}`; DOM.modalSL.value = pos.sl||''; DOM.modalTP.value = pos.tp||''; DOM.modalLots.value = '' ; DOM.modalBackdrop.style.display = 'flex'; }
+        function closeModal(){ DOM.modalBackdrop.style.display = 'none'; modalEditingId = null; }
+        function saveModal(){ if(modalEditingId===null) return; const pos = positions.find(p=>p.id===modalEditingId); if(!pos) return; const newSL = parseFloat(DOM.modalSL.value); const newTP = parseFloat(DOM.modalTP.value); const newLots = parseFloat(DOM.modalLots.value);
+            pos.sl = isNaN(newSL)? null : newSL; pos.tp = isNaN(newTP)? null : newTP; if(!isNaN(newLots) && newLots>0 && newLots < pos.lots){ // reduce lots (partial close)
+                // close proportionally: calculate pnl share
+                const reduceBy = pos.lots - newLots; const share = reduceBy / pos.lots; const pnlShare = pos.pnl * share; pos.lots = newLots; // give user the pnlShare now
+                updateBalance(pnlShare);
+                history.push({...pos, closePrice: ASSETS[pos.symbol].current_price, closeTime: new Date(), result: pnlShare, reason: 'Partial Close'});
+            }
+            updatePositionsDisplay(); updateHistoryDisplay(); closeModal(); }
+        function closePositionFromModal(){ if(modalEditingId===null) return; closePosition(modalEditingId,'Manuelle'); closeModal(); }
+
+        function isMarketClosed(){ const day = new Date().getDay(); return day===0||day===6; }
+
+        document.addEventListener('DOMContentLoaded', ()=>{ renderWatchlist(); selectAsset(currentAsset); updateBalance(0); pnlInterval = setInterval(calculateAndCheckPnL, 1000); DOM.orderType.addEventListener('change',(e)=>{ const isLimit = e.target.value==='limit'; DOM.limitPrice.disabled = !isLimit; if(!isLimit) DOM.limitPrice.value=''; }); if(isMarketClosed()){ [...positions].forEach(p=>closePosition(p.id,'Market Close')); alert('Marchés fermés. Toutes les positions ont été clôturées.'); } });
+
+    </script>
+</body>
+</html>
 
 
 
