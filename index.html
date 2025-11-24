@@ -9,44 +9,33 @@
   :root{--bg:#0f1724;--card:#0b1220;--muted:#94a3b8;--accent:#06b6d4;--glass: rgba(255,255,255,0.03)}
   *{box-sizing:border-box;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial}
   body{margin:0;background:linear-gradient(180deg,#081226, #071126);color:#e6eef6;padding:18px}
-  .app{max-width:1200px;margin:12px auto;display:grid;grid-template-columns:1fr 360px;gap:16px}
-  .card{background:var(--card);border-radius:12px;padding:12px;box-shadow:0 6px 24px rgba(2,6,23,0.6)}
+  .app{width:100%;max-width:100%;margin:0 auto;display:grid;grid-template-columns:1fr 380px;gap:16px}
+  .card{background:var(--card);border-radius:12px;padding:12px;box-shadow:0 6px 24px rgba(2,6,23,0.6);width:100%}
   header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
   h1{font-size:18px;margin:0}
   .balance{font-weight:700;color:var(--accent)}
-  /* left column layout */
-  .left {display:flex;flex-direction:column;gap:12px}
-  /* chart area */
-  #chartCard{height:520px;padding:8px;display:flex;flex-direction:column;gap:8px}
-  #tvwidget{flex:1;border-radius:8px;overflow:hidden}
+  .left {display:flex;flex-direction:column;gap:12px;width:100%}
+  #chartCard{height:560px;padding:8px;display:flex;flex-direction:column;gap:8px;width:100%}
+  #tvwidget{flex:1;border-radius:8px;overflow:hidden;width:100%}
   .tabs{display:flex;gap:6px;background:var(--glass);padding:6px;border-radius:8px}
   .tab{padding:8px 12px;border-radius:8px;cursor:pointer;color:var(--muted)}
   .tab.active{background:linear-gradient(90deg,var(--accent),#7dd3fc);color:#032;box-shadow:0 6px 18px rgba(6,182,212,0.12)}
-  /* right column watchlist */
-  .watchlist{display:flex;flex-direction:column;gap:8px}
+  .watchlist{display:flex;flex-direction:column;gap:8px;width:100%}
   .wl-item{display:flex;justify-content:space-between;padding:8px;border-radius:8px;cursor:pointer}
   .wl-item:hover{background:rgba(255,255,255,0.02)}
   .small{font-size:13px;color:var(--muted)}
-  /* orders table */
   table{width:100%;border-collapse:collapse}
   th,td{padding:8px;text-align:left;font-size:13px;border-bottom:1px solid rgba(255,255,255,0.03)}
-  .controls{display:flex;gap:8px;align-items:center}
+  .controls{display:flex;gap:8px;align-items:center;width:100%}
   .btn{background:var(--accent);color:#032;padding:8px 10px;border-radius:6px;border:none;cursor:pointer;font-weight:600}
   .btn.danger{background:#ef4444;color:white}
   input,select{background:transparent;border:1px solid rgba(255,255,255,0.06);padding:8px;border-radius:6px;color:inherit}
-  .muted{color:var(--muted)}
-  .positions-table td.actions{display:flex;gap:6px}
   footer{margin-top:10px;font-size:12px;color:var(--muted);text-align:center}
-  /* responsive */
-  @media (max-width:1000px){
-    .app{grid-template-columns:1fr; padding:12px}
-    #chartCard{height:420px}
-  }
+  @media (max-width:1000px){.app{grid-template-columns:1fr}#chartCard{height:420px}}
 </style>
 </head>
 <body>
 <div class="app">
-  <!-- left: chart + tabs -->
   <div class="left">
     <div class="card" id="chartCard">
       <header>
@@ -57,10 +46,8 @@
         <div class="small muted">Mode demo</div>
       </header>
 
-      <!-- TradingView widget container -->
       <div id="tvwidget"></div>
 
-      <!-- tabs under chart -->
       <div style="display:flex;gap:8px;align-items:center;">
         <div class="tabs" style="flex:1">
           <div class="tab active" data-tab="positions">Positions</div>
@@ -69,21 +56,15 @@
         <div class="small muted">Actif sélectionné: <strong id="selectedAssetLabel">EUR/USD</strong></div>
       </div>
 
-      <!-- tab contents -->
       <div id="tabContent" style="margin-top:8px;">
-        <!-- Positions view -->
         <div id="positionsView">
           <table class="positions-table">
             <thead>
               <tr><th>Actif</th><th>Direction</th><th>Lots</th><th>Entrée</th><th>Prix actuel</th><th>PnL</th><th>Stop/TP</th><th>Actions</th></tr>
             </thead>
-            <tbody id="positionsBody">
-              <!-- dynamic -->
-            </tbody>
+            <tbody id="positionsBody"></tbody>
           </table>
         </div>
-
-        <!-- History view -->
         <div id="historyView" style="display:none">
           <table>
             <thead><tr><th>Date</th><th>Actif</th><th>Type</th><th>Lots</th><th>Prix</th><th>Résultat</th></tr></thead>
@@ -94,629 +75,69 @@
     </div>
 
     <div class="card">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-        <div><strong>Paramètres API</strong><div class="small muted">Insère la clé TwelveData ci-dessous. IG via proxy conseillé.</div></div>
-        <div style="display:flex;gap:8px">
-          <input id="tdApiKey" placeholder="TwelveData API Key" style="width:260px"/>
-        </div>
-      </div>
-      <div class="small muted">Remarque : laisse la clé vide si tu veux faire des tests manuels.</div>
+      <strong>Paramètres API</strong>
+      <div class="small muted">Clé TwelveData ci-dessous (IG via proxy)</div>
+      <input id="tdApiKey" placeholder="TwelveData API Key" style="width:100%;margin-top:6px"/>
     </div>
   </div>
 
-  <!-- right: watchlist + orders -->
   <div class="watchlist">
     <div class="card">
-      <header style="align-items:center">
-        <div><strong>Watchlist</strong><div class="small muted">Clique pour sélectionner — on ne poll que l'actif sélectionné</div></div>
-        <div class="small muted">Données live: TwelveData (Forex) + IG (Indices)</div>
+      <header>
+        <div><strong>Watchlist</strong><div class="small muted">Clique pour sélectionner</div></div>
       </header>
-
-      <!-- list -->
-      <div id="wlList" style="margin-top:10px;display:flex;flex-direction:column;gap:6px">
-        <!-- will be filled by JS -->
-      </div>
-
-      <!-- value per lot info -->
-      <div style="margin-top:10px" class="small muted">
-        <div>1 lot = <span id="lotValueDisplay">—</span> (USD) <button class="btn" id="refreshLotValues" style="margin-left:8px;padding:6px 8px">Rafraîchir</button></div>
-      </div>
+      <div id="wlList" style="margin-top:10px;display:flex;flex-direction:column;gap:6px"></div>
+      <div style="margin-top:10px" class="small muted">1 lot = <span id="lotValueDisplay">—</span></div>
     </div>
 
-    <!-- table d'ordres -->
     <div class="card">
-      <header style="display:flex;justify-content:space-between;align-items:center">
+      <header>
         <div><strong>Ordres limite</strong><div class="small muted">Passer achats / ventes</div></div>
-        <div class="small muted">Solde disponible: <span id="availableDisplay">50,000.00 $</span></div>
+        <div class="small muted">Solde: <span id="availableDisplay">50,000.00 $</span></div>
       </header>
 
-      <div style="margin-top:8px;display:grid;grid-template-columns:1fr;gap:8px">
+      <div style="margin-top:8px;display:flex;flex-direction:column;gap:8px;width:100%">
         <div class="controls">
-          <select id="orderAsset">
-            <!-- js -->
-          </select>
-          <select id="orderSide">
-            <option value="buy">Acheter</option>
-            <option value="sell">Vendre</option>
-          </select>
-          <input id="orderPrice" placeholder="Prix limite" />
-          <input id="orderLots" placeholder="Lots (ex: 1.0)" style="width:110px"/>
-          <button class="btn" id="placeOrderBtn">Placer ordre</button>
+          <select id="orderAsset" style="flex:1"></select>
+          <select id="orderSide"><option value="buy">Acheter</option><option value="sell">Vendre</option></select>
+        </div>
+        <div class="controls">
+          <input id="orderPrice" placeholder="Prix limite" style="flex:1"/>
+          <input id="orderLots" placeholder="Lots" style="width:120px"/>
+          <button class="btn" id="placeOrderBtn">Placer</button>
         </div>
 
-        <div>
-          <table id="ordersTable">
-            <thead><tr><th>Actif</th><th>Type</th><th>Lots</th><th>Prix Limite</th><th>Statut</th><th></th></tr></thead>
-            <tbody id="ordersBody"></tbody>
-          </table>
-        </div>
+        <table id="ordersTable">
+          <thead><tr><th>Actif</th><th>Type</th><th>Lots</th><th>Prix</th><th>Statut</th><th></th></tr></thead>
+          <tbody id="ordersBody"></tbody>
+        </table>
       </div>
-    </div>
-
-    <div class="card small muted">
-      <strong>Notes techniques</strong>
-      <ul>
-        <li>La page ne poll que l'actif sélectionné (économie de data).</li>
-        <li>IG : pour récupérer prix & contract size en production, lancer un proxy/serveur (voir commentaire dans le code).</li>
-        <li>Les tailles de contrats utilisées sont basées sur les spécifications publiques (voir sources fournies).</li>
-      </ul>
     </div>
   </div>
 </div>
 
-<footer class="muted">Fichier demo — ajoute tes clés API dans le champ dédié. © Prop Firm Mini Broker</footer>
+<footer class="muted">Fichier demo — © Prop Firm Mini Broker</footer>
 
-<!-- audio (data URLs, deux sons simples) -->
-<audio id="soundAccept">
-  <source src="data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAA=">
-</audio>
-<audio id="soundReject">
-  <source src="data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAA=">
-</audio>
-
-<!-- TradingView widget script (official embeddable) -->
-<script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
-
+<audio id="soundAccept"><source src="data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAA="></audio>
+<audio id="soundReject"><source src="data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAA="></audio>
+<script src="https://s3.tradingview.com/tv.js"></script>
 <script>
-/* ===========================
-   Configuration & Constants
-   =========================== */
-const TWELVEDATA_API_KEY = ''; // tu mettras ta clé ici ou dans le champ
-// Liste des actifs demandés
+/* ===================== */
+/* WATCHLIST (5 FX + 5 indices + GOLD) */
+/* ===================== */
 const DEFAULT_WATCHLIST = [
-  { symbol: 'EUR/USD', type:'forex', tdSymbol:'EUR/USD' },
-  { symbol: 'USD/JPY', type:'forex', tdSymbol:'USD/JPY' },
-  { symbol: 'GBP/USD', type:'forex', tdSymbol:'GBP/USD' },
-  { symbol: 'USD/CHF', type:'forex', tdSymbol:'USD/CHF' },
-  { symbol: 'AUD/USD', type:'forex', tdSymbol:'AUD/USD' },
-  { symbol: 'US500', type:'index', igSymbol:'US SPX 500' }, // S&P500
-  { symbol: 'NAS100', type:'index', igSymbol:'NASDAQ 100' },
-  { symbol: 'DE30', type:'index', igSymbol:'DAX' },
-  { symbol: 'UK100', type:'index', igSymbol:'FTSE 100' },
-  { symbol: 'JP225', type:'index', igSymbol:'Nikkei 225' },
-  { symbol: 'XAU/USD', type:'metal', tdSymbol:'XAU/USD' } // Or
-];
+  { symbol:'EUR/USD', type:'forex', tdSymbol:'EUR/USD' },
+  { symbol:'GBP/USD', type:'forex', tdSymbol:'GBP/USD' },
+  { symbol:'USD/JPY', type:'forex', tdSymbol:'USD/JPY' },
+  { symbol:'USD/CHF', type:'forex', tdSymbol:'USD/CHF' },
+  { symbol:'AUD/USD', type:'forex', tdSymbol:'AUD/USD' },
+  { symbol:'US500', type:'index', igSymbol:'US SPX 500' },
+  { symbol:'NAS100', type:'index', igSymbol:'NASDAQ 100' },
+  { symbol:'DE30', type:'index', igSymbol:'DAX' },
+  { symbol:'UK100', type:'index', igSymbol:'FTSE 100' },
+  { symbol:'JP225', type:'index', igSymbol:'Nikkei 225' },
+  { symbol:'XAU/USD', type:'metal', tdSymbol:'XAU/USD' }
 
-// mapping par défaut des tailles de contrat (valeurs récupérées depuis docs publiques pour certains instruments)
-// Ces valeurs ont été extraites des pages publiques (IG / documentation) — vérifie pour ton instrument exact.
-// EUR/USD: 100000 unités (lot standard). Source: IG / docs. AUUSD): 1 lot = 100 troy oz (IG/MT4). Source: IG / docs. _SPECS = {
-  'EUR/USD': { type:'forex', unitsPerLot: 100000 },      // source publique
-  'USD/JPY': { type:'forex', unitsPerLot: 100000 },
-  'GBP/USD': { type:'forex', unitsPerLot: 100000 },
-  'USD/CHF': { type:'forex', unitsPerLot: 100000 },
-  'AUD/USD': { type:'forex', unitsPerLot: 100000 },
-  'XAU/USD': { type:'metal', ozPerLot: 100 },            // 1 lot = 100 troy oz (MT4 spec IG)
-  'US500': { type:'index', contractSizeUSD: 250 },      // IG lists 250 USD per point for US500
-  // Les autres indices: il est préférable de récupérer la spec en direct depuis IG (proxy serveur)
-};
-
-// starting balance
-let balance = 50000.00;
-let positions = []; // active positions
-let history = [];
-let orders = [];
-let selectedAsset = DEFAULT_WATCHLIST[0]; // par défaut EUR/USD
-let pollingInterval = null;
-
-/* ===========================
-   UI init
-   =========================== */
-document.addEventListener('DOMContentLoaded', () => {
-  // TradingView widget
-  new TradingView.widget({
-    "container_id": "tvwidget",
-    "width": "100%",
-    "height": "100%",
-    "symbol": "FX:EURUSD",
-    "interval": "60",
-    "timezone": "Europe/Paris",
-    "theme": "dark",
-    "style": "1",
-    "locale": "fr",
-    "toolbar_bg": "#1f2a44",
-    "hide_side_toolbar": false,
-    "allow_symbol_change": true,
-    "withdateranges": true,
-    "details": true,
-    "studies": ["MACD@tv-basicstudies"],
-    "show_popup_button": true,
-    "popup_width": "1000",
-    "popup_height": "650"
-  });
-
-  // fill watchlist UI
-  const wlList = document.getElementById('wlList');
-  DEFAULT_WATCHLIST.forEach(item => {
-    const div = document.createElement('div');
-    div.className = 'wl-item';
-    div.innerHTML = `<div><strong>${item.symbol}</strong><div class="small muted">${item.type}</div></div><div id="price-${item.symbol.replace(/\W/g,'')}">-</div>`;
-    div.addEventListener('click', ()=>selectAsset(item));
-    wlList.appendChild(div);
-  });
-
-  // fill order asset select
-  const orderAsset = document.getElementById('orderAsset');
-  DEFAULT_WATCHLIST.forEach(a=>{
-    const opt = document.createElement('option');
-    opt.value = a.symbol;
-    opt.textContent = a.symbol;
-    orderAsset.appendChild(opt);
-  });
-
-  // attach events
-  document.getElementById('placeOrderBtn').addEventListener('click', onPlaceOrder);
-  document.getElementById('tdApiKey').addEventListener('change', e => {
-    // save key to runtime var
-    // NB: don't persist to server here, only runtime.
-    // user can copy/paste key in field or we can set TWELVEDATA_API_KEY variable below if desired.
-  });
-  document.getElementById('refreshLotValues').addEventListener('click', refreshLotValues);
-
-  // tabs
-  document.querySelectorAll('.tab').forEach(t=>{
-    t.addEventListener('click', ()=>{
-      document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
-      t.classList.add('active');
-      const tab = t.dataset.tab;
-      document.getElementById('positionsView').style.display = tab==='positions'?'block':'none';
-      document.getElementById('historyView').style.display = tab==='history'?'block':'none';
-    });
-  });
-
-  // select default asset
-  selectAsset(selectedAsset);
-
-  // start UI refresh loop
-  refreshUI();
-});
-
-/* ===========================
-   Asset selection & polling
-   =========================== */
-function selectAsset(asset){
-  selectedAsset = asset;
-  document.getElementById('selectedAssetLabel').textContent = asset.symbol;
-  // set TradingView symbol when possible
-  try {
-    if(asset.type==='forex'){
-      // TradingView uses FX:EURUSD
-      const tvSym = 'FX:' + asset.tdSymbol.replace('/','');
-      // If TradingView API has changeSymbol (not in minimal embed), we skip. Otherwise user can change manually.
-    } else if(asset.type==='index'){
-      // no direct mapping for tradingview — user can change in widget manually
-    } else if(asset.type==='metal'){
-      // e.g., XAUUSD
-    }
-  } catch(e){}
-  // stop previous polling
-  if(pollingInterval) clearInterval(pollingInterval);
-  // fetch immediately then poll every 3s
-  fetchPriceForSelected();
-  pollingInterval = setInterval(fetchPriceForSelected, 3000);
-  // update lot value display
-  updateLotValueDisplay(asset.symbol);
-}
-
-/* ===========================
-   Price fetching
-   =========================== */
-async function fetchPriceForSelected(){
-  const a = selectedAsset;
-  if(!a) return;
-  if(a.type === 'forex' || a.type === 'metal'){
-    // use TwelveData for forex/metals
-    await fetchTwelveDataPrice(a.tdSymbol || a.symbol);
-  } else if(a.type === 'index'){
-    // fetch via IG (requires proxy/server due to CORS & auth)
-    await fetchIGPrice(a.igSymbol || a.symbol);
-  }
-  // update PnL for positions (only those open on selected asset will use new price if we only poll selected)
-  updatePnLs();
-}
-
-async function fetchTwelveDataPrice(symbol){
-  const apiKey = document.getElementById('tdApiKey').value.trim() || TWELVEDATA_API_KEY;
-  if(!apiKey) {
-    // demo: allow manual input or simulate
-    // won't call API if no key
-    updatePriceInUI(symbol, null);
-    return;
-  }
-  // TwelveData price endpoint: https://api.twelvedata.com/price?symbol=EUR/USD&apikey=demo
-  try{
-    const url = `https://api.twelvedata.com/price?symbol=${encodeURIComponent(symbol)}&apikey=${apiKey}`;
-    const res = await fetch(url);
-    if(!res.ok) throw new Error('TD HTTP '+res.status);
-    const data = await res.json();
-    if(data && data.price){
-      const price = parseFloat(data.price);
-      updatePriceInUI(symbol, price);
-    } else {
-      updatePriceInUI(symbol, null);
-    }
-  } catch(err){
-    console.error('TwelveData error', err);
-    updatePriceInUI(symbol, null);
-  }
-}
-
-async function fetchIGPrice(igSymbol){
-  // NOTE: IG API requires auth and CORS: you should run a small proxy server that calls IG REST API with your key/credentials,
-  // then this frontend calls that proxy (ex: /api/ig/price?symbol=US500). Below we attempt to call a proxy endpoint; adjust to your setup.
-  try{
-    const res = await fetch(`/api/ig/price?symbol=${encodeURIComponent(igSymbol)}`);
-    if(!res.ok) throw new Error('IG proxy HTTP '+res.status);
-    const data = await res.json();
-    // expected {price: 5384.12, contractSizeUSD: 250}
-    updatePriceInUI(igSymbol, data.price);
-    // optionally update CONTRACT_SPECS from proxy data
-    if(data.contractSizeUSD){
-      CONTRACT_SPECS[igSymbol] = CONTRACT_SPECS[igSymbol] || {};
-      CONTRACT_SPECS[igSymbol].contractSizeUSD = data.contractSizeUSD;
-    }
-  } catch(err){
-    console.warn('IG price fetch failed (proxy?)', err);
-    updatePriceInUI(igSymbol, null);
-  }
-}
-
-function updatePriceInUI(symbol, price){
-  const id = 'price-' + symbol.replace(/\W/g,'');
-  const el = document.getElementById(id);
-  if(el) el.textContent = price ? price.toFixed(5) : '—';
-  // Update positions' current price for positions matching this symbol
-  positions.forEach(p=>{
-    if(p.asset === symbol || p.asset === (selectedAsset.symbol)) {
-      p.currentPrice = price;
-    }
-  });
-}
-
-/* ===========================
-   Orders logic
-   =========================== */
-function onPlaceOrder(){
-  const asset = document.getElementById('orderAsset').value;
-  const side = document.getElementById('orderSide').value;
-  const priceRaw = document.getElementById('orderPrice').value.trim();
-  const lotsRaw = document.getElementById('orderLots').value.trim();
-  if(!asset || !priceRaw || !lotsRaw){
-    playReject();
-    alert('Remplis actif / prix / lots');
-    return;
-  }
-  const price = parseFloat(priceRaw);
-  const lots = parseFloat(lotsRaw);
-  if(isNaN(price) || isNaN(lots) || lots <= 0){
-    playReject();
-    alert('Prix ou lots invalides');
-    return;
-  }
-  // check margin: estimate cost = lots * valuePerLotUSD (we compute from CONTRACT_SPECS when possible)
-  const valuePerLot = estimateUSDPerLot(asset);
-  if(valuePerLot === null){
-    // si on ne sait pas, on demande confirmation (mais on ne bloque)
-    if(!confirm("Valeur USD par lot inconnu pour cet actif — continuer en mode demo?")) {
-      playReject();
-      return;
-    }
-  } else {
-    const required = valuePerLot * lots;
-    if(required > balance){
-      playReject();
-      alert(`Position refusée — ${required.toFixed(2)} $ nécessaire (plus élevé que le solde ${balance.toFixed(2)} $)`);
-      return;
-    }
-  }
-
-  // create order
-  const ord = {
-    id: 'ORD' + Date.now(),
-    asset, side, price, lots,
-    status: 'En attente',
-    created: new Date().toISOString()
-  };
-  orders.push(ord);
-  renderOrders();
-  playAccept();
-
-  // For demo: immediate try to execute if market price equals or crosses limit (we could simulate)
-  // Here: if current price exists, execute immediately if market side condition met.
-  const currentPrice = findCurrentPriceForAsset(asset);
-  if(currentPrice){
-    if((side==='buy' && currentPrice <= price) || (side==='sell' && currentPrice >= price)){
-      executeOrder(ord, currentPrice);
-    }
-  }
-}
-
-function renderOrders(){
-  const tbody = document.getElementById('ordersBody');
-  tbody.innerHTML = '';
-  orders.forEach(o=>{
-    const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${o.asset}</td><td>${o.side}</td><td>${o.lots}</td><td>${o.price}</td><td>${o.status}</td><td><button class="btn" onclick="cancelOrder('${o.id}')">Annuler</button></td>`;
-    tbody.appendChild(tr);
-  });
-}
-
-function cancelOrder(id){
-  orders = orders.filter(o=>o.id!==id);
-  renderOrders();
-}
-
-/* ===========================
-   Execute order -> open position
-   =========================== */
-function executeOrder(order, execPrice){
-  // validate again margin & contract sizes
-  const valuePerLot = estimateUSDPerLot(order.asset);
-  if(valuePerLot !== null && order.lots * valuePerLot > balance){
-    order.status = 'Refusé: marge';
-    playReject();
-    renderOrders();
-    return;
-  }
-  order.status = 'Executé';
-  // create position
-  const pos = {
-    id: 'POS' + Date.now(),
-    asset: order.asset,
-    side: order.side,
-    lots: order.lots,
-    entryPrice: execPrice,
-    currentPrice: execPrice,
-    openedAt: new Date().toISOString(),
-    stop: null,
-    tp: null
-  };
-  positions.push(pos);
-  // debit used margin (for demo we subtract full notional to simplify)
-  const debit = valuePerLot ? order.lots * valuePerLot : 0;
-  balance -= debit;
-  history.push({date:new Date().toISOString(), asset: order.asset, type: order.side, lots: order.lots, price: execPrice, result: null});
-  // remove order from list
-  orders = orders.filter(o=>o.id!==order.id);
-  renderOrders();
-  refreshUI();
-  playAccept();
-}
-
-/* ===========================
-   PnL and position management
-   =========================== */
-function updatePnLs(){
-  positions.forEach(p=>{
-    if(p.currentPrice == null || p.entryPrice == null) return;
-    const spec = CONTRACT_SPECS[p.asset] || CONTRACT_SPECS[selectedAsset.symbol] || null;
-    let pnl = 0;
-    if(spec){
-      if(spec.unitsPerLot){
-        // forex: PnL = (current - entry) * unitsPerLot * lots (approx USD for pairs where quote currency is USD)
-        // For pairs where USD is quote (EUR/USD): it's direct. For others (USD/JPY) we approximate using price units.
-        pnl = (p.currentPrice - p.entryPrice) * spec.unitsPerLot * p.lots;
-      } else if(spec.ozPerLot){
-        // gold: PnL = (current - entry) * ozPerLot * lots
-        pnl = (p.currentPrice - p.entryPrice) * spec.ozPerLot * p.lots;
-      } else if(spec.contractSizeUSD){
-        // indices: PnL = (current - entry) * contractSizeUSD * lots
-        pnl = (p.currentPrice - p.entryPrice) * spec.contractSizeUSD * p.lots;
-      } else {
-        pnl = (p.currentPrice - p.entryPrice) * p.lots;
-      }
-      // if position is sell, invert
-      if(p.side === 'sell') pnl = -pnl;
-      p.pnl = pnl;
-    } else {
-      p.pnl = 0;
-    }
-  });
-  renderPositions();
-}
-
-function renderPositions(){
-  const tbody = document.getElementById('positionsBody');
-  tbody.innerHTML = '';
-  positions.forEach(p=>{
-    const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${p.asset}</td>
-      <td>${p.side}</td>
-      <td>${p.lots}</td>
-      <td>${formatNumber(p.entryPrice)}</td>
-      <td>${p.currentPrice?formatNumber(p.currentPrice):'—'}</td>
-      <td style="color:${p.pnl>=0? '#86efac':'#fb7185'}">${p.pnl? formatNumber(p.pnl) : '—'}</td>
-      <td>${p.stop?p.stop:''}/${p.tp?p.tp:''}</td>
-      <td class="actions">
-        <button class="btn" onclick='openModify(${JSON.stringify(p.id)})'>Modif</button>
-        <button class="btn danger" onclick='closePosition("${p.id}")'>Clôturer</button>
-      </td>`;
-    tbody.appendChild(tr);
-  });
-}
-
-function openModify(id){
-  // simple prompt for stop/tp
-  const p = positions.find(x=>x.id===id);
-  if(!p) return;
-  const stop = prompt('Prix Stop (laisser vide pour none)', p.stop || '');
-  const tp = prompt('Prix TP (laisser vide pour none)', p.tp || '');
-  p.stop = stop?parseFloat(stop):null;
-  p.tp = tp?parseFloat(tp):null;
-  renderPositions();
-}
-
-function closePosition(id){
-  const idx = positions.findIndex(p=>p.id===id);
-  if(idx===-1) return;
-  const p = positions[idx];
-  // settle: add current PnL to balance
-  const pnl = p.pnl || 0;
-  balance += (estimateUSDPerLot(p.asset) ? 0 /* we already debited notional at open for demo */ : 0) + pnl;
-  // update history record with result
-  const hist = history.find(h=>h.asset===p.asset && h.result===null);
-  if(hist) hist.result = pnl;
-  positions.splice(idx,1);
-  refreshUI();
-}
-
-/* ===========================
-   Utilities & helpers
-   =========================== */
-function formatNumber(n){
-  if(n==null || isNaN(n)) return '—';
-  return Number(n).toLocaleString('en-US',{maximumFractionDigits:2});
-}
-
-function findCurrentPriceForAsset(asset){
-  // check displayed prices or last known
-  // for TwelveData, we stored values in DOM id price-...
-  const id = 'price-' + asset.replace(/\W/g,'');
-  const el = document.getElementById(id);
-  if(el && el.textContent && el.textContent !== '—') return parseFloat(el.textContent);
-  return null;
-}
-
-function estimateUSDPerLot(asset){
-  // Try to compute USD value per 1.0 lot using CONTRACT_SPECS
-  if(CONTRACT_SPECS[asset]){
-    const s = CONTRACT_SPECS[asset];
-    if(s.unitsPerLot){
-      // Need current price to convert base units to USD if quote isn't USD — simplify: if pair is XXX/USD or USD/XXX
-      // We'll handle common case EUR/USD (quote USD): 1 lot = unitsPerLot * price (but pip calc normally)
-      const price = findCurrentPriceForAsset(asset) || 1;
-      // For pair like EUR/USD: 1 lot = 100000 * price (USD)
-      if(asset.includes('/USD') || asset.includes('XAU/USD')){
-        return s.unitsPerLot * price;
-      } else if(asset.startsWith('USD/')){
-        // 1 lot = units * 1 USD? For USD/JPY, base is USD, so 1 lot = 100000 USD (approx)
-        return s.unitsPerLot;
-      } else {
-        // fallback approximate
-        return s.unitsPerLot * price;
-      }
-    } else if(s.ozPerLot){
-      // gold: oz * price
-      const price = findCurrentPriceForAsset('XAU/USD') || findCurrentPriceForAsset('XAUUSD') || 0;
-      return s.ozPerLot * price;
-    } else if(s.contractSizeUSD){
-      return s.contractSizeUSD;
-    }
-  }
-  return null; // unknown
-}
-
-function refreshUI(){
-  document.getElementById('balanceDisplay').textContent = formatNumber(balance) + ' $';
-  document.getElementById('availableDisplay').textContent = formatNumber(balance) + ' $';
-  renderOrders();
-  renderPositions();
-  renderHistory();
-  updateLotValueDisplay(selectedAsset.symbol);
-}
-
-function renderHistory(){
-  const tbody = document.getElementById('historyBody');
-  tbody.innerHTML = '';
-  history.forEach(h=>{
-    const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${new Date(h.date).toLocaleString()}</td><td>${h.asset}</td><td>${h.type}</td><td>${h.lots}</td><td>${formatNumber(h.price)}</td><td>${h.result!=null?formatNumber(h.result):'—'}</td>`;
-    tbody.appendChild(tr);
-  });
-}
-
-/* ===========================
-   Lot value display
-   =========================== */
-async function refreshLotValues(){
-  updateLotValueDisplay(selectedAsset.symbol);
-}
-
-function updateLotValueDisplay(asset){
-  const el = document.getElementById('lotValueDisplay');
-  const val = estimateUSDPerLot(asset);
-  el.textContent = val ? formatNumber(val) + ' $' : 'Inconnu (voir proxy IG)';
-}
-
-/* ===========================
-   Sounds
-   =========================== */
-function playAccept(){ try{ document.getElementById('soundAccept').play(); }catch(e){} }
-function playReject(){ try{ document.getElementById('soundReject').play(); }catch(e){} }
-
-/* ===========================
-   Market close handling - simple simulation
-   =========================== */
-function isMarketOpenNowForAsset(asset){
-  // simplifié: forex & gold open 24/5, indices follow weekdays. We'll close everything at weekend.
-  const d = new Date();
-  const day = d.getUTCDay(); // 0=Sun, 6=Sat
-  // if weekend, false
-  if(day === 0 || day === 6) return false;
-  return true;
-}
-
-// stop all positions when market closed (called on interval or before opening new)
-setInterval(()=>{
-  if(!isMarketOpenNowForAsset(selectedAsset.symbol)){
-    // close all positions gracefully with current price
-    positions.slice().forEach(p=>{
-      // force close
-      closePosition(p.id);
-    });
-  }
-}, 60_000);
-
-/* ===========================
-   Small server proxy example (Node.js)
-   ===========================
-   NOTE: Browser cannot directly call IG REST/website in many cases due to CORS & auth.
-   Solution: create a tiny proxy on your server that accepts requests from this frontend,
-   calls IG API (with your credentials) and returns JSON.
-
-   Example Node.js express snippet (run on your server, not in browser):
-
-   const express = require('express');
-   const fetch = require('node-fetch');
-   const app = express();
-   const PORT = 3000;
-
-   // Basic route to fetch IG price (you must implement auth according to IG API)
-   app.get('/api/ig/price', async (req, res) => {
-     const symbol = req.query.symbol;
-     // Implement IG auth (client-side credentials, session token). For demo we return a mock.
-     // In production: call IG API endpoints -> return { price: <number>, contractSizeUSD: <number> }
-     // Example mock:
-     res.json({ price: 5350.12, contractSizeUSD: 250 });
-   });
-
-   app.listen(PORT, ()=>console.log('Proxy running on '+PORT));
-
-   ===========================
-*/
-
-</script>
-</body>
-</html>
 
 
 
