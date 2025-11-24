@@ -3,171 +3,214 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mini Broker Prop Firm</title>
+    <title>Mini Broker Pro</title>
     <style>
-        /* --- CSS pour le style --- */
+        /* --- CSS for Modern Dark Theme --- */
+        :root {
+            --bg-dark: #1e212b;
+            --bg-card: #282c37;
+            --primary-color: #00bcd4; /* Cyan clair */
+            --buy-color: #10b981; /* Vert émeraude */
+            --sell-color: #ef4444; /* Rouge vif */
+            --text-light: #ffffff;
+            --text-muted: #9ca3af;
+            --border-color: #3f4453;
+        }
+
         body {
-            font-family: Arial, sans-serif;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             margin: 0;
             padding: 0;
-            background-color: #1a1a2e; /* Thème sombre */
-            color: #ffffff;
+            background-color: var(--bg-dark);
+            color: var(--text-light);
             display: flex;
             flex-direction: column;
             height: 100vh;
+            overflow: hidden;
         }
 
         .header {
-            background-color: #0f0f1b;
-            padding: 10px 20px;
-            border-bottom: 3px solid #ff416c;
+            background-color: var(--bg-card);
+            padding: 12px 20px;
+            border-bottom: 2px solid var(--primary-color);
             display: flex;
             justify-content: space-between;
             align-items: center;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         }
 
         .header h1 {
             margin: 0;
-            font-size: 1.5em;
-            color: #ff416c;
+            font-size: 1.6em;
+            color: var(--primary-color);
         }
 
         .pnl-display {
-            font-size: 1.8em;
+            font-size: 1.6em;
             font-weight: bold;
-            color: #2ecc71;
         }
 
         .container {
             display: flex;
             flex: 1;
             padding: 10px;
+            gap: 10px;
             overflow: hidden;
         }
 
         .left-panel {
-            flex: 3; /* Le graphique prend plus d'espace */
+            flex: 3;
             display: flex;
             flex-direction: column;
-            margin-right: 10px;
+            gap: 10px;
         }
 
         .right-panel {
             flex: 1;
             display: flex;
             flex-direction: column;
-            max-width: 300px;
+            min-width: 320px;
+            max-width: 400px;
         }
 
-        .chart-container {
-            background-color: #0f0f1b;
-            border-radius: 8px;
-            box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
-            flex: 1;
-            min-height: 400px; /* Taille minimale pour le graphique */
-        }
-
-        .watchlist-container, .order-form-container, .positions-container {
-            background-color: #0f0f1b;
+        .card {
+            background-color: var(--bg-card);
             border-radius: 8px;
             padding: 15px;
             margin-bottom: 10px;
-            box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+        }
+
+        .card h3 {
+            margin-top: 0;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--border-color);
+            color: var(--primary-color);
+            font-size: 1.2em;
+        }
+
+        /* --- Chart Container --- */
+        .chart-container {
+            flex: 1;
+            min-height: 400px;
         }
 
         /* --- Watchlist --- */
-        .watchlist-container h3 {
-            margin-top: 0;
-            color: #ff416c;
-        }
-        
         .watchlist-item {
             display: flex;
             justify-content: space-between;
-            padding: 8px 0;
-            border-bottom: 1px solid #333;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid var(--border-color);
             cursor: pointer;
             transition: background-color 0.2s;
         }
         
-        .watchlist-item:hover {
-            background-color: #1a1a2e;
-        }
-
-        .watchlist-item.active {
-            background-color: #2c3e50;
+        .watchlist-item:hover, .watchlist-item.active {
+            background-color: rgba(var(--primary-color-rgb, 0, 188, 212), 0.1); /* Utilisation de la couleur primaire avec opacité */
+            border-radius: 4px;
+            padding: 10px 5px;
+            margin: 0 -5px;
         }
 
         .watchlist-symbol {
             font-weight: bold;
+            font-size: 1.1em;
         }
         
         .watchlist-price {
-            color: #2ecc71;
+            font-weight: 500;
         }
 
-        /* --- Ordres Limites --- */
-        .order-form-container h3 {
-            margin-top: 0;
-            color: #ff416c;
+        /* --- Order Form --- */
+        .input-group {
+            margin-bottom: 15px;
         }
 
-        .order-form-container label {
+        .input-group label {
             display: block;
-            margin-top: 10px;
             margin-bottom: 5px;
+            color: var(--text-muted);
+            font-size: 0.9em;
         }
 
-        .order-form-container input, .order-form-container button {
-            width: 100%;
+        .input-group input {
+            width: calc(100% - 20px);
             padding: 10px;
-            margin-bottom: 10px;
             border-radius: 4px;
-            border: none;
+            border: 1px solid var(--border-color);
+            background-color: var(--bg-dark);
+            color: var(--text-light);
+            transition: border-color 0.3s;
         }
 
-        .order-form-container button {
-            cursor: pointer;
-            font-weight: bold;
+        .input-group input:focus {
+            border-color: var(--primary-color);
+            outline: none;
+        }
+
+        .trade-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
         }
         
-        .btn-buy {
-            background-color: #2ecc71;
-            color: #0f0f1b;
+        .trade-buttons button {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 6px;
+            font-weight: bold;
+            font-size: 1.1em;
+            cursor: pointer;
+            transition: opacity 0.3s, transform 0.2s;
         }
 
-        .btn-sell {
-            background-color: #e74c3c;
-            color: #0f0f1b;
+        .trade-buttons button:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+        }
+        
+        .btn-buy-market {
+            background-color: var(--buy-color);
+            color: var(--bg-dark);
         }
 
-        /* --- Positions / Historique --- */
+        .btn-sell-market {
+            background-color: var(--sell-color);
+            color: var(--bg-dark);
+        }
+
+        /* --- Positions / History Tabs --- */
         .tabs {
             display: flex;
-            border-bottom: 2px solid #ff416c;
-            margin-bottom: 10px;
+            margin-bottom: 0;
+            background-color: var(--bg-dark);
+            border-radius: 4px 4px 0 0;
         }
 
         .tab-button {
             padding: 10px 15px;
             cursor: pointer;
-            background-color: #0f0f1b;
+            background-color: var(--bg-dark);
             border: none;
-            color: #fff;
-            opacity: 0.6;
-            font-weight: bold;
-            transition: opacity 0.3s;
+            color: var(--text-muted);
+            font-weight: 600;
+            transition: color 0.3s;
+            border-bottom: 2px solid transparent;
         }
 
         .tab-button.active {
-            opacity: 1;
-            border-bottom: 2px solid #2ecc71;
+            color: var(--primary-color);
+            border-bottom: 2px solid var(--primary-color);
         }
 
         .tab-content {
             display: none;
             overflow-y: auto;
-            max-height: 250px; /* Hauteur maximale pour le tableau */
+            max-height: 250px;
+            border-top: 1px solid var(--border-color);
+            padding-top: 10px;
         }
         
         .tab-content.active {
@@ -182,29 +225,36 @@
 
         .positions-table th, .positions-table td, 
         .history-table th, .history-table td {
-            padding: 8px;
+            padding: 10px 8px;
             text-align: left;
-            border-bottom: 1px solid #333;
+            border-bottom: 1px solid var(--border-color);
         }
         
         .positions-table th, .history-table th {
-            background-color: #1a1a2e;
-            color: #ff416c;
+            background-color: #3f4453;
+            color: var(--text-light);
+            text-transform: uppercase;
         }
 
         .positions-table tr:hover {
-            background-color: #2c3e50;
+            background-color: #3a404c;
         }
 
         .action-cell button {
-            background: none;
-            border: 1px solid #ff416c;
-            color: #ff416c;
-            padding: 3px 8px;
-            border-radius: 3px;
+            background-color: var(--sell-color);
+            color: var(--text-light);
+            padding: 5px 10px;
+            border-radius: 4px;
+            border: none;
             cursor: pointer;
+            font-size: 0.8em;
+            transition: background-color 0.3s;
         }
-
+        
+        .action-cell button:hover {
+            background-color: #c53030;
+        }
+        
     </style>
 </head>
 <body>
@@ -213,19 +263,21 @@
     <audio id="sound-rejected" src="https://assets.mixkit.co/sfx/download/mixkit-error-buzz-978.wav"></audio>
 
     <div class="header">
-        <h1>🚀 Mini Broker</h1>
-        <div>Balance: <span id="balance-display">$100,000.00</span> | PnL Total: <span id="pnl-total-display" class="pnl-display">$0.00</span></div>
+        <h1>📈 Mini Broker PRO</h1>
+        <div>
+            Balance: <span id="balance-display">$100,000.00</span> | PnL Total: <span id="pnl-total-display" class="pnl-display">$0.00</span>
+        </div>
     </div>
 
     <div class="container">
         <div class="left-panel">
             
-            <div class="chart-container">
-                <h3 style="text-align: center; color: #aaa;">Graphique de <span id="chart-symbol-display">EURUSD</span> (Fourni par TradingView)</h3>
-                <div id="tradingview-widget"></div>
+            <div class="card chart-container">
+                <h3 style="margin-bottom: 5px; border-bottom: none;">Graphique de <span id="chart-symbol-display">EUR/USD</span></h3>
+                <div id="tradingview-widget" style="height: calc(100% - 30px);"></div>
             </div>
 
-            <div class="positions-container">
+            <div class="card positions-history-card" style="padding: 0;">
                 <div class="tabs">
                     <button class="tab-button active" onclick="openTab(event, 'positions')">Positions (0)</button>
                     <button class="tab-button" onclick="openTab(event, 'history')">Historique</button>
@@ -238,8 +290,9 @@
                                 <th>Symbole</th>
                                 <th>Type</th>
                                 <th>Lots</th>
-                                <th>Prix Ouvert</th>
-                                <th>Prix Actuel</th>
+                                <th>Ouverture</th>
+                                <th>Actuel</th>
+                                <th>S/L | T/P</th>
                                 <th>PnL</th>
                                 <th>Action</th>
                             </tr>
@@ -256,8 +309,8 @@
                                 <th>Symbole</th>
                                 <th>Type</th>
                                 <th>Lots</th>
-                                <th>Prix Ouvert</th>
-                                <th>Prix Fermé</th>
+                                <th>Ouverture</th>
+                                <th>Fermeture</th>
                                 <th>Gain/Perte</th>
                             </tr>
                         </thead>
@@ -270,31 +323,43 @@
 
         <div class="right-panel">
             
-            <div class="watchlist-container">
+            <div class="card watchlist-container">
                 <h3>⭐ Watchlist</h3>
                 <div id="watchlist-body">
                     </div>
             </div>
 
-            <div class="order-form-container">
-                <h3>Order: <span id="order-symbol-display">EURUSD</span></h3>
+            <div class="card order-form-container">
+                <h3>Trade: <span id="order-symbol-display">EUR/USD</span></h3>
                 
-                <label for="lots">Lots (Lot Size):</label>
-                <input type="number" id="lots" value="1" min="0.1" step="0.1">
+                <div class="input-group">
+                    <label for="lots">Volume (Lots):</label>
+                    <input type="number" id="lots" value="1.0" min="0.01" step="0.1" required>
+                </div>
                 
-                <label for="limit-price">Prix Limite (Optionnel):</label>
-                <input type="number" id="limit-price" placeholder="Laisser vide pour Market">
+                <div class="input-group">
+                    <label for="limit-price">Prix Limite (Optionnel - Pour Ordre PENDING):</label>
+                    <input type="number" id="limit-price" placeholder="Laisser vide pour Market">
+                </div>
 
-                <label for="stop-loss">Stop Loss (Optionnel):</label>
-                <input type="number" id="stop-loss" placeholder="SL Price">
+                <div class="input-group">
+                    <label for="stop-loss">Stop Loss (Prix):</label>
+                    <input type="number" id="stop-loss" placeholder="SL (Auto-Close)">
+                </div>
 
-                <label for="take-profit">Take Profit (Optionnel):</label>
-                <input type="number" id="take-profit" placeholder="TP Price">
+                <div class="input-group">
+                    <label for="take-profit">Take Profit (Prix):</label>
+                    <input type="number" id="take-profit" placeholder="TP (Auto-Close)">
+                </div>
+                
+                <div class="trade-buttons">
+                    <button class="btn-buy-market" onclick="placeOrder('BUY')">ACHETER (Market)</button>
+                    <button class="btn-sell-market" onclick="placeOrder('SELL')">VENDRE (Market)</button>
+                </div>
 
-                <button class="btn-buy" onclick="placeOrder('BUY')">Acheter (Market)</button>
-                <button class="btn-sell" onclick="placeOrder('SELL')">Vendre (Market)</button>
-
-                <p style="font-size: 0.8em; color: #999;">1 Lot sur l'or (XAUUSD) est estimé à $4000 de valeur notionnelle (à titre d'exemple).</p>
+                <p style="font-size: 0.8em; color: var(--text-muted); margin-top: 15px;">
+                    Valeur Notionnelle : <span id="notional-value-display">$100,000</span> par Lot sur cet actif.
+                </p>
 
             </div>
 
@@ -306,33 +371,33 @@
     <script>
         // --- JavaScript pour la logique et les API ---
 
-        const API_KEY = '8906aa7f29ca470da317f72ae7efab51'; // Votre clé Twelve Data (ATTENTION SÉCURITÉ)
-        const TWELVEDATA_URL = (symbol) => `https://api.twelvedata.com/price?symbol=${symbol}&apikey=${API_KEY}`;
+        const API_KEY = '8906aa7f29ca470da317f72ae7efab51'; 
         const TWELVEDATA_WSS = (symbol) => `wss://ws.twelvedata.com/v1/quotes/price?symbol=${symbol}&apikey=${API_KEY}`;
 
-
         // 2. Watchlist et Actif Séléctionné
+        // Multiplicateur : C'est la valeur notionnelle par lot (1 lot) en dollars USD.
         const ALL_ASSETS = [
-            // Paires de devise
-            { symbol: 'EUR/USD', name: 'Euro/Dollar', type: 'FOREX', multiplier: 100000 }, // Lot de 100k
+            // Paires de devise : 1 lot standard = 100 000 unités de base.
+            { symbol: 'EUR/USD', name: 'Euro/Dollar', type: 'FOREX', multiplier: 100000 }, 
             { symbol: 'GBP/USD', name: 'Livre/Dollar', type: 'FOREX', multiplier: 100000 },
             { symbol: 'USD/JPY', name: 'Dollar/Yen', type: 'FOREX', multiplier: 100000 },
             { symbol: 'AUD/USD', name: 'AUD/Dollar', type: 'FOREX', multiplier: 100000 },
             { symbol: 'USD/CAD', name: 'Dollar/CAD', type: 'FOREX', multiplier: 100000 },
-            // Indices
-            { symbol: 'US30', name: 'Dow Jones', type: 'INDEX', multiplier: 10 }, // Exemple de multiplicateur plus petit
-            { symbol: 'NDAQ100', name: 'Nasdaq 100', type: 'INDEX', multiplier: 5 },
+            // Indices (Les multiplicateurs varient beaucoup, ce sont des exemples)
+            { symbol: 'US30', name: 'Dow Jones', type: 'INDEX', multiplier: 10 }, 
+            { symbol: 'NDAQ100', name: 'Nasdaq 100', type: 'INDEX', multiplier: 2 },
             { symbol: 'SPX500', name: 'S&P 500', type: 'INDEX', multiplier: 50 },
-            { symbol: 'DAX', name: 'DAX 40', type: 'INDEX', multiplier: 25 },
-            { symbol: 'FTSE100', name: 'FTSE 100', type: 'INDEX', multiplier: 10 },
+            { symbol: 'DAX', name: 'DAX 40', type: 'INDEX', multiplier: 12.5 },
+            { symbol: 'FTSE100', name: 'FTSE 100', type: 'INDEX', multiplier: 5 },
             // Matières Premières
-            { symbol: 'XAU/USD', name: 'Or/Dollar', type: 'COMMODITY', multiplier: 4000 }, // Un lot = $4000 de valeur notionnelle (selon votre demande)
+            { symbol: 'XAU/USD', name: 'Or/Dollar', type: 'COMMODITY', multiplier: 4000 }, // Lot de 4000 (exemple)
         ];
 
         let currentSymbol = 'EUR/USD';
-        let assetPrices = {}; // Stocke les derniers prix reçus
-        let positions = []; // Liste des positions en cours (id, symbol, type, lots, openPrice, sl, tp, openTime)
-        let positionHistory = []; // Liste des positions clôturées
+        let assetPrices = {}; 
+        let positions = []; 
+        let positionHistory = []; 
+        let websocket = null; // Pour gérer la connexion
 
         // Références DOM
         const watchlistBody = document.getElementById('watchlist-body');
@@ -342,6 +407,7 @@
         const orderSymbolDisplay = document.getElementById('order-symbol-display');
         const pnlTotalDisplay = document.getElementById('pnl-total-display');
         const tabPositions = document.querySelector('.tab-button:first-child');
+        const notionalValueDisplay = document.getElementById('notional-value-display');
         const soundAccepted = document.getElementById('sound-accepted');
         const soundRejected = document.getElementById('sound-rejected');
 
@@ -350,24 +416,34 @@
 
         // Formater les montants en USD
         const formatUSD = (amount) => {
-            const color = amount >= 0 ? '#2ecc71' : '#e74c3c';
-            return `<span style="color: ${color};">${amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</span>`;
+            const color = amount >= 0 ? 'var(--buy-color)' : 'var(--sell-color)';
+            const sign = amount >= 0 ? '+' : '';
+            return `<span style="color: ${color};">${sign}${amount.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 })}</span>`;
         };
+        
+        // Formater le prix
+        const formatPrice = (price) => price ? price.toFixed(5) : 'N/A';
 
         // Jouer un effet sonore
         const playSound = (type) => {
-            if (type === 'accepted') {
-                soundAccepted.play();
-            } else if (type === 'rejected') {
-                soundRejected.play();
-            }
+            const audio = type === 'accepted' ? soundAccepted : soundRejected;
+            audio.currentTime = 0; // Rembobiner
+            audio.play().catch(e => console.error("Erreur de lecture audio:", e));
         };
+
+        // Trouver les valeurs notionnelles (multiplier)
+        const getAssetData = (symbol) => {
+            return ALL_ASSETS.find(a => a.symbol === symbol);
+        }
 
         // Sélectionner un actif
         function selectAsset(symbol) {
             currentSymbol = symbol;
+            const assetData = getAssetData(symbol);
+
             chartSymbolDisplay.textContent = symbol;
             orderSymbolDisplay.textContent = symbol;
+            notionalValueDisplay.textContent = `$${assetData.multiplier.toLocaleString()} (Lot)`;
             
             // Mettre à jour la classe active dans la watchlist
             document.querySelectorAll('.watchlist-item').forEach(item => {
@@ -375,45 +451,30 @@
             });
             document.getElementById(`watchlist-${symbol.replace('/', '')}`).classList.add('active');
             
-            // Recharger le graphique TradingView pour le nouvel actif
+            // Recharger le graphique et le WebSocket
             loadTradingViewWidget(symbol);
+            initWebSocket();
         }
         
-        // Trouver les valeurs notionnelles (multiplier)
-        const getAssetMultiplier = (symbol) => {
-            const asset = ALL_ASSETS.find(a => a.symbol === symbol);
-            return asset ? asset.multiplier : 1;
-        }
-
         // --- 1. Graphique TradingView ---
         function loadTradingViewWidget(symbol) {
-            // Utiliser le widget Lightweight Chart pour plus de simplicité en front-end pur,
-            // ou l'API TradingView pour un affichage plus avancé.
-            // Nous utilisons l'API TradingView pour respecter votre demande.
-            
             const tvContainer = document.getElementById('tradingview-widget');
-            tvContainer.innerHTML = ''; // Nettoyer l'ancien widget
+            tvContainer.innerHTML = ''; 
 
             new TradingView.widget(
             {
                 "container_id": "tradingview-widget",
-                "symbol": symbol.replace('/', ''), // TradingView utilise des symboles sans /
-                "interval": "60", // 1 heure
+                "symbol": symbol.replace('/', ''), 
+                "interval": "60", 
                 "timezone": "Europe/Paris",
                 "theme": "dark",
                 "style": "1",
                 "locale": "fr",
-                "toolbar_bg": "#f1f3f6",
+                "toolbar_bg": "var(--bg-dark)",
                 "enable_publishing": false,
-                "withdateranges": true,
                 "allow_symbol_change": true,
                 "hide_side_toolbar": false,
-                "details": true,
-                "hotlist": false,
-                "calendar": false,
-                "studies": [
-                    "STD;RSI"
-                ]
+                "autosize": true,
             });
         }
         
@@ -428,70 +489,66 @@
 
                 item.innerHTML = `
                     <span class="watchlist-symbol">${asset.symbol}</span>
-                    <span class="watchlist-price" id="price-${asset.symbol.replace('/', '')}">...</span>
+                    <span class="watchlist-price" id="price-${asset.symbol.replace('/', '')}">---</span>
                 `;
                 watchlistBody.appendChild(item);
             });
             
-            // Sélectionner le premier actif au démarrage
             selectAsset(ALL_ASSETS[0].symbol); 
         }
 
         // --- 5. Récupération des Cotations (Twelve Data) ---
-
-        // Fonction pour initialiser la connexion WebSocket (coûte moins de data API)
         function initWebSocket() {
-            // Nous allons uniquement écouter le prix des actifs dans la watchlist et les positions ouvertes.
-            const symbolsToSubscribe = [...new Set([
-                ...ALL_ASSETS.map(a => a.symbol),
-                ...positions.map(p => p.symbol)
-            ])];
-            
-            if (symbolsToSubscribe.length === 0) return;
+            if (websocket) {
+                websocket.close(); // Fermer la connexion précédente
+            }
 
-            // Twelve Data nécessite une connexion par symbole pour l'API Free,
-            // mais l'API Payante (WebSocket) permet d'envoyer une liste.
-            // Pour l'exemple, nous allons simplifier en utilisant une seule connexion par la plus importante: l'actif sélectionné.
-            
             const assetToWatch = currentSymbol.replace('/', '');
-            const WSS_URL = `wss://ws.twelvedata.com/v1/quotes/price?symbol=${assetToWatch}&apikey=${API_KEY}`;
-            const ws = new WebSocket(WSS_URL);
+            const WSS_URL = TWELVEDATA_WSS(assetToWatch);
+            websocket = new WebSocket(WSS_URL);
             
             console.log(`Tentative de connexion WebSocket pour ${assetToWatch}...`);
 
-            ws.onopen = () => {
-                console.log('WebSocket connectée.');
+            websocket.onopen = () => {
+                console.log('WebSocket connectée pour ' + assetToWatch);
             };
 
-            ws.onmessage = (event) => {
+            websocket.onmessage = (event) => {
                 const data = JSON.parse(event.data);
                 if (data.event === 'price') {
-                    const symbol = data.symbol.replace('/', '/'); // Remettre le slash pour la cohérence interne
+                    const symbol = data.symbol.replace('/', '/'); 
                     const price = parseFloat(data.price);
                     
                     if (isNaN(price)) return;
 
-                    // Mettre à jour le prix interne
                     assetPrices[symbol] = price;
                     
-                    // Mettre à jour la Watchlist (si l'élément existe)
+                    // Mettre à jour la Watchlist
                     const priceElement = document.getElementById(`price-${data.symbol}`);
                     if (priceElement) {
-                        priceElement.textContent = price.toFixed(5);
+                        priceElement.textContent = formatPrice(price);
+                        // Animation simple de changement de prix (Green/Red tick)
+                        const oldPrice = parseFloat(priceElement.dataset.lastPrice || price);
+                        if (price > oldPrice) {
+                            priceElement.style.color = var(--buy-color);
+                        } else if (price < oldPrice) {
+                            priceElement.style.color = var(--sell-color);
+                        }
+                        setTimeout(() => priceElement.style.color = var(--text-light), 200);
+                        priceElement.dataset.lastPrice = price;
                     }
                     
-                    // Recalculer le PnL
                     calculateAndUpdatePnL();
                 }
             };
 
-            ws.onerror = (error) => {
+            websocket.onerror = (error) => {
                 console.error('Erreur WebSocket:', error);
-                // Si l'API Free limite la WebSocket, nous pourrions revenir au polling (fetch)
             };
             
-            // Pour des raisons de simplicité et de limitation API (si elle coupe), on pourrait relancer la WS si nécessaire.
-            // Dans une vraie application, on gérerait la reconnexion et les abonnements multiples.
+            websocket.onclose = () => {
+                console.log('WebSocket déconnectée.');
+            };
         }
         
         // --- Calcul du PnL ---
@@ -502,7 +559,7 @@
                 const currentPrice = assetPrices[pos.symbol];
                 if (!currentPrice) return;
                 
-                const multiplier = getAssetMultiplier(pos.symbol);
+                const multiplier = getAssetData(pos.symbol).multiplier;
                 const lots = parseFloat(pos.lots);
 
                 let pnl;
@@ -520,17 +577,16 @@
                 const row = document.getElementById(`pos-${pos.id}`);
                 if (row) {
                     row.querySelector('.pnl-cell').innerHTML = formatUSD(pnl);
-                    row.querySelector('.current-price-cell').textContent = currentPrice.toFixed(5);
+                    row.querySelector('.current-price-cell').textContent = formatPrice(currentPrice);
                 }
                 
                 // 7. Vérification SL/TP
                 checkStopLossTakeProfit(pos, currentPrice);
             });
 
-            // Mettre à jour le PnL Total dans le Header
             pnlTotalDisplay.innerHTML = formatUSD(totalPnL);
             tabPositions.textContent = `Positions (${positions.length})`;
-            renderPositions(); // Re-rendre le tableau
+            renderPositions(); 
         }
 
         // --- 7. Vérification SL/TP ---
@@ -538,21 +594,19 @@
             let shouldClose = false;
             let closeReason = '';
 
+            // Stop Loss Check
             if (position.sl && position.sl > 0) {
-                if (position.type === 'BUY' && currentPrice <= position.sl) {
-                    shouldClose = true;
-                    closeReason = 'Stop Loss Hit';
-                } else if (position.type === 'SELL' && currentPrice >= position.sl) {
+                if ((position.type === 'BUY' && currentPrice <= position.sl) || 
+                    (position.type === 'SELL' && currentPrice >= position.sl)) {
                     shouldClose = true;
                     closeReason = 'Stop Loss Hit';
                 }
             }
 
+            // Take Profit Check
             if (!shouldClose && position.tp && position.tp > 0) {
-                if (position.type === 'BUY' && currentPrice >= position.tp) {
-                    shouldClose = true;
-                    closeReason = 'Take Profit Hit';
-                } else if (position.type === 'SELL' && currentPrice <= position.tp) {
+                if ((position.type === 'BUY' && currentPrice >= position.tp) || 
+                    (position.type === 'SELL' && currentPrice <= position.tp)) {
                     shouldClose = true;
                     closeReason = 'Take Profit Hit';
                 }
@@ -560,12 +614,11 @@
 
             if (shouldClose) {
                 closePosition(position.id, currentPrice, closeReason);
-                playSound('accepted');
             }
         }
 
 
-        // --- 6. Passer un Ordre (Acheter/Vendre) ---
+        // --- 6. Passer un Ordre (Acheter/Vendre Market) ---
         function placeOrder(type) {
             const lotsInput = document.getElementById('lots');
             const limitPriceInput = document.getElementById('limit-price');
@@ -573,32 +626,30 @@
             const takeProfitInput = document.getElementById('take-profit');
 
             const lots = parseFloat(lotsInput.value);
-            const limitPrice = parseFloat(limitPriceInput.value);
+            const limitPrice = parseFloat(limitPriceInput.value) || null;
             const sl = parseFloat(stopLossInput.value) || null;
             const tp = parseFloat(takeProfitInput.value) || null;
             
-            // Validation de base
-            if (isNaN(lots) || lots <= 0) {
-                alert('Nombre de Lots invalide.');
+            if (isNaN(lots) || lots <= 0.01) {
+                alert('Veuillez saisir un volume de Lots valide (min 0.01).');
                 playSound('rejected');
                 return;
             }
             
-            // Pour l'exemple, nous exécutons les ordres MARKET immédiatement
-            if (!limitPrice || isNaN(limitPrice)) {
+            const openPrice = assetPrices[currentSymbol];
+            
+            if (!openPrice) {
+                alert('Erreur: Prix actuel non disponible. Attendez les données API.');
+                playSound('rejected');
+                return;
+            }
+            
+            if (!limitPrice) {
                 // Ordre Market
-                const openPrice = assetPrices[currentSymbol];
-                
-                if (!openPrice) {
-                    alert('Erreur: Prix actuel de l\'actif non disponible. Veuillez attendre les données.');
-                    playSound('rejected');
-                    return;
-                }
-                
                 const newPosition = {
-                    id: Date.now(), // ID simple basé sur le temps
+                    id: Date.now(), 
                     symbol: currentSymbol,
-                    type: type, // 'BUY' ou 'SELL'
+                    type: type, 
                     lots: lots.toFixed(2),
                     openPrice: openPrice,
                     sl: sl,
@@ -611,15 +662,14 @@
                 positions.push(newPosition);
                 renderPositions();
                 playSound('accepted');
-                console.log(`Position ${type} ouverte pour ${currentSymbol} à ${openPrice} avec ${lots} lots.`);
                 
             } else {
-                // Ordre Limite (Non implémenté en détail pour cet exemple Front-end pur)
-                alert(`Ordre Limite ${type} pour ${currentSymbol} à ${limitPrice} placé. (Non géré par le script en l'état)`);
+                // Ordre Limite (En mode démo, on simule l'acceptation)
+                alert(`Ordre Limite ${type} pour ${currentSymbol} à ${limitPrice} placé.`);
                 playSound('accepted');
             }
             
-            // Nettoyer les inputs optionnels
+            // Nettoyer les inputs
             limitPriceInput.value = '';
             stopLossInput.value = '';
             takeProfitInput.value = '';
@@ -638,8 +688,7 @@
                 return;
             }
 
-            // Calcul final du PnL
-            const multiplier = getAssetMultiplier(position.symbol);
+            const multiplier = getAssetData(position.symbol).multiplier;
             const lots = parseFloat(position.lots);
             let pnl;
             
@@ -649,7 +698,6 @@
                 pnl = (position.openPrice - finalPrice) * lots * multiplier;
             }
             
-            // Ajouter à l'historique
             positionHistory.push({
                 ...position,
                 closeTime: new Date().toLocaleTimeString(),
@@ -658,15 +706,15 @@
                 reason: closeReason
             });
             
-            // Retirer des positions actives
             positions.splice(index, 1);
             
-            // Mettre à jour l'affichage
             renderPositions();
             renderHistory();
             calculateAndUpdatePnL();
             
-            console.log(`Position ${position.id} fermée à ${finalPrice}. PnL: ${pnl.toFixed(2)}$`);
+            if (closeReason === 'Closed by User') {
+                playSound('accepted');
+            }
         }
 
         // --- 4. Affichage des Positions et Historique ---
@@ -679,43 +727,40 @@
                 
                 row.innerHTML = `
                     <td>${pos.symbol}</td>
-                    <td style="color: ${pos.type === 'BUY' ? '#2ecc71' : '#e74c3c'}; font-weight: bold;">${pos.type}</td>
+                    <td style="color: ${pos.type === 'BUY' ? 'var(--buy-color)' : 'var(--sell-color)'}; font-weight: bold;">${pos.type}</td>
                     <td>${pos.lots}</td>
-                    <td>${pos.openPrice.toFixed(5)}</td>
-                    <td class="current-price-cell">${pos.currentPrice.toFixed(5)}</td>
+                    <td>${formatPrice(pos.openPrice)}</td>
+                    <td class="current-price-cell">${formatPrice(pos.currentPrice)}</td>
+                    <td>${pos.sl ? formatPrice(pos.sl) : 'N/A'} | ${pos.tp ? formatPrice(pos.tp) : 'N/A'}</td>
                     <td class="pnl-cell">${formatUSD(pos.pnl)}</td>
                     <td class="action-cell">
                         <button onclick="closePosition(${pos.id})">Fermer</button>
                     </td>
                 `;
             });
+            tabPositions.textContent = `Positions (${positions.length})`;
         }
 
         function renderHistory() {
             historyBody.innerHTML = '';
-            positionHistory.sort((a, b) => b.id - a.id).forEach(hist => { // Tri du plus récent au plus ancien
+            positionHistory.sort((a, b) => b.id - a.id).forEach(hist => {
                 const row = historyBody.insertRow();
                 row.innerHTML = `
                     <td>${hist.symbol}</td>
-                    <td style="color: ${hist.type === 'BUY' ? '#2ecc71' : '#e74c3c'};">${hist.type}</td>
+                    <td style="color: ${hist.type === 'BUY' ? 'var(--buy-color)' : 'var(--sell-color)'};">${hist.type}</td>
                     <td>${hist.lots}</td>
-                    <td>${hist.openPrice.toFixed(5)}</td>
-                    <td>${hist.closePrice.toFixed(5)}</td>
+                    <td>${formatPrice(hist.openPrice)}</td>
+                    <td>${formatPrice(hist.closePrice)}</td>
                     <td>${formatUSD(hist.finalPnL)}</td>
                 `;
             });
         }
         
-        // Fonction pour changer d'onglet
         function openTab(evt, tabName) {
-            // Cacher tous les onglets
-            document.querySelectorAll('.tab-content').forEach(tab => tab.style.display = 'none');
-            // Retirer la classe 'active' de tous les boutons
+            document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
             document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
             
-            // Afficher l'onglet courant
-            document.getElementById(tabName).style.display = 'block';
-            // Ajouter la classe 'active' au bouton cliqué
+            document.getElementById(tabName).classList.add('active');
             evt.currentTarget.classList.add('active');
         }
 
@@ -723,14 +768,10 @@
         // --- Initialisation ---
         function initializeBroker() {
             renderWatchlist();
-            initWebSocket(); // Commence à écouter le prix de l'actif sélectionné
-            // Si la WS n'est pas supportée, on peut utiliser un intervalle de 5 secondes (polling)
-            // setInterval(initWebSocket, 5000); 
+            // Le WebSocket et le graphique sont initialisés dans selectAsset()
             
-            // Initialiser le premier chargement du graphique
-            loadTradingViewWidget(currentSymbol);
-            
-            console.log("Mini Broker Initialisé.");
+            // Ouvrir l'onglet 'Positions' au démarrage
+            openTab({currentTarget: tabPositions}, 'positions');
         }
 
         window.onload = initializeBroker;
