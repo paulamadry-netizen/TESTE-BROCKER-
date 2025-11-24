@@ -1,153 +1,324 @@
-// =========================
-//    MINI-BROKER — JS PRO
-// =========================
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Mini-Broker Pro</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-// =========================
-// Variables globales
-// =========================
-let currentSymbol = "AAPL";
+<!-- TradingView -->
+<script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
+
+<!-- STYLES EXACTS ORIGINE -->
+<style>
+body {
+    margin: 0;
+    background: #010409;
+    color: #fff;
+    font-family: Arial, sans-serif;
+}
+header {
+    background: #161b22;
+    padding: 10px;
+    text-align: center;
+    border-bottom: 1px solid #30363d;
+}
+.tabs {
+    display: flex;
+    justify-content: center;
+    background: #0d1117;
+    border-bottom: 1px solid #30363d;
+}
+.tab {
+    padding: 15px;
+    cursor: pointer;
+    color: #8b949e;
+}
+.tab.active {
+    color: #fff;
+    border-bottom: 3px solid #58a6ff;
+}
+#main {
+    display: flex;
+    height: calc(100vh - 100px);
+}
+#broker, #ordersTab, #historyTab {
+    flex: 1;
+    padding: 20px;
+    overflow-y: auto;
+    display: none;
+}
+#ordersTab, #historyTab {
+    background: #0d1117;
+    border-left: 1px solid #30363d;
+}
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 15px;
+}
+table th, table td {
+    padding: 10px;
+    border-bottom: 1px solid #30363d;
+    text-align: center;
+}
+.buy-row {
+    background: rgba(46, 160, 67, 0.1);
+}
+.sell-row {
+    background: rgba(248, 81, 73, 0.1);
+}
+.panel {
+    margin-bottom: 20px;
+    padding: 15px;
+    background: #0d1117;
+    border: 1px solid #30363d;
+}
+.panel h2 {
+    margin: 0 0 10px;
+}
+input, select {
+    width: 100%;
+    padding: 10px;
+    margin: 8px 0;
+    background: #161b22;
+    border: 1px solid #30363d;
+    color: #fff;
+    border-radius: 5px;
+}
+button {
+    width: 100%;
+    padding: 12px;
+    margin: 5px 0;
+    border: none;
+    cursor: pointer;
+    font-weight: bold;
+    border-radius: 5px;
+}
+.buyBtn {
+    background: #238636;
+    color: #fff;
+}
+.sellBtn {
+    background: #da3633;
+    color: #fff;
+}
+#chart {
+    height: 50vh;
+    border: 1px solid #30363d;
+    border-radius: 5px;
+    margin-bottom: 20px;
+}
+</style>
+</head>
+
+<body>
+
+<header>
+    <h1>Mini-Broker Pro</h1>
+    <div>
+        <input id="symbolInput" placeholder="Entrer un symbole (ex: BTC/USD)" style="width:200px;">
+        <button onclick="setChartSymbol()">Changer</button>
+    </div>
+</header>
+
+<div class="tabs">
+    <div class="tab active" data-tab="trade">Trading</div>
+    <div class="tab" data-tab="orders">Ordres en cours</div>
+    <div class="tab" data-tab="history">Historique</div>
+</div>
+
+<div id="main">
+
+    <!-- BROKER -->
+    <div id="broker" style="display:block;">
+        <div id="chart"></div>
+
+        <div class="panel">
+            <h2 id="symbolDisplay">Symbole</h2>
+            <p>Prix Actuel: <span id="currentPrice">--</span></p>
+
+            <label>Lots</label>
+            <input id="lotInput" type="number" value="1">
+
+            <label>Stop Loss</label>
+            <input id="slInput" type="number" placeholder="SL">
+
+            <label>Take Profit</label>
+            <input id="tpInput" type="number" placeholder="TP">
+
+            <button class="buyBtn" id="btnBuy">BUY Market</button>
+            <button class="sellBtn" id="btnSell">SELL Market</button>
+
+            <label>Prix limite :</label>
+            <input id="priceInput" type="number" placeholder="Entrer prix">
+
+            <button class="buyBtn" id="btnBuyLimit">BUY Limit</button>
+            <button class="sellBtn" id="btnSellLimit">SELL Limit</button>
+        </div>
+    </div>
+
+    <!-- ORDERS -->
+    <div id="ordersTab">
+        <h2>Ordres en cours</h2>
+        <table id="ordersTable">
+            <thead>
+                <tr>
+                    <th>ID</th><th>Heure</th><th>Type</th><th>Side</th><th>Prix</th>
+                    <th>SL</th><th>TP</th><th>Lots</th><th>Status</th><th>Action</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+
+    <!-- HISTORY -->
+    <div id="historyTab">
+        <h2>Historique</h2>
+        <table id="historyTable">
+            <thead>
+                <tr>
+                    <th>ID</th><th>Type</th><th>Side</th><th>Entry</th><th>Exit</th>
+                    <th>Lots</th><th>PNL</th><th>Heure</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+
+</div>
+
+<script>
+// ======================
+// Variables
+// ======================
+let symbol = "BTC/USD";
 let currentPrice = 0;
-let orders = [];            // ordres ouverts
-let orderHistory = [];      // ordres fermés
-let orderIdCounter = 1;
-let tvFeed = null;
+let orders = [];
+let history = [];
+let orderID = 1;
 
-// =========================
+// ======================
 // Initialisation TradingView
-// =========================
-function initTradingView() {
-    const widget = new TradingView.widget({
-        symbol: currentSymbol,
-        interval: "1",
-        container_id: "chart",
-        datafeed: new Datafeeds.UDFCompatibleDatafeed(
-            "https://demo_feed.tradingview.com"
-        ),
-        library_path: "https://s3.tradingview.com/",
-        locale: "fr",
-        theme: "dark",
-        autosize: true
+// ======================
+function initChart() {
+    new TradingView.widget({
+        "width": "100%",
+        "height": "100%",
+        "symbol": symbol.replace("/", ""),
+        "interval": "1",
+        "timezone": "Europe/Paris",
+        "theme": "dark",
+        "style": "1",
+        "locale": "fr",
+        "container_id": "chart",
+        "hide_side_toolbar": false,
     });
 
-    setTimeout(() => attachRealtimeFeed(), 2000);
+    simulatePrice();
 }
 
-// =========================
-// Flux temps réel TradingView (simulation)
-// =========================
-function attachRealtimeFeed() {
-    if (tvFeed) clearInterval(tvFeed);
-
-    tvFeed = setInterval(() => {
-        // Simulation du prix (à remplacer si tu as un vrai flux)
-        const randomMove = (Math.random() - 0.5) * 0.2;
-        currentPrice = Math.max(0, (currentPrice || 150) + randomMove);
-
-        updatePriceUI();
-        processActiveOrders();
-    }, 500);
+function simulatePrice() {
+    setInterval(() => {
+        currentPrice += (Math.random() - 0.5) * 0.5;
+        if (currentPrice <= 0) currentPrice = 1;
+        document.getElementById("currentPrice").textContent = currentPrice.toFixed(2);
+        checkOrders();
+    }, 800);
 }
 
-// =========================
-// Mise à jour affichage prix
-// =========================
-function updatePriceUI() {
-    document.getElementById("currentPrice").textContent = currentPrice.toFixed(2);
-    document.getElementById("priceInput").placeholder = currentPrice.toFixed(2);
+// ======================
+// Change Symbol
+// ======================
+function setChartSymbol() {
+    const input = document.getElementById("symbolInput").value;
+    if (!input) return;
+    symbol = input;
+    document.getElementById("symbolDisplay").textContent = symbol;
+    initChart();
 }
 
-// =========================
-// Gestion des tabs
-// =========================
-function activateTab(tab) {
-    document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
-    tab.classList.add("active");
+// ======================
+// Tabs
+// ======================
+document.querySelectorAll(".tab").forEach(t => {
+    t.addEventListener("click", () => {
+        document.querySelectorAll(".tab").forEach(e => e.classList.remove("active"));
+        t.classList.add("active");
 
-    const target = tab.dataset.tab;
-    document.getElementById("broker").style.display = target === "trade" ? "block" : "none";
-    document.getElementById("ordersTab").style.display = target === "orders" ? "block" : "none";
-    document.getElementById("historyTab").style.display = target === "history" ? "block" : "none";
-}
+        document.getElementById("broker").style.display = "none";
+        document.getElementById("ordersTab").style.display = "none";
+        document.getElementById("historyTab").style.display = "none";
 
-// =========================
-// Création d'un ordre
-// =========================
-function createOrder(type, side, price, lots, sl, tp) {
-    return {
-        id: orderIdCounter++,
-        time: new Date().toLocaleTimeString(),
-        type,
-        side,
-        lots: parseFloat(lots),
-        entry: price,
-        sl: sl ? parseFloat(sl) : null,
-        tp: tp ? parseFloat(tp) : null,
-        status: "open"
-    };
-}
+        if (t.dataset.tab === "trade") document.getElementById("broker").style.display = "block";
+        if (t.dataset.tab === "orders") document.getElementById("ordersTab").style.display = "block";
+        if (t.dataset.tab === "history") document.getElementById("historyTab").style.display = "block";
+    });
+});
 
-// =========================
-// TRAITEMENT — Ordre MARCHÉ
-// =========================
-function executeMarketOrder(side) {
+// ======================
+// Market Order
+// ======================
+function marketOrder(side) {
     const lots = parseFloat(document.getElementById("lotInput").value);
-    const sl = document.getElementById("slInput").value || null;
-    const tp = document.getElementById("tpInput").value || null;
+    const sl = parseFloat(document.getElementById("slInput").value) || null;
+    const tp = parseFloat(document.getElementById("tpInput").value) || null;
 
-    if (!lots || lots <= 0) {
-        alert("Lots invalides");
-        return;
-    }
+    const order = {
+        id: orderID++,
+        time: new Date().toLocaleTimeString(),
+        type: "market",
+        side,
+        lots,
+        entry: currentPrice,
+        sl,
+        tp,
+        status: "running"
+    };
 
-    const order = createOrder("market", side, currentPrice, lots, sl, tp);
     orders.push(order);
-
-    refreshOrdersTable();
+    updateOrdersTable();
 }
 
-// =========================
-// TRAITEMENT — Ordre LIMITE
-// =========================
-function executeLimitOrder(side) {
+// ======================
+// Limit Order
+// ======================
+function limitOrder(side) {
     const price = parseFloat(document.getElementById("priceInput").value);
-    const lots = document.getElementById("lotInput").value;
-    const sl = document.getElementById("slInput").value || null;
-    const tp = document.getElementById("tpInput").value || null;
+    const lots = parseFloat(document.getElementById("lotInput").value);
+    const sl = parseFloat(document.getElementById("slInput").value) || null;
+    const tp = parseFloat(document.getElementById("tpInput").value) || null;
 
-    if (!price || price <= 0) {
-        alert("Prix limite invalide");
-        return;
-    }
-    if (!lots || lots <= 0) {
-        alert("Lots invalides");
-        return;
-    }
+    const order = {
+        id: orderID++,
+        time: new Date().toLocaleTimeString(),
+        type: "limit",
+        side,
+        lots,
+        sl,
+        tp,
+        entry: price,
+        status: "pending"
+    };
 
-    const order = createOrder("limit", side, price, lots, sl, tp);
     orders.push(order);
-
-    refreshOrdersTable();
+    updateOrdersTable();
 }
 
-// =========================
-// Vérifie les ordres ouverts
-// =========================
-function processActiveOrders() {
+// ======================
+// Vérification des ordres
+// ======================
+function checkOrders() {
     for (let i = orders.length - 1; i >= 0; i--) {
-        const o = orders[i];
+        let o = orders[i];
 
-        // Ordre LIMIT → activation
-        if (o.type === "limit" && o.status === "open") {
-            if (
-                (o.side === "BUY" && currentPrice <= o.entry) ||
-                (o.side === "SELL" && currentPrice >= o.entry)
-            ) {
+        if (o.type === "limit" && o.status === "pending") {
+            if ((o.side === "BUY" && currentPrice <= o.entry) ||
+                (o.side === "SELL" && currentPrice >= o.entry)) {
                 o.entry = currentPrice;
                 o.status = "running";
             }
         }
 
-        // Ordres en cours (SL/TP)
         if (o.status === "running") {
             if (o.tp && ((o.side === "BUY" && currentPrice >= o.tp) || (o.side === "SELL" && currentPrice <= o.tp))) {
                 closeOrder(i);
@@ -158,29 +329,28 @@ function processActiveOrders() {
         }
     }
 
-    refreshOrdersTable();
+    updateOrdersTable();
 }
 
-// =========================
-// Clôture d’un ordre
-// =========================
+// ======================
+// Fermer un ordre
+// ======================
 function closeOrder(i) {
     const o = orders[i];
-    o.status = "closed";
     o.exit = currentPrice;
-    o.pnl = (o.side === "BUY" ? (currentPrice - o.entry) : (o.entry - currentPrice)) * o.lots;
+    o.pnl = (o.side === "BUY" ? (o.exit - o.entry) : (o.entry - o.exit)) * o.lots;
 
-    orderHistory.push(o);
+    history.push(o);
     orders.splice(i, 1);
 
-    refreshOrdersTable();
-    refreshHistoryTable();
+    updateOrdersTable();
+    updateHistoryTable();
 }
 
-// =========================
-// Table des ordres ouverts
-// =========================
-function refreshOrdersTable() {
+// ======================
+// Update Tables
+// ======================
+function updateOrdersTable() {
     const tbody = document.querySelector("#ordersTable tbody");
     tbody.innerHTML = "";
 
@@ -198,24 +368,23 @@ function refreshOrdersTable() {
             <td>${o.tp ?? "-"}</td>
             <td>${o.lots}</td>
             <td>${o.status}</td>
-            <td>
-                <button onclick="forceClose(${o.id})" style="background:red;color:white;border:none;padding:4px 8px;cursor:pointer">Fermer</button>
-            </td>
+            <td><button onclick="forceClose(${o.id})" style="background:red;color:white;">Fermer</button></td>
         `;
         tbody.appendChild(tr);
     });
 }
 
-// =========================
-// Table historique
-// =========================
-function refreshHistoryTable() {
+function forceClose(id) {
+    const i = orders.findIndex(o => o.id === id);
+    if (i !== -1) closeOrder(i);
+}
+
+function updateHistoryTable() {
     const tbody = document.querySelector("#historyTable tbody");
     tbody.innerHTML = "";
 
-    orderHistory.forEach(o => {
+    history.forEach(o => {
         const tr = document.createElement("tr");
-        tr.className = o.pnl >= 0 ? "buy-row" : "sell-row";
 
         tr.innerHTML = `
             <td>${o.id}</td>
@@ -231,53 +400,21 @@ function refreshHistoryTable() {
     });
 }
 
-// =========================
-// Bouton FERMER (manuel)
-// =========================
-function forceClose(id) {
-    const i = orders.findIndex(o => o.id === id);
-    if (i !== -1) closeOrder(i);
-}
+// ======================
+// Buttons
+// ======================
+document.getElementById("btnBuy").onclick = () => marketOrder("BUY");
+document.getElementById("btnSell").onclick = () => marketOrder("SELL");
+document.getElementById("btnBuyLimit").onclick = () => limitOrder("BUY");
+document.getElementById("btnSellLimit").onclick = () => limitOrder("SELL");
 
-// =========================
-// Changement de symbole
-// =========================
-function setSymbolFromInput() {
-    const input = document.getElementById("symbolInput");
-    const value = input.value.trim().toUpperCase();
+// Start
+initChart();
+</script>
 
-    if (!value) return;
+</body>
+</html>
 
-    currentSymbol = value;
-    document.getElementById("symbolDisplay").textContent = currentSymbol;
-
-    initTradingView();
-}
-
-// =========================
-// ÉVÉNEMENTS
-// =========================
-document.getElementById("btnBuy").onclick = () => executeMarketOrder("BUY");
-document.getElementById("btnSell").onclick = () => executeMarketOrder("SELL");
-
-document.getElementById("btnBuyLimit").onclick = () => executeLimitOrder("BUY");
-document.getElementById("btnSellLimit").onclick = () => executeLimitOrder("SELL");
-
-document.querySelectorAll(".tab").forEach(tab =>
-    tab.addEventListener("click", () => activateTab(tab))
-);
-
-document.getElementById("symbolInput").addEventListener("keydown", e => {
-    if (e.key === "Enter") setSymbolFromInput();
-});
-
-// =========================
-// Démarrage
-// =========================
-window.onload = () => {
-    document.getElementById("symbolDisplay").textContent = currentSymbol;
-    initTradingView();
-};
 
 
 
