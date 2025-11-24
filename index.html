@@ -593,6 +593,7 @@
         let currentAsset = 'EUR/USD';
         let tvWidget = null; 
         let currentEditingPositionId = null;
+        let tvReady = false; // Statut de l'initialisation de l'API de TradingView
 
         const TV_SYMBOLS = {
             'EUR/USD': 'FX_IDC:EURUSD',
@@ -642,11 +643,10 @@
 
         document.addEventListener('DOMContentLoaded', async () => {
             updateWatchlist();
-            // L'initialisation se fait de manière synchrone ici, mais le rendu est asynchrone
             initTradingView(currentAsset); 
             
             updateAccountInfo();
-            selectAsset(currentAsset); // On sélectionne l'actif par défaut
+            selectAsset(currentAsset); 
             setInterval(updatePricesAndPnL, 2000); 
             
             const limitAssetEl = document.getElementById('limit-asset');
@@ -661,6 +661,7 @@
 
         /**
          * Initialise le widget TradingView en utilisant le symbole mappé.
+         * Le drapeau tvReady est levé dans onChartReady.
          * @param {string} assetKey - La clé interne (ex: 'EUR/USD').
          */
         function initTradingView(assetKey) {
@@ -687,6 +688,7 @@
             
             tvWidget.onChartReady(() => {
                 console.log("TradingView Chart est prêt.");
+                tvReady = true; // Confirme la disponibilité de l'API Chart
             });
         }
 
@@ -750,7 +752,7 @@
 
         /**
          * Change l'actif actuellement regardé et sélectionné.
-         * Solution finale : Utilise tvWidget.onChartReady pour assurer l'exécution.
+         * Solution Finale : Utilise une vérification asynchrone pour s'assurer que setSymbol est disponible.
          * @param {string} asset - Le nouveau symbole.
          */
         function selectAsset(asset) {
@@ -765,20 +767,23 @@
                 }
             });
 
-            // 2. Mise à jour du graphique TradingView (La solution la plus fiable)
-            if (tvWidget && typeof tvWidget.onChartReady === 'function') {
-                // Utilise onChartReady pour s'assurer que .chart() et .setSymbol() sont disponibles.
-                // Si le graphique est déjà prêt, la fonction est exécutée immédiatement.
-                tvWidget.onChartReady(() => {
-                    if (tvWidget.chart && typeof tvWidget.chart().setSymbol === 'function') {
-                         tvWidget.chart().setSymbol(tvSymbol);
-                    } else {
-                        console.error("Erreur: tvWidget.chart().setSymbol n'est pas disponible.");
-                    }
-                });
-            } else {
-                console.warn("Le widget TradingView n'est pas encore initialisé ou l'API onChartReady n'est pas disponible.");
+            // 2. Mise à jour du graphique TradingView (Solution robuste)
+            function attemptSetSymbol() {
+                // Vérifie que l'API est prête ET que l'objet .chart() et sa méthode existent
+                if (tvReady && tvWidget && tvWidget.chart && typeof tvWidget.chart().setSymbol === 'function') {
+                    // C'est prêt ! On exécute.
+                    tvWidget.chart().setSymbol(tvSymbol);
+                    console.log(`Symbole changé avec succès pour : ${asset}`);
+                } else {
+                    // Ce n'est pas encore prêt. On réessaie dans 100ms (délai court).
+                    console.warn(`Tentative de changement de symbole échouée. Nouvelle tentative dans 100ms.`);
+                    setTimeout(attemptSetSymbol, 100);
+                }
             }
+            
+            // Lancer la première tentative
+            attemptSetSymbol();
+
 
             // 3. Mise à jour des panneaux d'exécution
             document.getElementById('current-asset').textContent = asset;
@@ -1184,8 +1189,6 @@
     </script>
 </body>
 </html>
-
-
 
 
 
