@@ -593,7 +593,6 @@
         let currentAsset = 'EUR/USD';
         let tvWidget = null; 
         let currentEditingPositionId = null;
-        let tvChartReady = false; // NOUVEAU: Drapeau pour indiquer l'état
 
         const TV_SYMBOLS = {
             'EUR/USD': 'FX_IDC:EURUSD',
@@ -643,11 +642,11 @@
 
         document.addEventListener('DOMContentLoaded', async () => {
             updateWatchlist();
-            // Utiliser la promesse pour attendre que le graphique soit prêt
-            await initTradingView(currentAsset); 
+            // L'initialisation se fait de manière synchrone ici, mais le rendu est asynchrone
+            initTradingView(currentAsset); 
             
             updateAccountInfo();
-            selectAsset(currentAsset); 
+            selectAsset(currentAsset); // On sélectionne l'actif par défaut
             setInterval(updatePricesAndPnL, 2000); 
             
             const limitAssetEl = document.getElementById('limit-asset');
@@ -661,37 +660,33 @@
         });
 
         /**
-         * Initialise le widget TradingView et retourne une Promesse qui se résout quand il est prêt.
+         * Initialise le widget TradingView en utilisant le symbole mappé.
          * @param {string} assetKey - La clé interne (ex: 'EUR/USD').
          */
         function initTradingView(assetKey) {
-            return new Promise((resolve) => {
-                const tvSymbol = TV_SYMBOLS[assetKey] || assetKey; 
-                
-                tvWidget = new TradingView.widget({
-                    "container_id": "tv_chart_container",
-                    "symbol": tvSymbol, 
-                    "interval": "60",
-                    "timezone": "Europe/Paris",
-                    "theme": "dark",
-                    "style": "1",
-                    "locale": "fr",
-                    "toolbar_bg": "#f1f3f6",
-                    "enable_publishing": false,
-                    "allow_symbol_change": false, // VERROUILLAGE
-                    "symbol_search_request_delay": 0, // VERROUILLAGE
-                    "hide_side_toolbar": true,
-                    "autosize": true,
-                    "studies": [ "Moving Average" ],
-                    "client_id": "tradingview.com", 
-                    "user_id": "test_user"
-                });
-                
-                tvWidget.onChartReady(() => {
-                    console.log("TradingView Chart est prêt.");
-                    tvChartReady = true; // Définir le drapeau
-                    resolve();
-                });
+            const tvSymbol = TV_SYMBOLS[assetKey] || assetKey; 
+            
+            tvWidget = new TradingView.widget({
+                "container_id": "tv_chart_container",
+                "symbol": tvSymbol, 
+                "interval": "60",
+                "timezone": "Europe/Paris",
+                "theme": "dark",
+                "style": "1",
+                "locale": "fr",
+                "toolbar_bg": "#f1f3f6",
+                "enable_publishing": false,
+                "allow_symbol_change": false, // VERROUILLAGE
+                "symbol_search_request_delay": 0, // VERROUILLAGE
+                "hide_side_toolbar": true,
+                "autosize": true,
+                "studies": [ "Moving Average" ],
+                "client_id": "tradingview.com", 
+                "user_id": "test_user"
+            });
+            
+            tvWidget.onChartReady(() => {
+                console.log("TradingView Chart est prêt.");
             });
         }
 
@@ -755,9 +750,10 @@
 
         /**
          * Change l'actif actuellement regardé et sélectionné.
+         * Solution finale : Utilise tvWidget.onChartReady pour assurer l'exécution.
          * @param {string} asset - Le nouveau symbole.
          */
-        async function selectAsset(asset) {
+        function selectAsset(asset) {
             currentAsset = asset;
             const tvSymbol = TV_SYMBOLS[asset] || asset;
 
@@ -769,26 +765,19 @@
                 }
             });
 
-            // 2. Mise à jour du graphique TradingView (UTILISATION DU DRAPEAU)
-            if (tvWidget && tvChartReady) {
-                // Si le graphique est prêt, on change le symbole immédiatement
-                tvWidget.chart().setSymbol(tvSymbol);
-            } else {
-                 // Si non prêt, on met une attente (fallback)
-                 console.warn("Chart non prêt, changement de symbole mis en attente.");
-                 // Ceci est un fallback, la Promesse dans DOMContentLoaded devrait suffire.
-                 let attempts = 0;
-                 const interval = setInterval(() => {
-                     if (tvChartReady && tvWidget && tvWidget.chart) {
+            // 2. Mise à jour du graphique TradingView (La solution la plus fiable)
+            if (tvWidget && typeof tvWidget.onChartReady === 'function') {
+                // Utilise onChartReady pour s'assurer que .chart() et .setSymbol() sont disponibles.
+                // Si le graphique est déjà prêt, la fonction est exécutée immédiatement.
+                tvWidget.onChartReady(() => {
+                    if (tvWidget.chart && typeof tvWidget.chart().setSymbol === 'function') {
                          tvWidget.chart().setSymbol(tvSymbol);
-                         clearInterval(interval);
-                     }
-                     attempts++;
-                     if (attempts > 10) { 
-                         clearInterval(interval);
-                         console.error("Échec du changement de symbole après plusieurs tentatives.");
-                     }
-                 }, 500);
+                    } else {
+                        console.error("Erreur: tvWidget.chart().setSymbol n'est pas disponible.");
+                    }
+                });
+            } else {
+                console.warn("Le widget TradingView n'est pas encore initialisé ou l'API onChartReady n'est pas disponible.");
             }
 
             // 3. Mise à jour des panneaux d'exécution
