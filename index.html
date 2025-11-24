@@ -1,394 +1,135 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AmA Trading - Interface Moderne</title>
-
-<!-- TradingView Widget -->
-<script src="https://s3.tradingview.com/tv.js"></script>
-
-<style>
-/* -------------------------------------------------
-   🎨 THEME MODERNE / GLASS UI
---------------------------------------------------*/
-:root {
-    --bg-dark: #0d1117;
-    --bg-panel: rgba(255,255,255,0.06);
-    --bg-panel-hover: rgba(255,255,255,0.09);
-    --primary: #3b82f6;
-    --accent: #0ea5e9;
-    --text: #e2e8f0;
-    --border: rgba(255,255,255,0.08);
-    --success: #10b981;
-    --danger: #ef4444;
-    --radius: 14px;
-}
-
-* {
-    margin: 0; padding: 0; box-sizing: border-box;
-    font-family: "Inter", sans-serif;
-}
-
-body {
-    background: linear-gradient(135deg, #0d1117, #111827);
-    color: var(--text);
-    height: 100vh;
-    overflow: hidden;
-}
-
-
-/* -------------------------------------------------
-   HEADER
---------------------------------------------------*/
-
-header {
-    background: rgba(255,255,255,0.05);
-    backdrop-filter: blur(12px);
-    padding: 15px 25px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    border-bottom: 1px solid var(--border);
-}
-
-header h1 {
-    font-size: 1.8rem;
-    font-weight: 800;
-    color: var(--primary);
-}
-
-.balance-box {
-    background: rgba(255,255,255,0.07);
-    padding: 10px 18px;
-    border-radius: var(--radius);
-    border: 1px solid var(--border);
-    font-size: 1.2rem;
-}
-
-
-/* -------------------------------------------------
-   LAYOUT
---------------------------------------------------*/
-
-.main {
-    display: flex;
-    height: calc(100vh - 70px);
-    gap: 12px;
-    padding: 12px;
-}
-
-.left-panel {
-    width: 320px;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    position: relative;
-}
-
-.resizer {
-    position: absolute;
-    top: 0; right: 0;
-    width: 8px;
-    cursor: ew-resize;
-}
-
-.panel {
-    background: var(--bg-panel);
-    backdrop-filter: blur(14px);
-    border-radius: var(--radius);
-    border: 1px solid var(--border);
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-}
-
-.panel-title {
-    padding: 12px 16px;
-    font-weight: 600;
-    border-bottom: 1px solid var(--border);
-    background: rgba(255,255,255,0.05);
-}
-
-.panel-content {
-    padding: 10px 15px;
-    flex-grow: 1;
-    overflow-y: auto;
-}
-
-
-/* -------------------------------------------------
-   WATCHLIST
---------------------------------------------------*/
-
-.asset-row {
-    display: grid;
-    grid-template-columns: 2fr 1fr 1fr;
-    padding: 10px;
-    border-bottom: 1px solid var(--border);
-    cursor: pointer;
-    transition: 0.15s;
-}
-
-.asset-row:hover {
-    background: var(--bg-panel-hover);
-}
-
-.asset-row.selected {
-    background: var(--primary);
-    color: white;
-    font-weight: bold;
-}
-
-
-/* -------------------------------------------------
-   ORDER ENTRY
---------------------------------------------------*/
-
-input, select {
-    width: 100%;
-    padding: 8px 10px;
-    margin-top: 5px;
-    background: rgba(255,255,255,0.06);
-    border: 1px solid var(--border);
-    color: var(--text);
-    border-radius: 8px;
-}
-
-.order-btn {
-    width: 100%;
-    padding: 12px;
-    margin-top: 10px;
-    font-weight: bold;
-    border-radius: 8px;
-    cursor: pointer;
-    border: none;
-    transition: 0.2s;
-}
-
-.buy { background: var(--success); color:white; }
-.sell { background: var(--danger); color:white; }
-.order-btn:hover { opacity: 0.9; }
-
-
-/* -------------------------------------------------
-   RIGHT PANEL / CHART
---------------------------------------------------*/
-
-#chart-panel {
-    flex-grow: 2;
-}
-
-#chart-container {
-    width: 100%;
-    height: 100%;
-}
-
-/* -------------------------------------------------
-   TABS + TABLES
---------------------------------------------------*/
-
-.tabs {
-    display: flex;
-    border-bottom: 1px solid var(--border);
-}
-
-.tab {
-    flex: 1;
-    padding: 12px;
-    text-align: center;
-    cursor: pointer;
-    font-weight: 600;
-}
-
-.tab.active {
-    background: var(--primary);
-    color: white;
-}
-
-.tab-content {
-    display: none;
-    padding: 10px;
-}
-
-.tab-content.active {
-    display: block;
-}
-
-.table {
-    width: 100%;
-    border-collapse: collapse;
-}
-
-.table th, .table td {
-    border-bottom: 1px solid var(--border);
-    padding: 8px;
-}
-
-.pnl-positive { color: var(--success); }
-.pnl-negative { color: var(--danger); }
-
-</style>
+  <meta charset="UTF-8">
+  <title>AmA Trading</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- TradingView Widget, styles modernes, icônes, etc. -->
+  <link rel="stylesheet" href="https://unpkg.com/modern-css-reset/dist/reset.min.css"/>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/css/bootstrap.min.css">
+  <style>
+    body { background: #111; color: #f8f8f8; font-family: 'Segoe UI', Arial, sans-serif;}
+    header { padding: 1rem; font-size: 2.2rem; font-weight: bold; background: linear-gradient(90deg, #0099ff, #09edb5); color:#fff;}
+    .main { display:flex; gap:1rem; min-height: 90vh; }
+    .sidebar, .chart, .order-book {background: #1d2131; border-radius:10px; padding:1rem;}
+    .sidebar { width: 340px; flex-shrink:0; display: flex; flex-direction: column;}
+    .watchlist { margin-bottom: 1rem;}
+    .watchlist-item { cursor:pointer; padding:7px; border-radius:6px; margin-bottom:3px; }
+    .watchlist-item.active, .watchlist-item:hover {background: #3569ec; color:#fff;}
+    .order-table, .positions-table {background:#20294a; border-radius:9px;}
+    .positions-tabs {display: flex; gap:14px; margin-bottom:14px;}
+    .positions-tabs .tab { cursor:pointer; padding:7px 16px; border-radius:7px; background: #233063; }
+    .positions-tabs .tab.active {background:#3fc1c9; color:#222;}
+    .fullscreen-btn {position:absolute; top:12px; right:12px; z-index:10; background:#2e385a; color:#fff; border:none; border-radius:8px; padding:8px 14px; cursor:pointer;}
+    .hidden {display:none;}
+    .expand-btn { color:#0ef2c6; cursor:pointer; float:right; font-size:1.2rem;}
+  </style>
 </head>
-
 <body>
-
-<header>
-    <h1>AmA Trading</h1>
-    <div class="balance-box">Solde : <span id="balance">$50 000.00</span></div>
-</header>
-
-<div class="main">
-
-    <!-- LEFT PANEL -->
-    <div class="left-panel" id="left-panel">
-        <div class="resizer" id="resizer"></div>
-
-        <!-- Watchlist -->
-        <div class="panel" style="height: 45%;">
-            <div class="panel-title">⭐ Watchlist</div>
-            <div class="panel-content" id="watchlist"></div>
+  <header>AmA Trading <span style="float:right;font-size:1.1rem;">Solde: <b>€50,000</b></span></header>
+  <div class="main">
+    <div class="sidebar">
+      <div class="watchlist">
+        <div style="font-size:1.15rem;margin-bottom:7px;">
+          <span>Watchlist Indices</span>
+          <span class="expand-btn" onclick="toggleSection('watchlist-indices')">&#9654;</span>
         </div>
-
-        <!-- Order Entry -->
-        <div class="panel" style="height: 55%;">
-            <div class="panel-title">📊 Ordre : <span id="asset-title">EUR/USD</span></div>
-            <div class="panel-content">
-                
-                <label>Type d’ordre</label>
-                <select id="order-type">
-                    <option value="market">Marché</option>
-                    <option value="limit">Limite</option>
-                </select>
-
-                <label>Lots</label>
-                <input type="number" id="lots" min="0.01" step="0.01" value="0.10">
-
-                <div id="limit-box" style="display:none;">
-                    <label>Prix Limite</label>
-                    <input type="number" id="limit-price" step="0.00001">
-                </div>
-
-                <label>TP</label>
-                <input type="number" id="tp" step="0.00001">
-
-                <label>SL</label>
-                <input type="number" id="sl" step="0.00001">
-
-                <button class="order-btn buy" onclick="placeOrder('BUY')">Acheter</button>
-                <button class="order-btn sell" onclick="placeOrder('SELL')">Vendre</button>
-
-            </div>
+        <div id="watchlist-indices">
+          <!-- Exemples – Les vrais legal names à annoter par JS : -->
+          <div class="watchlist-item" onclick="setChart('SPX')">S&P 500 <span>[finance:S&P 500]</span></div>
+          <div class="watchlist-item" onclick="setChart('DJI')">Dow Jones <span>[finance:Dow Jones Industrial Average]</span></div>
+          <div class="watchlist-item" onclick="setChart('NASDAQ')">Nasdaq 100 <span>[finance:NASDAQ 100]</span></div>
+          <div class="watchlist-item" onclick="setChart('DAX')">DAX <span>[finance:DAX 40]</span></div>
+          <div class="watchlist-item" onclick="setChart('FTSE')">FTSE 100 <span>[finance:FTSE 100]</span></div>
         </div>
-
+        <div style="font-size:1.15rem;margin:12px 0 7px;">
+          <span>Watchlist Devises</span>
+          <span class="expand-btn" onclick="toggleSection('watchlist-fx')">&#9654;</span>
+        </div>
+        <div id="watchlist-fx">
+          <div class="watchlist-item" onclick="setChart('EURUSD')">EUR/USD <span>[finance:EUR/USD]</span></div>
+          <div class="watchlist-item" onclick="setChart('GBPUSD')">GBP/USD <span>[finance:GBP/USD]</span></div>
+          <div class="watchlist-item" onclick="setChart('USDJPY')">USD/JPY <span>[finance:USD/JPY]</span></div>
+          <div class="watchlist-item" onclick="setChart('USDCHF')">USD/CHF <span>[finance:USD/CHF]</span></div>
+          <div class="watchlist-item" onclick="setChart('USDCAD')">USD/CAD <span>[finance:USD/CAD]</span></div>
+        </div>
+        <div style="font-size:1.15rem;margin:12px 0 7px;">
+          <span>Or Spot</span>
+          <span class="expand-btn" onclick="toggleSection('watchlist-gold')">&#9654;</span>
+        </div>
+        <div id="watchlist-gold">
+          <div class="watchlist-item" onclick="setChart('XAUUSD')">Gold (XAU/USD) <span>[finance:XAU/USD]</span></div>
+        </div>
+      </div>
+      <div class="order-book">
+        <h5>Ordres Limite</h5>
+        <table class="order-table table table-dark">
+          <thead><tr><th>Actif</th><th>Acheter</th><th>Vendre</th><th>Prix</th><th>Lots</th><th></th></tr></thead>
+          <tbody id="order-list"></tbody>
+        </table>
+        <button class="btn btn-success btn-sm mt-2" onclick="showOrderSound('valide')">Effet sonore Validation</button>
+        <button class="btn btn-danger btn-sm" onclick="showOrderSound('refus')">Effet sonore Refus</button>
+      </div>
     </div>
-
-    <!-- RIGHT PANEL -->
-    <div class="panel" id="chart-panel">
-        <div class="panel-title">📈 Graphique TradingView (<span id="chart-title">EUR/USD</span>)</div>
-        <div id="chart-container"></div>
+    <div style="flex:1;display:flex;flex-direction:column;">
+      <div class="chart" style="position:relative;">
+        <button class="fullscreen-btn" onclick="toggleFullscreen('chart')">&#128470; Plein écran</button>
+        <div id="tradingview-widget" style="height:400px;"></div>
+      </div>
+      <div class="positions-tabs mt-3">
+        <div class="tab active" onclick="showTab('positions')">Positions</div>
+        <div class="tab" onclick="showTab('history')">Historique positions</div>
+        <div class="tab" onclick="showTab('pending')">Ordres en attente</div>
+      </div>
+      <div id="positions" class="positions-table p-3">
+        <!-- Table dynamique : positions en cours, TP/SL/Vente -->
+      </div>
+      <div id="history" class="positions-table p-3 hidden">
+        <!-- Table historique -->
+      </div>
+      <div id="pending" class="positions-table p-3 hidden">
+        <!-- Table ordres en attente -->
+      </div>
     </div>
-
-</div>
-
-
-
-<script>
-/* ======================================================
-   🔧 FIX TRADINGVIEW : VERSION 100% FONCTIONNELLE
-======================================================*/
-
-function loadChart(symbol) {
-    document.getElementById("chart-container").innerHTML = "";
-
-    const tvSymbol =
-        symbol.includes("/") ? "FOREXCOM:" + symbol.replace("/", "") :
-        symbol === "^GSPC" ? "SP:SPX" :
-        symbol === "^DJI" ? "DJI" :
-        symbol === "^IXIC" ? "NASDAQ:IXIC" :
-        symbol === "XAU/USD" ? "FOREXCOM:XAUUSD" :
-        symbol;
-
-    new TradingView.widget({
-        autosize: true,
-        symbol: tvSymbol,
-        interval: "60",
-        timezone: "Europe/Paris",
-        theme: "dark",
-        style: "1",
-        container_id: "chart-container",
-        hide_side_toolbar: false,
-        allow_symbol_change: false
-    });
-}
-
-
-/* ======================================================
-   WATCHLIST + PRIX
-======================================================*/
-
-const ASSETS = ["EUR/USD", "GBP/USD", "USD/JPY", "XAU/USD", "^GSPC", "^DJI"];
-
-let quotes = {};
-
-function renderWatchlist() {
-    const wl = document.getElementById("watchlist");
-    wl.innerHTML = "";
-
-    ASSETS.forEach(s => {
-        const row = document.createElement("div");
-        row.className = "asset-row";
-        row.innerHTML = `
-            <span>${s}</span>
-            <span>${quotes[s] ? quotes[s] : "---"}</span>
-            <span>${quotes[s] ? (quotes[s] * 1.0001).toFixed(5) : "---"}</span>
-        `;
-        row.onclick = () => selectAsset(s);
-        if (s === currentAsset) row.classList.add("selected");
-        wl.appendChild(row);
-    });
-}
-
-
-/* ======================================================
-   SELECTION D’ASSET
-======================================================*/
-
-let currentAsset = "EUR/USD";
-
-function selectAsset(sym) {
-    currentAsset = sym;
-    document.getElementById("asset-title").innerText = sym;
-    document.getElementById("chart-title").innerText = sym;
-    renderWatchlist();
-    loadChart(sym);
-}
-
-
-/* ======================================================
-   ORDRES (simples pour la démo)
-======================================================*/
-
-function placeOrder(type) {
-    alert("Ordre " + type + " placé sur " + currentAsset);
-}
-
-
-/* ======================================================
-   INIT
-======================================================*/
-
-document.getElementById("order-type").addEventListener("change", e => {
-    document.getElementById("limit-box").style.display =
-        e.target.value === "limit" ? "block" : "none";
-});
-
-selectAsset("EUR/USD"); // charge graphique
-
-</script>
-
+  </div>
+  <audio id="sound-valide" src="https://assets.mixkit.co/sfx/download/mixkit-positive-interface-beep-221.mp3"></audio>
+  <audio id="sound-refus" src="https://assets.mixkit.co/sfx/download/mixkit-wrong-answer-fail-notification-946.mp3"></audio>
+  <audio id="sound-sortie" src="https://assets.mixkit.co/sfx/download/mixkit-select-click-1107.mp3"></audio>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/js/bootstrap.bundle.min.js"></script>
+  <!-- TradingView Widget JS -->
+  <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
+  <script>
+    // JS d’intégration, initialisation du widget TradingView, gestion Watchlist/onglets/effets sonores...
+    function setChart(symbol) {
+      // Récupère la cotation via TwelveData, change le graphique TradingView
+      // ...
+      document.querySelectorAll('.watchlist-item').forEach(el=>el.classList.remove('active'))
+      document.querySelector(`[onclick="setChart('${symbol}')"]`).classList.add('active');
+      // Afficher/rafraichir le TradingView Widget sur l'actif choisi
+      // (Voir doc https://www.tradingview.com/widget/)
+    }
+    function toggleSection(id) { document.getElementById(id).classList.toggle('hidden');}
+    function showTab(tab) {
+      ['positions','history','pending'].forEach(t=>
+        document.getElementById(t).classList[t==tab?'remove':'add']('hidden'))
+      document.querySelectorAll('.positions-tabs .tab').forEach((t,i)=>
+        t.classList[t.innerText.toLowerCase().includes(tab)?'add':'remove']('active'))
+    }
+    function showOrderSound(type) {
+      document.getElementById('sound-'+type).play();
+    }
+    function toggleFullscreen(elementId) {
+      var elem = document.querySelector('.chart'); // à adapter si plein écran
+      if (!document.fullscreenElement) {
+        elem.requestFullscreen();
+      }
+      else {document.exitFullscreen()}
+    }
+    // À compléter : intégration TwelveData, validation lots sur XTB, dynamique ordres/positions
+  </script>
 </body>
 </html>
+
 
 
 
