@@ -491,7 +491,7 @@
              }
         }
 
-        // --- Récupération de Prix via REST (Vérifié) ---
+        // --- Récupération de Prix via REST (AVEC DIAGNOSTIC) ---
         async function getInitialPriceRest(symbol) {
             const assetData = getAssetData(symbol);
             if (!assetData) return null;
@@ -499,13 +499,11 @@
             const tv_symbol = assetData.tv_symbol; 
 
             try {
-                // Utilise le symbole API (sans slash)
                 const response = await fetch(TWELVEDATA_PRICE_REST(tv_symbol)); 
                 const data = await response.json();
                 
                 if (data.price && !isNaN(parseFloat(data.price))) {
                     const price = parseFloat(data.price);
-                    // Stocker sous le symbole de l'interface (avec slash)
                     assetPrices[symbol] = price; 
                     
                     const priceElement = document.getElementById(`price-${tv_symbol}`);
@@ -513,24 +511,21 @@
                          priceElement.textContent = formatPrice(price, symbol);
                     }
                     
-                    console.log(`[REST OK] Prix initial pour ${symbol}: ${price}`);
+                    console.log(`[REST OK] Prix initial pour ${symbol} (API: ${tv_symbol}): ${price}`);
                     return price;
-                } else if (data.message && data.message.includes('API key is invalid')) {
-                    console.error(`[REST ERREUR FATALE] Clé API Invalide ou Permissions manquantes: ${data.message}`);
-                     // On ne met pas d'alerte ici, mais on laisse la fonction placeOrder le faire si elle ne reçoit rien.
-                    return null;
                 } else {
-                    console.error(`[REST ERREUR] Impossible d'obtenir le prix pour ${symbol}.`, data.message);
+                    // Si la propriété 'price' est manquante ou invalide, logguer la réponse complète
+                    console.error(`[REST ÉCHEC] Le prix est manquant pour ${symbol} (API: ${tv_symbol}). Réponse complète de l'API Twelve Data:`, data);
                     return null;
                 }
             } catch (error) {
-                console.error('[REST ÉCHEC] Erreur lors de la requête REST pour le prix. Le CORS peut être le problème si vous exécutez localement.', error);
+                console.error('[REST ÉCHEC] Erreur lors de la requête REST (problème de réseau ou de serveur API):', error);
                 return null;
             }
         }
 
         // --- TradingView et WebSocket ---
-        function loadTradingViewWidget(tv_symbol) { /* ... Inchangé ... */
+        function loadTradingViewWidget(tv_symbol) { 
             const tvContainer = document.getElementById('tradingview-widget');
             tvContainer.innerHTML = ''; 
 
@@ -555,10 +550,8 @@
             if (websocket) {
                 websocket.close(); 
             }
-            // Tente de récupérer le prix immédiatement (pour la Watchlist et l'ouverture rapide)
             getInitialPriceRest(currentSymbol); 
 
-            // Utiliser le symbole API (sans slash) pour le WS
             const WSS_URL = TWELVEDATA_WSS(tv_symbol);
             websocket = new WebSocket(WSS_URL);
             
@@ -579,7 +572,6 @@
 
                     assetPrices[symbol] = price; 
                     
-                    // Mise à jour visuelle du prix de l'actif
                     const priceElement = document.getElementById(`price-${data.symbol}`);
                     if (priceElement) {
                         priceElement.textContent = formatPrice(price, symbol);
@@ -618,24 +610,22 @@
             
             let openPrice = assetPrices[currentSymbol];
 
-            // 1. Vérifier si le prix est déjà là
             if (!openPrice) {
                 console.warn(`Le prix pour ${currentSymbol} est manquant au moment du clic. Nouvelle tentative de récupération REST...`);
-                // 2. Si non, forcer une alerte et attendre le prix REST
+                
+                // Cette alerte est utile pour signaler le délai à l'utilisateur
                 alert('Prix non disponible. Tentative de récupération en cours, veuillez patienter quelques secondes...');
                 
                 openPrice = await getInitialPriceRest(currentSymbol); 
             }
             
-            // 3. Échec final après la tentative REST
             if (!openPrice) {
-                console.error('Échec critique: Le prix actuel n\'a pas pu être récupéré via API après double tentative. Vérifiez les logs REST/WS dans la console (F12) pour un message d\'erreur détaillé (CORS ou Clé invalide).');
-                alert('Erreur: Le prix actuel n\'a pas pu être récupéré via API. Problème de connexion/CORS ou Clé API invalide.');
+                console.error('Échec critique: Le prix actuel n\'a pas pu être récupéré via API après double tentative. Regardez la console (F12) pour la réponse de Twelve Data.');
+                alert('Erreur: Le prix actuel n\'a pas pu être récupéré via API. Problème de connexion/API. Voir console (F12).');
                 playSound('rejected');
                 return;
             }
             
-            // 4. Succès: Placer l'ordre.
             const newPosition = {
                 id: Date.now(), 
                 symbol: currentSymbol,
