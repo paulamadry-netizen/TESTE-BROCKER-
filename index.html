@@ -387,9 +387,7 @@
 
         // CLÉ API UTILISÉE : 8906aa7f29ca470da317f72ae7efab51
         const API_KEY = '8906aa7f29ca470da317f72ae7efab51'; 
-        // L'API WebSocket utilise les symboles TWELVEDATA (ex: EURUSD)
         const TWELVEDATA_WSS = (symbol) => `wss://ws.twelvedata.com/v1/quotes/price?symbol=${symbol}&apikey=${API_KEY}`;
-        // L'API REST utilise également les symboles TWELVEDATA (ex: EURUSD)
         const TWELVEDATA_PRICE_REST = (symbol) => `https://api.twelvedata.com/price?symbol=${symbol}&apikey=${API_KEY}`;
         
         const ALL_ASSETS = [
@@ -426,6 +424,7 @@
         const lotsInput = document.getElementById('lots'); 
 
         // --- Fonctions d'Utilitaires (Inchangées) ---
+
         const formatUSD = (amount) => {
             const color = amount >= 0 ? 'var(--buy-color)' : 'var(--sell-color)';
             const sign = amount >= 0 ? '+' : '';
@@ -462,8 +461,9 @@
             });
             document.getElementById(`watchlist-${assetData.tv_symbol}`).classList.add('active');
             
-            // Recharger le graphique et le WebSocket
+            // Recharger le graphique
             loadTradingViewWidget(assetData.tv_symbol);
+            // Démarrer le WebSocket et demander immédiatement un prix REST
             initWebSocket(assetData.tv_symbol); 
         }
         
@@ -493,21 +493,21 @@
              }
         }
 
-        // --- Récupération de Prix via REST (Corrigé pour utiliser tv_symbol) ---
+        // --- Récupération de Prix via REST (Vérifié) ---
         async function getInitialPriceRest(symbol) {
             const assetData = getAssetData(symbol);
             if (!assetData) return null;
 
-            // Utiliser le tv_symbol (sans slash) pour la requête REST
             const tv_symbol = assetData.tv_symbol; 
 
             try {
+                // Utilise le symbole API (sans slash)
                 const response = await fetch(TWELVEDATA_PRICE_REST(tv_symbol)); 
                 const data = await response.json();
                 
                 if (data.price && !isNaN(parseFloat(data.price))) {
                     const price = parseFloat(data.price);
-                    // Stocker le prix sous le symbole interne (ex: EUR/USD)
+                    // Stocker sous le symbole de l'interface (avec slash)
                     assetPrices[symbol] = price; 
                     
                     const priceElement = document.getElementById(`price-${tv_symbol}`);
@@ -515,20 +515,20 @@
                          priceElement.textContent = formatPrice(price, symbol);
                     }
                     
-                    console.log(`Prix initial récupéré par REST pour ${symbol}: ${price}`);
+                    console.log(`[REST OK] Prix initial pour ${symbol}: ${price}`);
                     return price;
                 } else {
-                    console.error(`Erreur REST API: Impossible d'obtenir le prix pour ${symbol}.`, data.message);
+                    console.error(`[REST ERREUR] Impossible d'obtenir le prix pour ${symbol}.`, data.message);
                     return null;
                 }
             } catch (error) {
-                console.error('Erreur lors de la requête REST pour le prix:', error);
+                console.error('[REST ÉCHEC] Erreur lors de la requête REST pour le prix:', error);
                 return null;
             }
         }
 
         // --- TradingView et WebSocket ---
-        function loadTradingViewWidget(tv_symbol) {
+        function loadTradingViewWidget(tv_symbol) { /* ... Inchangé ... */
             const tvContainer = document.getElementById('tradingview-widget');
             tvContainer.innerHTML = ''; 
 
@@ -553,33 +553,31 @@
             if (websocket) {
                 websocket.close(); 
             }
-            // Récupère d'abord un prix par REST au cas où le WS serait lent ou échouerait
+            // Tente de récupérer le prix immédiatement (pour la Watchlist et l'ouverture rapide)
             getInitialPriceRest(currentSymbol); 
 
-            // Utiliser le tv_symbol (sans slash) pour la requête WS
+            // Utiliser le symbole API (sans slash) pour le WS
             const WSS_URL = TWELVEDATA_WSS(tv_symbol);
             websocket = new WebSocket(WSS_URL);
             
             websocket.onopen = () => {
-                console.log('WebSocket connectée pour ' + tv_symbol);
+                console.log('[WS OK] WebSocket connectée pour ' + tv_symbol);
             };
 
             websocket.onmessage = (event) => {
                 const data = JSON.parse(event.data);
                 if (data.event === 'price') {
-                    // Trouver le symbole interne (EUR/USD) à partir du symbole TV (EURUSD)
                     const assetData = ALL_ASSETS.find(a => a.tv_symbol === data.symbol);
                     if (!assetData) return;
                     
-                    const symbol = assetData.symbol; // EUR/USD
+                    const symbol = assetData.symbol; 
                     const price = parseFloat(data.price);
                     
                     if (isNaN(price)) return;
 
-                    // Stocker le prix sous le symbole interne (EUR/USD)
                     assetPrices[symbol] = price; 
                     
-                    // Mise à jour Watchlist (visuel)
+                    // Mise à jour visuelle du prix de l'actif
                     const priceElement = document.getElementById(`price-${data.symbol}`);
                     if (priceElement) {
                         priceElement.textContent = formatPrice(price, symbol);
@@ -598,15 +596,15 @@
             };
 
             websocket.onerror = (error) => {
-                console.error('Erreur WebSocket:', error);
+                console.error('[WS ERREUR] Erreur WebSocket:', error);
             };
             
             websocket.onclose = () => {
-                console.log('WebSocket déconnectée.');
+                console.log('[WS CLOSING] WebSocket déconnectée.');
             };
         }
         
-        // --- Passer un Ordre Market (Amélioré) ---
+        // --- Passer un Ordre Market (Stabilisé) ---
         async function placeOrder(type) {
             const lots = parseFloat(lotsInput.value);
             
@@ -618,20 +616,22 @@
             
             let openPrice = assetPrices[currentSymbol];
 
-            // Tenter de récupérer le prix une dernière fois via REST si le WS est toujours muet
+            // Si le prix n'est PAS là (même après l'appel REST de initWebSocket), on force un nouvel appel.
             if (!openPrice) {
-                console.warn('Le prix n\'est pas encore disponible. Tentative de récupération via REST...');
-                // getInitialPriceRest est async et met à jour assetPrices[currentSymbol]
+                console.warn('Le prix est manquant au moment du clic. Nouvelle tentative de récupération REST...');
+                alert('Récupération du prix en cours, veuillez patienter quelques secondes...');
+                
                 openPrice = await getInitialPriceRest(currentSymbol); 
             }
             
             if (!openPrice) {
-                alert('Erreur: Le prix actuel n\'a pas pu être récupéré via WebSocket ou REST API. Veuillez vérifier votre connexion internet et la validité de votre clé API.');
+                // Si REST échoue à nouveau, il y a un problème de clé, de symbole ou de connexion API.
+                alert('Erreur: Le prix actuel n\'a pas pu être récupéré via API. Vérifiez votre clé API et les symboles dans la console (F12).');
                 playSound('rejected');
                 return;
             }
             
-            // Ordre Market
+            // Si on arrive ici, le prix est garanti.
             const newPosition = {
                 id: Date.now(), 
                 symbol: currentSymbol,
@@ -654,7 +654,7 @@
             document.getElementById('take-profit').value = '';
         }
         
-        // --- Fonctions de Rendu et de Logique (Inchangées) ---
+        // --- Le reste des fonctions (Inchangées) ---
         function calculateAndUpdatePnL() {
             let totalPnL = 0;
 
