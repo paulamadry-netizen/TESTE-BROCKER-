@@ -13,62 +13,56 @@
     --accent:#00c4a7;
     --danger:#ff6b6b;
     --glass:rgba(255,255,255,0.03);
-    --card-shadow:0 8px 28px rgba(2,6,23,0.7);
-    --radius:16px;
+    --card-shadow:0 6px 20px rgba(2,6,23,0.7);
+    --radius:12px;
     font-family:Inter,system-ui,Roboto,sans-serif;
   }
   html,body{height:100%;margin:0;background:linear-gradient(180deg,#071025,#071423);color:#e6eef6}
-  .app{display:grid;grid-template-columns:1fr 380px;grid-template-rows:1fr 320px;gap:18px;height:100vh;padding:18px}
-  .card{background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01));border-radius:var(--radius);padding:18px;box-shadow:var(--card-shadow);display:flex;flex-direction:column}
+  .app{display:grid;grid-template-columns:1fr 360px;grid-template-rows:1fr 320px;gap:18px;height:100vh;padding:18px}
+  .card{background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01));border-radius:var(--radius);padding:14px;box-shadow:var(--card-shadow);display:flex;flex-direction:column}
   .chart-card{grid-column:1/2;grid-row:1/2;min-width:0}
-  .chart-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+  .chart-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
   .symbol-info{display:flex;gap:12px;align-items:center}
-  .symbol-badge{background:var(--glass);padding:10px 14px;border-radius:12px;font-weight:600;color:var(--accent)}
+  .symbol-badge{background:var(--glass);padding:8px 12px;border-radius:10px;font-weight:600;color:var(--accent)}
   .control-row{display:flex;gap:10px;align-items:center}
-  .btn{padding:10px 14px;border-radius:12px;border:0;cursor:pointer;font-weight:700;letter-spacing:0.4px}
+  .btn{padding:8px 12px;border-radius:10px;border:0;cursor:pointer;font-weight:700}
   .btn-buy{background:linear-gradient(90deg,#0ea5a3,#00c4a7);color:#022}
   .btn-sell{background:linear-gradient(90deg,#ff6b6b,#ff8a8a);color:#111}
-  .btn-ghost{background:transparent;color:var(--muted);border:1px solid rgba(255,255,255,0.2)}
-  #tv_chart_container{flex:1;min-height:420px;border-radius:16px;overflow:hidden;margin-top:12px}
-  .watchlist{grid-column:2/3;grid-row:1/2;background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01));border-radius:var(--radius);padding:16px;box-shadow:var(--card-shadow);display:flex;flex-direction:column}
-  .watchlist h3{margin:0 0 10px 0;font-size:16px;color:var(--muted)}
-  .wl-item{display:flex;justify-content:space-between;align-items:center;padding:10px;border-radius:12px;cursor:pointer;transition:transform .15s ease,background .15s ease;background:rgba(255,255,255,0.01)}
-  .wl-item:hover{transform:translateY(-4px);background:rgba(255,255,255,0.08)}
-  .wl-symbol{font-weight:700}
-  .wl-details{text-align:right}
-  .orders-card{margin-top:12px;background:rgba(255,255,255,0.01);padding:12px;border-radius:14px;display:flex;flex-direction:column;gap:10px;border:1px solid rgba(255,255,255,0.06)}
-  .orders-card h4{margin:0;color:var(--muted);font-size:15px}
+  .btn-ghost{background:transparent;color:var(--muted);border:1px solid rgba(255,255,255,0.03)}
+  #tv_chart_container{flex:1;min-height:420px;border-radius:10px;overflow:hidden}
+  .watchlist{grid-column:2/3;grid-row:1/2;background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01));border-radius:var(--radius);padding:12px;box-shadow:var(--card-shadow);display:flex;flex-direction:column}
+  .watchlist h3{margin:0 0 8px 0;font-size:16px;color:var(--muted)}
+  .wl-item{display:flex;justify-content:space-between;align-items:center;padding:10px;border-radius:10px;cursor:pointer;transition:transform .12s ease,background .12s ease;background:transparent}
+  .wl-item:hover{transform:translateY(-4px);background:rgba(255,255,255,0.015)}
+  .orders-card{margin-top:12px;background:rgba(255,255,255,0.01);padding:10px;border-radius:10px;display:flex;flex-direction:column;gap:10px}
+  .orders-card h4{margin:0;color:var(--muted)}
   .orders-table{width:100%;border-collapse:collapse;font-size:13px}
-  .orders-table th,.orders-table td{padding:8px 10px;text-align:left;border-bottom:1px dashed rgba(255,255,255,0.08)}
-  .orders-table th{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:0.2em}
-  .orders-table tbody tr:nth-child(even){background:rgba(255,255,255,0.015)}
-  .orders-table tbody tr:hover{background:rgba(255,255,255,0.05)}
-  .order-input{width:100%;padding:8px;border-radius:10px;border:1px solid rgba(255,255,255,0.2);background:transparent;color:inherit;font-size:13px}
+  .orders-table th,.orders-table td{padding:8px 10px;text-align:left;border-bottom:1px dashed rgba(255,255,255,0.03)}
+  .order-input{width:100%;padding:6px;border-radius:6px;border:1px solid rgba(255,255,255,0.03);background:transparent;color:inherit;font-size:13px}
   .order-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-  .order-grid-two{display:grid;grid-template-columns:1fr 1fr;gap:8px}
   .small-muted{color:var(--muted);font-size:12px}
-  .bottom-left{grid-column:1/2;grid-row:2/3;background:linear-gradient(180deg,rgba(255,255,255,0.01),rgba(255,255,255,0));border-radius:var(--radius);padding:16px;box-shadow:var(--card-shadow);display:flex;flex-direction:column;overflow:auto}
+  .bottom-left{grid-column:1/2;grid-row:2/3;background:linear-gradient(180deg,rgba(255,255,255,0.01),rgba(255,255,255,0));border-radius:var(--radius);padding:12px;box-shadow:var(--card-shadow);display:flex;flex-direction:column;overflow:auto}
   .tabs{display:flex;gap:10px;margin-bottom:12px}
   .tab{padding:8px 12px;border-radius:10px;cursor:pointer;background:transparent;color:var(--muted);font-weight:700}
-  .tab.active{color:var(--accent);background:rgba(0,196,167,0.08)}
+  .tab.active{color:var(--accent);background:rgba(0,196,167,0.06)}
   .positions-table,.history-table{width:100%;border-collapse:collapse;font-size:13px;color:var(--muted)}
-  .positions-table th,.positions-table td,.history-table th,.history-table td{padding:10px;border-bottom:1px dashed rgba(255,255,255,0.02)}
-  .positive{color:#0f5132;background:rgba(16,185,129,0.12);border-radius:6px;padding:6px;font-weight:700}
-  .negative{color:#7c1d1d;background:rgba(255,99,99,0.12);border-radius:6px;padding:6px;font-weight:700}
-  .bottom-right{grid-column:2/3;grid-row:2/3;background:linear-gradient(180deg,rgba(255,255,255,0.01),rgba(255,255,255,0));border-radius:var(--radius);padding:16px;box-shadow:var(--card-shadow);display:flex;flex-direction:column;gap:10px;overflow:auto}
+  .positions-table th,.positions-table td,.history-table th,.history-table td{padding:8px 10px;border-bottom:1px dashed rgba(255,255,255,0.02)}
+  .positive{color:#0f5132;background:rgba(16,185,129,0.09);border-radius:6px;padding:6px;font-weight:700}
+  .negative{color:#7c1d1d;background:rgba(255,99,99,0.06);border-radius:6px;padding:6px;font-weight:700}
+  .bottom-right{grid-column:2/3;grid-row:2/3;background:linear-gradient(180deg,rgba(255,255,255,0.01),rgba(255,255,255,0));border-radius:var(--radius);padding:12px;box-shadow:var(--card-shadow);display:flex;flex-direction:column;gap:10px;overflow:auto}
   .status{padding:6px 10px;border-radius:8px;font-weight:700}
   .status.connected{background:rgba(0,196,167,0.08);color:var(--accent)}
   .status.disconnected{background:rgba(255,99,99,0.06);color:#ff8a8a}
-  .lot-grid{display:flex;gap:10px;align-items:center;margin-top:4px}
-  .lot-grid input{width:90px;padding:7px;border-radius:8px;border:1px solid rgba(255,255,255,0.2);background:transparent;color:inherit}
-  .lot-info{font-size:13px;color:var(--muted);margin-top:6px}
+  .lot-grid{display:flex;gap:10px;align-items:center;margin-top:6px}
+  .lot-grid input{width:90px;padding:6px;border-radius:6px;border:1px solid rgba(255,255,255,0.2);background:transparent;color:inherit}
+  .lot-info{font-size:13px;color:var(--muted);margin-top:4px}
   @media (max-width:1100px){.app{grid-template-columns:1fr;grid-template-rows:auto auto auto}.watchlist{grid-column:1/-1;grid-row:2/3}.bottom-left{grid-row:3/4}.bottom-right{display:none}}
 </style>
 </head>
 <body>
-<audio id="sound-open" src="https://cdn.pixabay.com/download/audio/2021/08/04/audio_1c47d5f6b5.mp3?filename=double-bell-140040.mp3"></audio>
-<audio id="sound-denied" src="https://cdn.pixabay.com/download/audio/2022/01/10/audio_a646e3ae03.mp3?filename=warning-tone-6076.mp3"></audio>
-<audio id="sound-close" src="https://cdn.pixabay.com/download/audio/2022/03/15/audio_3d3c5e3272.mp3?filename=notification-6076.mp3"></audio>
+<audio id="sound-open" src="https://cdn.pixabay.com/download/audio/2022/03/15/audio_59c3c1c861.mp3?filename=short-energetic-beep-6003.mp3"></audio>
+<audio id="sound-denied" src="https://cdn.pixabay.com/download/audio/2022/03/03/audio_cd6e6d8f42.mp3?filename=failure-buzzer-39619.mp3"></audio>
+<audio id="sound-close" src="https://cdn.pixabay.com/download/audio/2022/03/15/audio_6d47af56a4.mp3?filename=success-notification-6073.mp3"></audio>
 
 <div class="app">
   <div class="card chart-card">
@@ -90,7 +84,7 @@
     <div class="lot-grid">
       <label>Lots :</label>
       <input type="number" id="lotInput" min="0.01" step="0.01" value="1"/>
-      <div class="lot-info" id="lotValueInfo">1 lot = 100 000 unités · marge 1:30</div>
+      <div class="lot-info" id="lotValueInfo">Lot standard = 100 000 unités</div>
     </div>
     <div id="tv_chart_container"></div>
   </div>
@@ -111,16 +105,7 @@
       </div>
       <button class="btn btn-buy" id="addOrderBtn">Ajouter l'ordre</button>
       <table class="orders-table">
-        <thead>
-          <tr>
-            <th>Symbole</th>
-            <th>Side</th>
-            <th>Prix cible</th>
-            <th>Lots</th>
-            <th>Marge</th>
-            <th></th>
-          </tr>
-        </thead>
+        <thead><tr><th>Symbole</th><th>Side</th><th>Prix cible</th><th>Lots</th><th></th></tr></thead>
         <tbody id="ordersBody"></tbody>
       </table>
     </div>
@@ -132,35 +117,17 @@
         <div class="tab active" id="tabPositions">Positions</div>
         <div class="tab" id="tabHistory">Historique</div>
       </div>
-      <div class="small-muted">Simulé · Finnhub WS · Effet 1:30</div>
+      <div class="small-muted">Simulé · Finnhub WS (Levier 1:30)</div>
     </div>
     <div id="positionsPane">
       <table class="positions-table">
-        <thead>
-          <tr>
-            <th>Symbole</th>
-            <th>Side</th>
-            <th>Entry</th>
-            <th>Actuel</th>
-            <th>Lots</th>
-            <th>PNL</th>
-            <th></th>
-          </tr>
-        </thead>
+        <thead><tr><th>Symbole</th><th>Side</th><th>Entry</th><th>Actuel</th><th>Lots</th><th>PNL</th><th></th></tr></thead>
         <tbody id="positionsBody"></tbody>
       </table>
     </div>
     <div id="historyPane" style="display:none">
       <table class="history-table">
-        <thead>
-          <tr>
-            <th>Symbole</th>
-            <th>Side</th>
-            <th>Entry</th>
-            <th>Close</th>
-            <th>PNL</th>
-          </tr>
-        </thead>
+        <thead><tr><th>Symbole</th><th>Side</th><th>Entry</th><th>Close</th><th>PNL</th></tr></thead>
         <tbody id="historyBody"></tbody>
       </table>
     </div>
@@ -185,7 +152,7 @@
 </div>
 
 <script>
-const API_KEY='d4is89hr01queuakbspgd4is89hr01queuakbsq0';
+const API_KEY='d4g61b9r01qm5b343fo0d4g61b9r01qm5b343fog';
 const WS_ENDPOINT='wss://ws.finnhub.io';
 const KEEPALIVE_INTERVAL=25000;
 const RECONNECT_MAX=60000;
@@ -213,17 +180,6 @@ const audioClose=document.getElementById('sound-close');
 function escapeId(val){return String(val).replace(/[^\w]/g,'_');}
 function formatPrice(val){return val===undefined||val===null?'—':Number(val).toFixed(5).replace(/\.0+$|0+$/,'').replace(/\.$/,'');}
 function formatMoney(val){return val===undefined||val===null?'0.00':Number(val).toFixed(2);}
-function pipSize(symbol){
-  if(symbol.includes('JPY')) return 0.01;
-  if(symbol.includes('XAU')) return 0.1;
-  return 0.0001;
-}
-function lotUnits(symbol){return symbol.includes('XAU')?100:BASE_LOT_SIZE;}
-function pipValue(symbol){
-  const price=priceCache[symbol];
-  if(!price) return 0;
-  return (pipSize(symbol)/price)*lotUnits(symbol);
-}
 
 const wlList=document.getElementById('wlList');
 const ordSymbol=document.getElementById('ordSymbol');
@@ -231,7 +187,7 @@ WATCHLIST.forEach(w=>{
   const item=document.createElement('div');
   item.className='wl-item';
   item.innerHTML=`<div><div class="wl-symbol">${w.label}</div><div class="small-muted" style="margin-top:4px">${w.tv}</div></div>
-    <div class="wl-details">
+    <div style="text-align:right">
       <div class="wl-price" id="price_${escapeId(w.api)}">—</div>
       <div class="small-muted" id="lotValue_${escapeId(w.api)}">Lot: —</div>
     </div>`;
@@ -242,7 +198,7 @@ WATCHLIST.forEach(w=>{
 
 function initTradingView(){
   try{if(tvWidget&&typeof tvWidget.remove==='function'){tvWidget.remove();tvWidget=null;document.getElementById('tv_chart_container').innerHTML='';}}catch(e){}
-  if(typeof TradingView==='undefined') return;
+  if(typeof TradingView==='undefined')return;
   try{
     tvWidget=new TradingView.widget({
       container_id:'tv_chart_container',
@@ -253,7 +209,7 @@ function initTradingView(){
       theme:'dark',
       locale:'fr'
     });
-  }catch(e){console.warn('TradingView init failed',e);}
+  }catch(e){console.warn('TV init',e);}
 }
 initTradingView();
 
@@ -263,7 +219,8 @@ function selectSymbol(sym){
   document.getElementById('currentSymbolTitle').innerText=sym.label;
   const price=priceCache[sym.api];
   document.getElementById('currentPriceMini').innerText=price!==undefined?'Prix: '+formatPrice(price):'Prix: —';
-  refreshLotInfo();
+  const lots=parseFloat(document.getElementById('lotInput').value)||1;
+  if(price!==undefined)document.getElementById('lotValueInfo').innerText=`Valeur ${lots} lots = ${(price*lotUnits(sym.api)*lots/LEVERAGE).toFixed(2)} USD (avec levier 1:${LEVERAGE})`;
   initTradingView();
 }
 
@@ -280,7 +237,7 @@ function stopKeepalive(){if(keepaliveTimer){clearInterval(keepaliveTimer);keepal
 
 function scheduleReconnect(){
   stopKeepalive();
-  if(reconnectDelay>RECONNECT_MAX) reconnectDelay=RECONNECT_MAX;
+  if(reconnectDelay>RECONNECT_MAX)reconnectDelay=RECONNECT_MAX;
   setTimeout(()=>{reconnectDelay=Math.min(RECONNECT_MAX,Math.floor(reconnectDelay*1.8));startWebSocket();},reconnectDelay);
 }
 
@@ -290,33 +247,31 @@ function startWebSocket(){
     ws.addEventListener('open',()=>{
       setWsStatus(true);
       reconnectDelay=1000;
-      WATCHLIST.forEach(w=>{try{ws.send(JSON.stringify({type:'subscribe',symbol:w.api}));}catch(e){console.warn('subscribe',e);} });
+      WATCHLIST.forEach(w=>{try{ws.send(JSON.stringify({type:'subscribe',symbol:w.api}));}catch(e){console.warn('subscribe',e);}});
       startKeepalive();
-      WATCHLIST.forEach(async w=>{if(priceCache[w.api]===undefined){const fetched=await fetchPriceREST(w.api);if(fetched!==null){priceCache[w.api]=fetched;updatePriceUI(w.api);updateLotUI(w.api);} }});
+      WATCHLIST.forEach(async w=>{if(priceCache[w.api]===undefined){const fetched=await fetchPriceREST(w.api);if(fetched!==null){priceCache[w.api]=fetched;updatePriceUI(w.api);updateLotInfo(w.api);}}});
     });
     ws.addEventListener('message',ev=>{
       try{const msg=JSON.parse(ev.data);handleWsMessage(msg);}catch(e){console.warn('WS parse',e);}
     });
     ws.addEventListener('close',()=>{setWsStatus(false);scheduleReconnect();});
     ws.addEventListener('error',()=>{setWsStatus(false);try{ws.close();}catch(e){}scheduleReconnect();});
-  }catch(e){
-    scheduleReconnect();
-  }
+  }catch(e){scheduleReconnect();}
 }
 
 function handleWsMessage(msg){
-  if(!msg) return;
+  if(!msg)return;
   if(Array.isArray(msg)){msg.forEach(m=>handleWsMessage(m));return;}
-  if(msg.type==='ping') return;
+  if(msg.type==='ping')return;
   if(msg.type==='error'){console.warn('WS error',msg);return;}
   if(msg.type==='trade'&&Array.isArray(msg.data)){
     msg.data.forEach(d=>{
       const sym=d.s||d.symbol;
       const price=d.p||d.price;
-      if(!sym||price===undefined) return;
+      if(!sym||price===undefined)return;
       priceCache[sym]=Number(price);
       updatePriceUI(sym);
-      updateLotUI(sym);
+      updateLotInfo(sym);
       onPriceUpdate(sym,Number(price));
     });
     return;
@@ -327,7 +282,7 @@ function handleWsMessage(msg){
     if(sym&&price!==undefined){
       priceCache[sym]=Number(price);
       updatePriceUI(sym);
-      updateLotUI(sym);
+      updateLotInfo(sym);
       onPriceUpdate(sym,Number(price));
     }
   }
@@ -335,65 +290,47 @@ function handleWsMessage(msg){
 
 function updatePriceUI(symbol){
   const el=document.getElementById('price_'+escapeId(symbol));
-  if(el) el.innerText=formatPrice(priceCache[symbol]);
-  if(symbol===currentSymbol.api) document.getElementById('currentPriceMini').innerText='Prix: '+formatPrice(priceCache[symbol]);
+  if(el)el.innerText=formatPrice(priceCache[symbol]);
+  if(symbol===currentSymbol.api)document.getElementById('currentPriceMini').innerText='Prix: '+formatPrice(priceCache[symbol]);
 }
 
-function updateLotUI(symbol){
+function updateLotInfo(symbol){
   const price=priceCache[symbol];
   const el=document.getElementById('lotValue_'+escapeId(symbol));
-  if(!el) return;
+  if(!el)return;
   if(price===undefined){el.innerText='Lot: —';return;}
   const units=lotUnits(symbol);
-  const lotValue=price*units;
-  el.innerText=`1 lot = ${lotValue.toFixed(2)} USD`;
-  if(symbol===currentSymbol.api) refreshLotInfo();
+  el.innerText=`Lot (${units.toLocaleString()}u) = ${(price*units).toFixed(2)} USD`;
 }
 
-function refreshLotInfo(){
-  const price=priceCache[currentSymbol.api];
-  const lots=parseFloat(document.getElementById('lotInput').value)||1;
-  if(price!==undefined){
-    const units=lotUnits(currentSymbol.api);
-    const lotValue=price*units*lots;
-    const pip=pipSize(currentSymbol.api);
-    document.getElementById('lotValueInfo').innerText=`${lots} lots = ${(lotValue/LEVERAGE).toFixed(2)} USD de marge · 1 pip ≈ ${pipValue(currentSymbol.api).toFixed(2)} USD · levier 1:${LEVERAGE}`;
-  } else {
-    document.getElementById('lotValueInfo').innerText=`1 lot = ${units}u · marge 1:${LEVERAGE}`;
-  }
-}
+function lotUnits(symbol){return symbol.includes('XAU')?100:BASE_LOT_SIZE;}
 
 function onPriceUpdate(symbol,price){
   let updated=false;
   positions.forEach(pos=>{if(pos.symbol.api===symbol){pos.current=price;updated=true;}});
   checkOrdersForSymbol(symbol);
-  if(updated) renderPositions();
+  if(updated)renderPositions();
   renderTotals();
 }
 
 async function fetchPriceREST(symbol){
   try{
     const res=await fetch(`https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(symbol)}&token=${API_KEY}`);
-    if(!res.ok) return null;
-    const body=await res.json();
-    return body?.c?Number(body.c):null;
+    if(!res.ok)return null;
+    const data=await res.json();
+    return data?.c?Number(data.c):null;
   }catch(e){return null;}
 }
 
 function computePnl(pos){
   const current=pos.current!==undefined?pos.current:(priceCache[pos.symbol.api]!==undefined?priceCache[pos.symbol.api]:pos.entry);
   const delta=pos.side==='BUY'?(current-pos.entry):(pos.entry-current);
-  const pip_cnt=delta/pipSize(pos.symbol.api);
-  const value_per_pip=pipValue(pos.symbol.api);
-  return Number(pip_cnt*value_per_pip*LEVERAGE);
+  return Number(delta*lotUnits(pos.symbol.api)*pos.size*LEVERAGE);
 }
 
 async function openPosition(symObj,side,lots=1,forcedEntry=null){
   let price=forcedEntry!==null?forcedEntry:priceCache[symObj.api];
-  if(price===undefined||price===null){
-    const fetched=await fetchPriceREST(symObj.api);
-    if(fetched!==null) price=fetched;
-  }
+  if(price===undefined||price===null){const fetched=await fetchPriceREST(symObj.api);if(fetched!==null)price=fetched;}
   if(price===undefined||price===null){audioDenied.play();return alert('Prix indisponible');}
   const required=(price*lotUnits(symObj.api)*lots)/LEVERAGE;
   if(required>simBalance){audioDenied.play();return alert('Solde insuffisant');}
@@ -406,7 +343,7 @@ async function openPosition(symObj,side,lots=1,forcedEntry=null){
 
 function closePosition(id){
   const idx=positions.findIndex(p=>p.id===id);
-  if(idx===-1) return;
+  if(idx===-1)return;
   const pos=positions[idx];
   const closePrice=priceCache[pos.symbol.api]!==undefined?priceCache[pos.symbol.api]:pos.current;
   const pnl=computePnl(pos);
@@ -422,7 +359,7 @@ function closePosition(id){
 function addLimitOrder(symbol,side,price,lots){
   const required=(price*lotUnits(symbol)*lots)/LEVERAGE;
   if(required>simBalance){audioDenied.play();return alert('Solde insuffisant pour cet ordre');}
-  orders.push({id:'ord_'+Math.random().toString(36).slice(2,9),symbol,side,price:Number(price),size:Number(lots),margin:required});
+  orders.push({id:'ord_'+Math.random().toString(36).slice(2,9),symbol,side,price:Number(price),size:Number(lots)});
   renderOrders();
   audioOpen.play();
 }
@@ -431,7 +368,7 @@ function removeOrder(id){orders=orders.filter(o=>o.id!==id);renderOrders();}
 
 function checkOrdersForSymbol(symbol){
   const price=priceCache[symbol];
-  if(price===undefined) return;
+  if(price===undefined)return;
   const matches=orders.filter(o=>o.symbol===symbol&&((o.side==='BUY'&&price<=o.price)||(o.side==='SELL'&&price>=o.price)));
   matches.forEach(m=>{
     const symObj=WATCHLIST.find(w=>w.api===m.symbol)||{label:m.symbol,tv:m.symbol,api:m.symbol};
@@ -464,7 +401,7 @@ function renderPositions(){
   const details=document.getElementById('posDetails');
   if(positions.length>0){
     const p=positions[0];
-    details.innerText=`${p.symbol.label} · ${p.side} · Entry ${formatPrice(p.entry)} · Current ${formatPrice(p.current)} · ${p.size} lots`;
+    details.innerText=`${p.symbol.label} · ${p.side} · Entry ${formatPrice(p.entry)} · Current ${formatPrice(p.current)} · Lots ${p.size}`;
   } else details.innerText='Aucune position sélectionnée';
 }
 
@@ -495,7 +432,6 @@ function renderOrders(){
       <td>${o.side}</td>
       <td>${formatPrice(o.price)}</td>
       <td>${o.size}</td>
-      <td>${formatMoney(o.margin)}</td>
       <td><button class="btn btn-ghost" data-id="${o.id}">Annuler</button></td>
     `;
     tbody.appendChild(tr);
@@ -512,7 +448,13 @@ function renderTotals(){
 function renderAll(){renderPositions();renderHistory();renderOrders();renderTotals();}
 renderAll();
 
-document.getElementById('lotInput').addEventListener('input',refreshLotInfo);
+document.getElementById('lotInput').addEventListener('input',()=>{
+  const lots=parseFloat(document.getElementById('lotInput').value)||1;
+  const price=priceCache[currentSymbol.api];
+  if(price!==undefined){
+    document.getElementById('lotValueInfo').innerText=`Valeur ${lots} lots = ${(price*lotUnits(currentSymbol.api)*lots/LEVERAGE).toFixed(2)} USD (levier 1:${LEVERAGE})`;
+  }
+});
 
 document.getElementById('addOrderBtn').addEventListener('click',()=>{
   const symbol=document.getElementById('ordSymbol').value;
@@ -526,7 +468,7 @@ document.getElementById('addOrderBtn').addEventListener('click',()=>{
 document.getElementById('refreshPricesBtn').addEventListener('click',()=>{
   if(ws&&ws.readyState===WebSocket.OPEN){
     WATCHLIST.forEach(w=>{try{ws.send(JSON.stringify({type:'subscribe',symbol:w.api}));}catch(e){}});
-  } else renderAll();
+  }else renderAll();
 });
 
 document.getElementById('buyBtn').addEventListener('click',()=>openPosition(currentSymbol,'BUY',parseFloat(document.getElementById('lotInput').value)||1));
