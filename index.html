@@ -13,7 +13,6 @@
   html,body{height:100%;margin:0;background:linear-gradient(180deg,#071025 0%, #071423 60%);color:#e6eef6}
   .app{display:grid;grid-template-columns: 1fr 360px;grid-template-rows: 1fr 320px;gap:18px;height:100vh;padding:18px}
 
-  /* Chart area */
   .chart-card{grid-column:1/2;grid-row:1/2;background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));border-radius:var(--radius);padding:14px;box-shadow:var(--card-shadow);display:flex;flex-direction:column;min-width:0}
   .chart-header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px}
   .symbol-info{display:flex;gap:12px;align-items:center}
@@ -25,7 +24,6 @@
   .btn-ghost{ background:transparent; color:var(--muted); border:1px solid rgba(255,255,255,0.03); }
   #tv_chart_container{flex:1 1 auto;min-height:420px;border-radius:10px;overflow:hidden}
 
-  /* Watchlist */
   .watchlist{grid-column:2/3;grid-row:1/2;background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));border-radius:var(--radius);padding:12px;box-shadow:var(--card-shadow);display:flex;flex-direction:column}
   .watchlist h3{margin:0 0 8px 0;font-size:16px;color:var(--muted)}
   .wl-item{display:flex;justify-content:space-between;align-items:center;padding:10px;border-radius:10px;cursor:pointer;transition:all .12s;background:transparent}
@@ -36,7 +34,6 @@
   .positive{ color:#0f5132; background:rgba(16,185,129,0.09) }
   .negative{ color:#7c1d1d; background:rgba(255,99,99,0.06) }
 
-  /* Orders table under watchlist */
   .orders-card{margin-top:12px;background:rgba(255,255,255,0.01);padding:10px;border-radius:10px}
   .orders-card h4{margin:0 0 8px 0;color:var(--muted)}
   .orders-table{width:100%;border-collapse:collapse}
@@ -44,7 +41,6 @@
   .order-input{width:100%;padding:6px;border-radius:6px;border:1px solid rgba(255,255,255,0.03);background:transparent;color:inherit}
   .small-muted{ color:var(--muted); font-size:12px; }
 
-  /* Bottom area */
   .bottom-left{grid-column:1/2;grid-row:2/3;background:linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.00));border-radius:var(--radius);padding:12px;box-shadow:var(--card-shadow);display:flex;flex-direction:column;overflow:auto}
   .tabs{display:flex;gap:10px;margin-bottom:12px}
   .tab{padding:8px 12px;border-radius:10px;cursor:pointer;background:transparent;color:var(--muted);font-weight:700}
@@ -60,7 +56,6 @@
 <body>
 <div class="app">
 
-  <!-- Chart big card -->
   <div class="chart-card" id="chartCard">
     <div class="chart-header">
       <div class="symbol-info">
@@ -78,32 +73,22 @@
       </div>
     </div>
 
-    <!-- TradingView container -->
     <div id="tv_chart_container"></div>
   </div>
 
-  <!-- Watchlist -->
   <div class="watchlist">
     <h3>Watchlist</h3>
-    <div id="wlList" style="display:flex;flex-direction:column;gap:6px;max-height:360px;overflow:auto;">
-      <!-- Items injected by JS -->
-    </div>
-
-    <!-- Orders card (limit orders) -->
+    <div id="wlList" style="display:flex;flex-direction:column;gap:6px;max-height:360px;overflow:auto;"></div>
     <div class="orders-card">
       <h4>Ordres Limites</h4>
       <table class="orders-table" id="ordersTable">
         <thead>
           <tr><th>Symbole</th><th>Side</th><th>Prix limite</th><th>Size</th><th></th></tr>
         </thead>
-        <tbody id="ordersBody">
-          <!-- orders injected -->
-        </tbody>
+        <tbody id="ordersBody"></tbody>
       </table>
       <div style="display:flex;gap:8px;margin-top:8px">
-        <select id="ordSymbol" class="order-input">
-          <!-- options injected by JS -->
-        </select>
+        <select id="ordSymbol" class="order-input"></select>
         <select id="ordSide" class="order-input">
           <option value="BUY">BUY</option>
           <option value="SELL">SELL</option>
@@ -115,7 +100,6 @@
     </div>
   </div>
 
-  <!-- Bottom-left: tabs (positions / history) -->
   <div class="bottom-left">
     <div style="display:flex;justify-content:space-between;align-items:center">
       <div class="tabs">
@@ -144,7 +128,6 @@
     </div>
   </div>
 
-  <!-- Bottom-right: stats / details -->
   <div class="bottom-right">
     <div style="display:flex;justify-content:space-between;align-items:center">
       <div>
@@ -161,58 +144,44 @@
       <div style="font-weight:700">Détails position sélectionnée</div>
       <div class="small-muted" id="posDetails">Aucune position sélectionnée</div>
     </div>
-
   </div>
-
 </div>
 
 <script>
-/*
-  Version modifiée : Finnhub WebSocket (remplace TwelveData).
-  - Utilise votre clé Finnhub fournie.
-  - Subscriptions Finnhub: { type: "subscribe", symbol: "AAPL" } for each symbol.
-  - Handles 'trade' messages from Finnhub and updates priceCache, positions PnL, orders.
-  - REST fallback uses Finnhub quote endpoint for single fetch when needed.
-  - Robust reconnection + keepalive pings.
-*/
-
-/* ---------- CONFIG ---------- */
-const API_KEY = 'd4g61b9r01qm5b343fo0d4g61b9r01qm5b343fog'; // clé Finnhub fournie
+/* CONFIG */
+const API_KEY = 'd4g61b9r01qm5b343fo0d4g61b9r01qm5b343fog';
 const WS_ENDPOINT = 'wss://ws.finnhub.io';
-const USE_WS = true;
 const KEEPALIVE_INTERVAL = 25000;
 const RECONNECT_MAX = 60000;
 
-/* ---------- WATCHLIST (symbols compatibles Finnhub) ---------- */
+/* WATCHLIST : 5 principales devises + XAU */
 const WATCHLIST = [
-  { tv: 'OANDA:EUR_USD', label: 'EUR / USD', api: 'OANDA:EUR_USD' },
-  { tv: 'OANDA:USD_JPY', label: 'USD / JPY', api: 'OANDA:USD_JPY' },
-  { tv: 'OANDA:GBP_USD', label: 'GBP / USD', api: 'OANDA:GBP_USD' },
-  { tv: 'OANDA:XAU_USD', label: 'Gold (XAU / USD)', api: 'OANDA:XAU_USD' },
-  { tv: 'AAPL', label: 'Apple (AAPL)', api: 'AAPL' },
-  { tv: 'SPY', label: 'SPY (ETF)', api: 'SPY' }
+  { tv:'OANDA:EUR_USD', label:'EUR / USD', api:'OANDA:EUR_USD' },
+  { tv:'OANDA:USD_JPY', label:'USD / JPY', api:'OANDA:USD_JPY' },
+  { tv:'OANDA:GBP_USD', label:'GBP / USD', api:'OANDA:GBP_USD' },
+  { tv:'OANDA:USD_CHF', label:'USD / CHF', api:'OANDA:USD_CHF' },
+  { tv:'OANDA:AUD_USD', label:'AUD / USD', api:'OANDA:AUD_USD' },
+  { tv:'OANDA:XAU_USD', label:'Gold (XAU / USD)', api:'OANDA:XAU_USD' }
 ];
 
-/* ---------- STATE ---------- */
 let currentSymbol = WATCHLIST[0];
 let positions = [];
 let history = [];
 let orders = [];
-let priceCache = {}; // { 'AAPL': 150.2, 'OANDA:EUR_USD': 1.1234 }
+let priceCache = {};
+let tvWidget = null;
 let ws = null;
 let wsConnected = false;
 let reconnectDelay = 1000;
-let simBalance = 10000.00;
 let keepaliveTimer = null;
-let tvWidget = null;
+let simBalance = 10000.00;
 
-/* ---------- HELPERS ---------- */
 function escapeId(s){ return String(s).replace(/[^\w]/g,'_'); }
 function formatPrice(x){ return (x===undefined||x===null)?'—':Number(x).toFixed(5).replace(/\.0+$|0+$/,'').replace(/\.$/,''); }
 function formatMoney(x){ return (x===undefined||x===null)?'0.00':Number(x).toFixed(2); }
 function now(){ return new Date().toISOString(); }
 
-/* ---------- UI Build ---------- */
+/* UI Build */
 const wlList = document.getElementById('wlList');
 WATCHLIST.forEach(w=>{
   const item = document.createElement('div'); item.className='wl-item';
@@ -223,7 +192,7 @@ WATCHLIST.forEach(w=>{
 const ordSymbol = document.getElementById('ordSymbol');
 WATCHLIST.forEach(w=>{ const opt=document.createElement('option'); opt.value=w.api; opt.text=w.label; ordSymbol.appendChild(opt); });
 
-/* ---------- TradingView ---------- */
+/* TradingView */
 function initTradingView(){
   try{
     if(tvWidget && typeof tvWidget.remove === 'function'){ tvWidget.remove(); tvWidget = null; document.getElementById('tv_chart_container').innerHTML=''; }
@@ -248,31 +217,21 @@ function loadSymbol(sym){
   document.getElementById('currentSymbolBadge').innerText = sym.tv;
   document.getElementById('currentSymbolTitle').innerText = sym.label;
   const p = priceCache[sym.api];
-  document.getElementById('currentPriceMini').innerText = p !== undefined ? 'Prix: ' + formatPrice(p) : 'Prix: —';
+  document.getElementById('currentPriceMini').innerText = p!==undefined ? 'Prix: ' + formatPrice(p) : 'Prix: —';
   initTradingView();
 }
 
-/* ---------- WebSocket (Finnhub) ---------- */
+/* WebSocket */
 function setWsStatus(connected){
   const el = document.getElementById('wsStatus');
   wsConnected = !!connected;
-  if(wsConnected){ el.className = 'status connected'; el.innerText = 'WS: Connected'; }
-  else { el.className = 'status disconnected'; el.innerText = 'WS: Disconnected'; }
+  if(wsConnected){ el.className='status connected'; el.innerText='WS: Connected'; }
+  else { el.className='status disconnected'; el.innerText='WS: Disconnected'; }
 }
 
 function buildWsUrl(){ return `${WS_ENDPOINT}?token=${API_KEY}`; }
-
-function startKeepalive(){
-  stopKeepalive();
-  keepaliveTimer = setInterval(()=>{
-    try{
-      if(ws && ws.readyState === WebSocket.OPEN){
-        ws.send(JSON.stringify({ type: 'ping' }));
-      }
-    }catch(e){ console.warn('keepalive failed', e); }
-  }, KEEPALIVE_INTERVAL);
-}
-function stopKeepalive(){ if(keepaliveTimer){ clearInterval(keepaliveTimer); keepaliveTimer = null; } }
+function startKeepalive(){ stopKeepalive(); keepaliveTimer = setInterval(()=>{ try{ if(ws && ws.readyState===WebSocket.OPEN){ ws.send(JSON.stringify({ type:'ping' })); } }catch(e){ console.warn('keepalive send failed', e); } }, KEEPALIVE_INTERVAL); }
+function stopKeepalive(){ if(keepaliveTimer){ clearInterval(keepaliveTimer); keepaliveTimer=null; } }
 
 function scheduleReconnect(){
   stopKeepalive();
@@ -282,7 +241,6 @@ function scheduleReconnect(){
 }
 
 function startWebSocket(){
-  if(!USE_WS) return;
   try{
     const url = buildWsUrl();
     console.log(now(), 'Connexion Finnhub WS ->', url);
@@ -292,17 +250,14 @@ function startWebSocket(){
       console.log(now(), 'WS OPEN');
       setWsStatus(true);
       reconnectDelay = 1000;
-      // subscribe to watchlist symbols individually (Finnhub expects individual subscribe messages)
       WATCHLIST.forEach(w=>{
-        try{ ws.send(JSON.stringify({ type: 'subscribe', symbol: w.api })); }
-        catch(e){ console.warn('subscribe send failed', e); }
+        try{ ws.send(JSON.stringify({ type: 'subscribe', symbol: w.api })); }catch(e){ console.warn('subscribe failed', e); }
       });
       startKeepalive();
-      // initial one-shot REST fill for missing prices (light)
       WATCHLIST.forEach(async w=>{
         if(priceCache[w.api] === undefined){
           const p = await fetchPriceREST(w.api);
-          if(p !== null){ priceCache[w.api] = p; updatePriceUI(w.api); }
+          if(p!==null){ priceCache[w.api]=p; updatePriceUI(w.api); }
         }
       });
     });
@@ -311,7 +266,7 @@ function startWebSocket(){
       try{
         const msg = JSON.parse(ev.data);
         handleWsMessage(msg);
-      }catch(e){ console.warn('WS parse error', e, ev.data); }
+      }catch(e){ console.warn('WS parse error', e); }
     });
 
     ws.addEventListener('close', evt=>{
@@ -326,40 +281,34 @@ function startWebSocket(){
       try{ ws.close(); }catch(e){}
       scheduleReconnect();
     });
-
   }catch(e){
     console.error(now(), 'startWebSocket exception', e);
     scheduleReconnect();
   }
 }
 
-/* ---------- WS message handling (Finnhub shapes) ---------- */
+/* Message handling */
 function handleWsMessage(msg){
   if(!msg) return;
-  // Finnhub: { type: "trade", data: [ {s: "AAPL", p: 261.74, t: 158264...}, ... ] }
-  if(Array.isArray(msg)) { msg.forEach(m => handleWsMessage(m)); return; }
-  if(msg.type === 'ping') return;
-  if(msg.type === 'error'){ console.warn('WS server error', msg); return; }
-
-  if(msg.type === 'trade' && Array.isArray(msg.data)){
+  if(Array.isArray(msg)){ msg.forEach(m=>handleWsMessage(m)); return; }
+  if(msg.type==='ping') return;
+  if(msg.type==='error'){ console.warn('WS server error', msg); return; }
+  if(msg.type==='trade' && Array.isArray(msg.data)){
     msg.data.forEach(d=>{
-      const sym = d.s || d.symbol || null;
-      const price = d.p || d.price || null;
-      if(!sym || price === null || price === undefined) return;
-      const normalized = sym;
-      priceCache[normalized] = Number(price);
-      updatePriceUI(normalized);
-      onPriceUpdate(normalized, Number(price));
+      const sym = d.s || d.symbol;
+      const price = d.p || d.price;
+      if(!sym || price===undefined) return;
+      priceCache[sym] = Number(price);
+      updatePriceUI(sym);
+      onPriceUpdate(sym, Number(price));
     });
     return;
   }
-
-  // fallback: some messages may contain data as object
-  if(msg.data && typeof msg.data === 'object' && !Array.isArray(msg.data)){
+  if(msg.data && typeof msg.data==='object' && !Array.isArray(msg.data)){
     const d = msg.data;
-    const sym = d.s || d.symbol || null;
-    const price = d.p || d.price || d.c || null;
-    if(sym && price !== null && price !== undefined){
+    const sym = d.s || d.symbol;
+    const price = d.p || d.price || d.c;
+    if(sym && price!==undefined){
       priceCache[sym] = Number(price);
       updatePriceUI(sym);
       onPriceUpdate(sym, Number(price));
@@ -367,95 +316,95 @@ function handleWsMessage(msg){
   }
 }
 
-/* ---------- Price update handler ---------- */
 function updatePriceUI(symbolApi){
   const el = document.getElementById('price_' + escapeId(symbolApi));
   if(el) el.innerText = formatPrice(priceCache[symbolApi]);
   if(symbolApi === currentSymbol.api) document.getElementById('currentPriceMini').innerText = 'Prix: ' + formatPrice(priceCache[symbolApi]);
 }
-
 function onPriceUpdate(symbolApi, price){
   checkOrdersForSymbol(symbolApi);
-  let needRender = false;
-  for(const pos of positions){
-    if(pos.symbol.api === symbolApi){
-      pos.current = price;
-      needRender = true;
+  let updated = false;
+  positions.forEach(p=>{
+    if(p.symbol.api === symbolApi){
+      p.current = price;
+      updated = true;
     }
-  }
-  if(needRender){ renderPositions(); renderTotals(); }
-  else renderTotals();
+  });
+  if(updated) renderPositions();
+  renderTotals();
 }
 
-/* ---------- REST fallback (Finnhub quote) ---------- */
+/* REST fallback */
 async function fetchPriceREST(symbolApi){
   try{
-    const url = `https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(symbolApi)}&token=${API_KEY}`;
-    const res = await fetch(url);
+    const res = await fetch(`https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(symbolApi)}&token=${API_KEY}`);
     if(!res.ok) return null;
     const body = await res.json();
-    // body.c is current price
     if(body && body.c) return Number(body.c);
   }catch(e){ console.warn('REST fetch failed', e); }
   return null;
 }
 
-/* ---------- Positions & Orders ---------- */
+/* Positions */
 function computePnl(pos){
   const current = pos.current !== undefined ? pos.current : (priceCache[pos.symbol.api] !== undefined ? priceCache[pos.symbol.api] : pos.entry);
-  return Number(((pos.side === 'BUY' ? (current - pos.entry) : (pos.entry - current)) * pos.size));
+  const delta = pos.side === 'BUY' ? (current - pos.entry) : (pos.entry - current);
+  return Number(delta * pos.size);
 }
 
 async function openPosition(symObj, side, size=1, forcedEntry=null){
   let price = forcedEntry !== null ? forcedEntry : priceCache[symObj.api];
-  if(price === undefined || price === null){
+  if(price===undefined || price===null){
     const fetched = await fetchPriceREST(symObj.api);
-    if(fetched !== null) price = fetched;
+    if(fetched!==null) price=fetched;
   }
-  if(price === undefined || price === null){
+  if(price===undefined || price===null){
     alert('Prix non disponible pour ' + symObj.label);
     return;
   }
-  const pos = { id:'pos_'+Math.random().toString(36).slice(2,9), symbol: symObj, side, entry: Number(price), size: Number(size), openAt: Date.now(), current: Number(price) };
+  const pos = { id:'pos_'+Math.random().toString(36).slice(2,9), symbol:symObj, side, entry:Number(price), size:Number(size), current:Number(price), openAt:Date.now() };
   positions.push(pos);
-  renderPositions(); renderTotals();
+  renderPositions();
+  renderTotals();
 }
 
-function closePosition(posId){
-  const idx = positions.findIndex(p=>p.id===posId); if(idx===-1) return;
+function closePosition(id){
+  const idx = positions.findIndex(p=>p.id===id); if(idx===-1) return;
   const pos = positions[idx];
   const closePrice = priceCache[pos.symbol.api] !== undefined ? priceCache[pos.symbol.api] : pos.current;
   const pnl = computePnl(pos);
   history.unshift({ symbol: pos.symbol, side: pos.side, entry: pos.entry, close: closePrice, pnl, closedAt: Date.now() });
   simBalance += pnl;
   positions.splice(idx,1);
-  renderPositions(); renderHistory(); renderTotals();
+  renderPositions();
+  renderHistory();
+  renderTotals();
 }
 
-/* Limit orders */
+/* Orders */
 function addLimitOrder(symbolApi, side, price, size){
-  orders.push({ id:'ord_'+Math.random().toString(36).slice(2,9), symbol: symbolApi, side, price: Number(price), size: Number(size), placedAt: Date.now() });
+  orders.push({ id:'ord_'+Math.random().toString(36).slice(2,9), symbol:symbolApi, side, price:Number(price), size:Number(size), placedAt:Date.now() });
   renderOrders();
 }
 function removeOrder(id){ orders = orders.filter(o=>o.id!==id); renderOrders(); }
 function checkOrdersForSymbol(symbolApi){
-  const price = priceCache[symbolApi]; if(price === undefined) return;
-  const toExec = orders.filter(o=>o.symbol===symbolApi && ((o.side==='BUY' && price <= o.price) || (o.side==='SELL' && price >= o.price)));
-  toExec.forEach(o=>{
-    const symObj = WATCHLIST.find(w=>w.api===o.symbol) || { api:o.symbol, label:o.symbol, tv:o.symbol };
-    openPosition(symObj, o.side, o.size, o.price);
-    removeOrder(o.id);
+  const price = priceCache[symbolApi]; if(price===undefined) return;
+  const matches = orders.filter(o=>o.symbol===symbolApi && ((o.side==='BUY' && price<=o.price) || (o.side==='SELL' && price>=o.price)));
+  matches.forEach(m=>{
+    const symObj = WATCHLIST.find(w=>w.api===m.symbol) || { label:m.symbol, tv:m.symbol, api:m.symbol };
+    openPosition(symObj, m.side, m.size, m.price);
+    removeOrder(m.id);
   });
 }
 
-/* ---------- Renderers ---------- */
+/* Renderers */
 function renderPositions(){
-  const tbody = document.getElementById('positionsBody'); tbody.innerHTML = '';
+  const tbody = document.getElementById('positionsBody'); tbody.innerHTML='';
   positions.forEach(pos=>{
     const current = pos.current !== undefined ? pos.current : (priceCache[pos.symbol.api] !== undefined ? priceCache[pos.symbol.api] : pos.entry);
     pos.current = current;
     const pnl = computePnl(pos);
-    const cls = pnl >= 0 ? 'positive' : 'negative';
+    const cls = pnl>=0?'positive':'negative';
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td><div style="font-weight:700">${pos.symbol.label}</div><div class="small-muted">${pos.symbol.tv || pos.symbol.api}</div></td>
@@ -468,76 +417,62 @@ function renderPositions(){
     tbody.appendChild(tr);
   });
   tbody.querySelectorAll('button[data-id]').forEach(btn=> btn.onclick = ()=> closePosition(btn.getAttribute('data-id')));
-
   const details = document.getElementById('posDetails');
-  if(positions.length>0){ const p = positions[0]; details.innerHTML = `${p.symbol.label} · ${p.side} · Entry ${formatPrice(p.entry)} · Current ${formatPrice(p.current)}`; } else details.innerText = 'Aucune position ouverte';
+  if(positions.length>0){ const p=positions[0]; details.innerHTML=`${p.symbol.label} · ${p.side} · Entry ${formatPrice(p.entry)} · Current ${formatPrice(p.current)}`; }
+  else details.innerText='Aucune position ouverte';
 }
-
 function renderHistory(){
-  const tbody = document.getElementById('historyBody'); tbody.innerHTML = '';
+  const tbody=document.getElementById('historyBody'); tbody.innerHTML='';
   history.forEach(h=>{
-    const tr = document.createElement('tr');
-    const cls = h.pnl >= 0 ? 'positive' : 'negative';
-    tr.innerHTML = `<td><div style="font-weight:700">${h.symbol.label}</div><div class="small-muted">${h.symbol.tv || h.symbol.api}</div></td><td>${h.side}</td><td>${formatPrice(h.entry)}</td><td>${formatPrice(h.close)}</td><td><span class="${cls}" style="padding:6px 8px;border-radius:8px;font-weight:700">${formatMoney(h.pnl)}</span></td>`;
+    const tr=document.createElement('tr');
+    const cls=h.pnl>=0?'positive':'negative';
+    tr.innerHTML=`<td><div style="font-weight:700">${h.symbol.label}</div><div class="small-muted">${h.symbol.tv||h.symbol.api}</div></td><td>${h.side}</td><td>${formatPrice(h.entry)}</td><td>${formatPrice(h.close)}</td><td><span class="${cls}" style="padding:6px 8px;border-radius:8px;font-weight:700">${formatMoney(h.pnl)}</span></td>`;
     tbody.appendChild(tr);
   });
 }
-
 function renderOrders(){
-  const tbody = document.getElementById('ordersBody'); tbody.innerHTML = '';
+  const tbody=document.getElementById('ordersBody'); tbody.innerHTML='';
   orders.forEach(o=>{
-    const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${o.symbol}</td><td>${o.side}</td><td>${formatPrice(o.price)}</td><td>${o.size}</td><td><button class="btn btn-ghost" data-id="${o.id}">Annuler</button></td>`;
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td>${o.symbol}</td><td>${o.side}</td><td>${formatPrice(o.price)}</td><td>${o.size}</td><td><button class="btn btn-ghost" data-id="${o.id}">Annuler</button></td>`;
     tbody.appendChild(tr);
   });
   tbody.querySelectorAll('button[data-id]').forEach(btn=> btn.onclick = ()=> removeOrder(btn.getAttribute('data-id')));
 }
-
 function renderTotals(){
   const totalPnl = positions.reduce((s,p)=> s + computePnl(p), 0);
   document.getElementById('totalPnl').innerText = formatMoney(totalPnl);
   document.getElementById('simBalance').innerText = formatMoney(simBalance);
 }
 
-/* ---------- UI Handlers ---------- */
+/* UI handlers */
 document.getElementById('addOrderBtn').addEventListener('click', ()=>{
-  const sym = document.getElementById('ordSymbol').value;
-  const side = document.getElementById('ordSide').value;
-  const price = document.getElementById('ordPrice').value;
-  const size = document.getElementById('ordSize').value || 1;
-  if(!sym || !price) return alert('Remplis symbole et prix');
-  addLimitOrder(sym, side, price, size);
+  const sym=document.getElementById('ordSymbol').value;
+  const side=document.getElementById('ordSide').value;
+  const price=document.getElementById('ordPrice').value;
+  const size=document.getElementById('ordSize').value || 1;
+  if(!sym||!price) return alert('Remplis symbole et prix');
+  addLimitOrder(sym,side,price,size);
 });
-
 document.getElementById('refreshPricesBtn').addEventListener('click', ()=>{
-  // when WS connected, re-subscribe to request snapshots; otherwise re-render UI
-  if(ws && ws.readyState === WebSocket.OPEN){
-    WATCHLIST.forEach(w=>{ try{ ws.send(JSON.stringify({ type: 'subscribe', symbol: w.api })); }catch(e){} });
+  if(ws&&ws.readyState===WebSocket.OPEN){
+    WATCHLIST.forEach(w=>{ try{ ws.send(JSON.stringify({ type:'subscribe', symbol:w.api })); }catch(e){} });
   } else {
     renderPositions(); renderOrders(); renderTotals();
   }
 });
-
 document.getElementById('buyBtn').addEventListener('click', async ()=>{ await openPosition(currentSymbol,'BUY',1); });
 document.getElementById('sellBtn').addEventListener('click', async ()=>{ await openPosition(currentSymbol,'SELL',1); });
-
 document.getElementById('tabPositions').addEventListener('click', ()=>{ document.getElementById('tabPositions').classList.add('active'); document.getElementById('tabHistory').classList.remove('active'); document.getElementById('positionsPane').style.display='block'; document.getElementById('historyPane').style.display='none'; renderPositions(); });
 document.getElementById('tabHistory').addEventListener('click', ()=>{ document.getElementById('tabHistory').classList.add('active'); document.getElementById('tabPositions').classList.remove('active'); document.getElementById('positionsPane').style.display='none'; document.getElementById('historyPane').style.display='block'; renderHistory(); });
 
-// initial render
 renderPositions(); renderHistory(); renderOrders(); renderTotals();
 
-/* ---------- Start WS ---------- */
-(async ()=>{
-  if(!USE_WS) return;
-  startWebSocket();
-})();
+/* launch WS */
+startWebSocket();
 
-/* expose some functions for debugging */
-window.openPosition = openPosition;
 window.closePosition = closePosition;
 window.removeOrder = removeOrder;
-window.priceCache = priceCache;
 </script>
 </body>
 </html>
