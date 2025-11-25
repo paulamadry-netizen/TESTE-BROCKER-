@@ -35,6 +35,7 @@
   .wl-item{display:flex;justify-content:space-between;align-items:center;padding:12px;border-radius:14px;cursor:pointer;transition:transform .15s ease,background .15s ease;background:rgba(255,255,255,0.01)}
   .wl-item:hover{transform:translateY(-4px);background:rgba(255,255,255,0.12)}
   .wl-symbol{font-weight:700}
+  .wl-details{text-align:right}
   .orders-card{margin-top:12px;background:rgba(255,255,255,0.01);padding:16px;border-radius:14px;display:flex;flex-direction:column;gap:12px;border:1px solid rgba(255,255,255,0.06)}
   .orders-card h4{margin:0;color:var(--muted);font-size:15px}
   .orders-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
@@ -258,7 +259,6 @@ const audioConfirm=document.getElementById('sound-confirm');
 function escapeId(val){return String(val).replace(/[^\w]/g,'_');}
 function formatPrice(val){return val===undefined||val===null?'—':Number(val).toFixed(5).replace(/\.0+$|0+$/,'').replace(/\.$/,'');}
 function formatMoney(val){return val===undefined||val===null?'0.00':Number(val).toFixed(2);}
-function pipSize(symbol){if(symbol.includes('JPY'))return 0.01;if(symbol.includes('XAU'))return 0.1;return 0.0001;}
 function lotUnits(symbol){return symbol.includes('XAU')?100:BASE_LOT_SIZE;}
 
 const wlList=document.getElementById('wlList');
@@ -327,6 +327,7 @@ function startWebSocket(){
       reconnectDelay=1000;
       WATCHLIST.forEach(w=>{try{ws.send(JSON.stringify({type:'subscribe',symbol:w.api}));}catch(e){console.warn('subscribe',e);} });
       startKeepalive();
+      fetchInitialPrices();
     });
     ws.addEventListener('message',ev=>{
       try{const msg=JSON.parse(ev.data);handleWsMessage(msg);}catch(e){console.warn('WS parse',e);}
@@ -336,6 +337,15 @@ function startWebSocket(){
   }catch(e){
     scheduleReconnect();
   }
+}
+
+async function fetchInitialPrices(){
+  await Promise.all(WATCHLIST.map(async w=>{
+    if(priceCache[w.api]!==undefined) return;
+    const value=await fetchPriceREST(w.api);
+    if(value!==null){priceCache[w.api]=value;updatePriceUI(w.api);}
+  }));
+  refreshLotInfo();
 }
 
 function handleWsMessage(msg){
@@ -409,6 +419,13 @@ function checkPositionTargets(symbol){
   [...new Set(toClose)].forEach(id=>closePosition(id));
 }
 
+function fetchPriceREST(symbol){
+  return fetch(`https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(symbol)}&token=${API_KEY}`)
+    .then(res=>res.ok?res.json():null)
+    .then(body=>body?.c?Number(body.c):null)
+    .catch(()=>null);
+}
+
 function computePnl(pos){
   const current=pos.current!==undefined?pos.current:priceCache[pos.symbol.api];
   if(current===undefined) return 0;
@@ -418,7 +435,11 @@ function computePnl(pos){
 }
 
 async function openPosition(symObj,side,lots=1,forcedEntry=null, tp=null, sl=null){
-  const price=forcedEntry!==null?forcedEntry:priceCache[symObj.api];
+  let price=forcedEntry!==null?forcedEntry:priceCache[symObj.api];
+  if(price===undefined||price===null){
+    const fetched=await fetchPriceREST(symObj.api);
+    if(fetched!==null) price=fetched;
+  }
   if(price===undefined||price===null){audioDenied.play();alert('Prix indisponible');return false;}
   const required=(price*lotUnits(symObj.api)*lots)/LEVERAGE;
   if(required>availableBalance){audioDenied.play();alert('Solde insuffisant');return false;}
@@ -500,7 +521,7 @@ function renderPositions(){
     tbody.appendChild(tr);
   });
   tbody.querySelectorAll('button[data-id]').forEach(btn=>btn.onclick=()=>openPositionModal(btn.dataset.id));
-  tbody.querySelectorAll('button[data-close]').forEach(btn=>closePosition(btn.dataset.close));
+  tbody.querySelectorAll('button[data-close]').forEach(btn=>btn.addEventListener('click',()=>closePosition(btn.dataset.close)));
   const details=document.getElementById('posDetails');
   if(positions.length>0){
     const p=positions[0];
@@ -625,7 +646,6 @@ startWebSocket();
 </script>
 </body>
 </html>
-
 
 
 
