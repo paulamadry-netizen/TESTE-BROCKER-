@@ -245,11 +245,11 @@ const WATCHLIST=[
   {tv:'OANDA:USDCHF',label:'USD / CHF',api:'OANDA:USD_CHF'},
   {tv:'OANDA:AUDUSD',label:'AUD / USD',api:'OANDA:AUD_USD'},
   {tv:'OANDA:XAUUSD',label:'Gold / USD',api:'OANDA:XAU_USD'},
-  {tv:'TVC:DJI',label:'Dow Jones',api:'TVC:DJI'},
-  {tv:'TVC:SPX',label:'S&P 500',api:'TVC:SPX'},
-  {tv:'TVC:NDX',label:'Nasdaq 100',api:'TVC:NDX'},
-  {tv:'TVC:GDAXI',label:'DAX 40',api:'TVC:GDAXI'},
-  {tv:'TVC:NI225',label:'Nikkei 225',api:'TVC:NI225'}
+  {tv:'TVC:US30',label:'Dow Jones',api:'US30'},
+  {tv:'TVC:SPX',label:'S&P 500',api:'SPX'},
+  {tv:'TVC:NDX',label:'Nasdaq 100',api:'NDX'},
+  {tv:'TVC:GDAXI',label:'DAX 40',api:'GDAXI'},
+  {tv:'TVC:NI225',label:'Nikkei 225',api:'NI225'}
 ];
 
 const PIP_STEPS={
@@ -257,6 +257,7 @@ const PIP_STEPS={
   jpy:0.01,
   xau:0.1
 };
+
 const PNL_BOOST_NON_XAU=4.5;
 
 let ws=null,wsConnected=false,reconnectDelay=1000,keepaliveTimer=null;
