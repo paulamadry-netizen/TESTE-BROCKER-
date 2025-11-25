@@ -245,11 +245,11 @@ const WATCHLIST=[
   {tv:'OANDA:USDCHF',label:'USD / CHF',api:'OANDA:USD_CHF'},
   {tv:'OANDA:AUDUSD',label:'AUD / USD',api:'OANDA:AUD_USD'},
   {tv:'OANDA:XAUUSD',label:'Gold / USD',api:'OANDA:XAU_USD'},
-  {tv:'TVC:US30',label:'Dow Jones',api:'US30'},
-  {tv:'TVC:SPX',label:'S&P 500',api:'SPX'},
-  {tv:'TVC:NDX',label:'Nasdaq 100',api:'NDX'},
-  {tv:'TVC:GDAXI',label:'DAX 40',api:'GDAXI'},
-  {tv:'TVC:NI225',label:'Nikkei 225',api:'NI225'}
+  {tv:'INDEX:DJI',label:'Dow Jones',api:'^DJI'},
+  {tv:'INDEX:SPX',label:'S&P 500',api:'^GSPC'},
+  {tv:'INDEX:NDX',label:'Nasdaq 100',api:'^NDX'},
+  {tv:'INDEX:GDAXI',label:'DAX 40',api:'^GDAXI'},
+  {tv:'INDEX:NI225',label:'Nikkei 225',api:'^N225'}
 ];
 
 const PIP_STEPS={
@@ -267,10 +267,12 @@ let simBalance=50000.00;
 let availableBalance=50000.00;
 let tvWidget=null;
 let activeModalId=null;
+
 const audioOpen=document.getElementById('sound-open');
 const audioClose=document.getElementById('sound-close');
 const audioReject=document.getElementById('sound-reject');
 const audioValidate=document.getElementById('sound-validate');
+
 const wlList=document.getElementById('wlList');
 const ordSymbol=document.getElementById('ordSymbol');
 const toastEl=document.getElementById('toast');
