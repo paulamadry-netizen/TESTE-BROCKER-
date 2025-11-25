@@ -463,7 +463,7 @@ function computePnl(pos){
   if(current===undefined) return 0;
   const step=pipStep(pos.symbol.api);
   const pipDiff=(current-pos.entry)/step;
-  const pipValue=getPipValuePerLot(pos.symbol.api,current);
+  const pipValue=pipValuePerLot(pos.symbol.api,current);
   const pnlPerLot=pipDiff * pipValue;
   return pos.side==='BUY'?pnlPerLot: -pnlPerLot;
 }
@@ -502,7 +502,7 @@ async function openPosition(symObj,side,lots=1,forcedEntry=null, tp=null, sl=nul
     tp:tp?Number(tp):null,
     sl:sl?Number(sl):null
   };
-  positions.push(pos);
+  positions.unshift(pos);
   renderPositions();
   renderTotals();
   audioOpen.play();
