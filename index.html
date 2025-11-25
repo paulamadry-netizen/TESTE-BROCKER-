@@ -1,417 +1,507 @@
-// --- Script pour TradingView Widget et Logique d'Application (CORRIGÉ) ---
 <script src="https://s3.tradingview.com/tv.js"></script>
 <script>
-    // --- Configuration Globale ---
-    const API_KEY = '1fc6cd30be484552ad303afda1087501';
-    // Utilisez l'endpoint `price` qui est plus simple et direct
-    const TWELVE_DATA_URL = 'https://api.twelvedata.com'; 
-    let CURRENT_SYMBOL = 'EURUSD';
-    let ACCOUNT_BALANCE = 50000.00;
-    
-    // Structure de données pour stocker les positions (SIMULÉ)
-    let activePositions = [];
+/* --- SCRIPT TRADING (CORRIGÉ & ROBUSTE) --- */
 
-    // Mapping des symboles et estimation de la valeur d'un lot (à confirmer avec XTB ou source fiable)
-    const WATCHLIST_ASSETS = {
-        'Indices': {
-            'US500': { name: 'S&P 500', exchange: 'NYSE', lotValue: 200000, symbol: 'US500' },
-            'NDX': { name: 'Nasdaq 100', exchange: 'NASDAQ', lotValue: 250000, symbol: 'NDX' },
-            'GDAXI': { name: 'DAX 40', exchange: 'XETRA', lotValue: 300000, symbol: 'GDAXI' },
-            'UK100': { name: 'FTSE 100', exchange: 'LSE', lotValue: 150000, symbol: 'UK100' },
-            'FCHI': { name: 'CAC 40', exchange: 'EURONEXT', lotValue: 100000, symbol: 'FCHI' },
-        },
-        'Devises': {
-            'EURUSD': { name: 'Euro/Dollar', exchange: 'FX', lotValue: 100000, symbol: 'EURUSD' },
-            'GBPUSD': { name: 'Livre/Dollar', exchange: 'FX', lotValue: 100000, symbol: 'GBPUSD' },
-            'USDJPY': { name: 'Dollar/Yen', exchange: 'FX', lotValue: 100000, symbol: 'USDJPY' },
-            'AUDUSD': { name: 'Dollar AUD/USD', exchange: 'FX', lotValue: 100000, symbol: 'AUDUSD' },
-            'USDCAD': { name: 'Dollar/Dollar CAD', exchange: 'FX', lotValue: 100000, symbol: 'USDCAD' },
-        },
-        'Matières Premières': {
-            'XAUUSD': { name: 'Or/Dollar', exchange: 'COMEX', lotValue: 100000, symbol: 'XAUUSD' }, 
-        }
-    };
-    
-    // Fonction utilitaire pour trouver les infos d'un actif
-    function getAssetInfo(symbol) {
-        return Object.values(WATCHLIST_ASSETS).flatMap(Object.values).find(a => a.symbol === symbol);
+/* Configuration globale */
+const API_KEY = '1fc6cd30be484552ad303afda1087501';
+const TWELVE_DATA_URL = 'https://api.twelvedata.com';
+let CURRENT_SYMBOL = 'EURUSD';
+let ACCOUNT_BALANCE = 50000.00;
+let activePositions = [];
+
+/* Watchlist / meta */
+const WATCHLIST_ASSETS = {
+    'Indices': {
+        'US500': { name: 'S&P 500', exchange: 'NYSE', lotValue: 200000, symbol: 'US500' },
+        'NDX': { name: 'Nasdaq 100', exchange: 'NASDAQ', lotValue: 250000, symbol: 'NDX' },
+        'GDAXI': { name: 'DAX 40', exchange: 'XETRA', lotValue: 300000, symbol: 'GDAXI' },
+        'UK100': { name: 'FTSE 100', exchange: 'LSE', lotValue: 150000, symbol: 'UK100' },
+        'FCHI': { name: 'CAC 40', exchange: 'EURONEXT', lotValue: 100000, symbol: 'FCHI' },
+    },
+    'Devises': {
+        'EURUSD': { name: 'Euro/Dollar', exchange: 'FX', lotValue: 100000, symbol: 'EURUSD' },
+        'GBPUSD': { name: 'Livre/Dollar', exchange: 'FX', lotValue: 100000, symbol: 'GBPUSD' },
+        'USDJPY': { name: 'Dollar/Yen', exchange: 'FX', lotValue: 100000, symbol: 'USDJPY' },
+        'AUDUSD': { name: 'Dollar AUD/USD', exchange: 'FX', lotValue: 100000, symbol: 'AUDUSD' },
+        'USDCAD': { name: 'Dollar/Dollar CAD', exchange: 'FX', lotValue: 100000, symbol: 'USDCAD' },
+    },
+    'Matières Premières': {
+        'XAUUSD': { name: 'Or/Dollar', exchange: 'COMEX', lotValue: 100000, symbol: 'XAUUSD' },
+    }
+};
+
+/* Utilitaires */
+function getAssetInfo(symbol) {
+    return Object.values(WATCHLIST_ASSETS).flatMap(Object.values).find(a => a.symbol === symbol) || null;
+}
+
+/* Initialise TradingView widget */
+function initializeTradingView(symbol) {
+    const container = document.getElementById('tradingview-widget-container');
+    if (!container) return console.warn('Container TradingView introuvable (id: tradingview-widget-container).');
+    container.innerHTML = '';
+
+    try {
+        new TradingView.widget({
+            "symbol": symbol,
+            "interval": "60",
+            "timezone": "Europe/Paris",
+            "theme": "dark",
+            "style": "1",
+            "locale": "fr",
+            "toolbar_bg": "#1F2937",
+            "enable_publishing": false,
+            "hide_side_toolbar": true,
+            "allow_symbol_change": true,
+            "container_id": "tradingview-widget-container",
+            "autosize": true,
+            "studies": ["STD;SMA"]
+        });
+    } catch (e) {
+        console.warn('Erreur initialisation TradingView:', e);
     }
 
-    // --- Fonctions de l'Interface (UI) (non modifiées sauf pour l'appel de getAssetInfo) ---
+    document.getElementById('current-symbol') && (document.getElementById('current-symbol').innerText = symbol);
+    CURRENT_SYMBOL = symbol;
+    renderOrderPanel(symbol);
+}
 
-    function initializeTradingView(symbol) {
-        const container = document.getElementById('tradingview-widget-container');
-        container.innerHTML = '';
-        
-        new TradingView.widget(
-            {
-                "symbol": symbol,
-                "interval": "60",
-                "timezone": "Europe/Paris",
-                "theme": "dark",
-                "style": "1",
-                "locale": "fr",
-                "toolbar_bg": "#1F2937",
-                "enable_publishing": false,
-                "hide_side_toolbar": true,
-                "allow_symbol_change": true,
-                "container_id": "tradingview-widget-container",
-                "autosize": true,
-                "studies": [ "STD;SMA" ]
-            }
-        );
-        document.getElementById('current-symbol').innerText = symbol;
-        CURRENT_SYMBOL = symbol;
-        renderOrderPanel(symbol);
-    }
+/* Fullscreen toggle (inchangé fonctionnellement) */
+function toggleFullScreen() {
+    const elem = document.getElementById('tradingview-widget-container');
+    const header = document.querySelector('header');
+    const containerGrid = document.querySelector('.container-grid');
+    const otherElements = [document.querySelector('.col-left'), document.querySelector('.positions-container')];
 
-    function toggleFullScreen() {
-        const elem = document.getElementById('tradingview-widget-container');
-        const header = document.querySelector('header');
-        const containerGrid = document.querySelector('.container-grid');
-        const otherElements = [document.querySelector('.col-left'), document.querySelector('.positions-container')];
-
-        if (!document.fullscreenElement) {
-            if (elem.requestFullscreen) {
-                elem.requestFullscreen();
-            } else if (elem.webkitRequestFullscreen) {
-                elem.webkitRequestFullscreen();
-            }
-            
-            header.style.display = 'none';
+    if (!document.fullscreenElement) {
+        if (elem.requestFullscreen) { elem.requestFullscreen(); } else if (elem.webkitRequestFullscreen) { elem.webkitRequestFullscreen(); }
+        if (header) header.style.display = 'none';
+        if (containerGrid) {
             containerGrid.style.gridTemplateColumns = '1fr';
             containerGrid.style.gridTemplateRows = '1fr';
-            otherElements.forEach(el => el.style.display = 'none');
-            elem.style.height = '100vh';
-        } else {
-            if (document.exitFullscreen) {
-                document.exitFullscreen();
-            } else if (document.webkitExitFullscreen) {
-                document.webkitExitFullscreen();
-            }
-
-            header.style.display = 'flex';
-            containerGrid.style.gridTemplateColumns = '20rem 1fr';
-            containerGrid.style.gridTemplateRows = '2fr 1fr';
-            otherElements.forEach(el => el.style.display = 'grid');
-            elem.style.height = '100%'; 
         }
+        otherElements.forEach(el => el && (el.style.display = 'none'));
+        if (elem) elem.style.height = '100vh';
+    } else {
+        if (document.exitFullscreen) { document.exitFullscreen(); } else if (document.webkitExitFullscreen) { document.webkitExitFullscreen(); }
+        if (header) header.style.display = 'flex';
+        if (containerGrid) { containerGrid.style.gridTemplateColumns = '20rem 1fr'; containerGrid.style.gridTemplateRows = '2fr 1fr'; }
+        otherElements.forEach(el => el && (el.style.display = 'grid'));
+        if (elem) elem.style.height = '100%';
     }
+}
 
-    function renderWatchlist() {
-        const ul = document.getElementById('watchlist-ul');
-        ul.innerHTML = '';
+/* Render watchlist */
+function renderWatchlist() {
+    const ul = document.getElementById('watchlist-ul');
+    if (!ul) return;
+    ul.innerHTML = '';
 
-        for (const category in WATCHLIST_ASSETS) {
-            const h4 = document.createElement('h4');
-            h4.className = 'text-sm font-bold mt-3 mb-1 text-indigo-300';
-            h4.innerText = category;
-            ul.appendChild(h4);
+    for (const category in WATCHLIST_ASSETS) {
+        const h4 = document.createElement('h4');
+        h4.className = 'text-sm font-bold mt-3 mb-1 text-indigo-300';
+        h4.innerText = category;
+        ul.appendChild(h4);
 
-            for (const symbol in WATCHLIST_ASSETS[category]) {
-                const asset = WATCHLIST_ASSETS[category][symbol];
-                const li = document.createElement('li');
-                li.className = 'flex justify-between items-center p-2 bg-gray-700 hover:bg-indigo-600 transition duration-150 rounded cursor-pointer';
-                li.innerHTML = `
-                    <span class="font-bold">${symbol}</span>
-                    <span class="text-xs text-gray-300">${asset.name}</span>
-                `;
-                li.onclick = () => initializeTradingView(symbol);
-                ul.appendChild(li);
-            }
-        }
-    }
-
-    function renderOrderPanel(symbol) {
-        const container = document.getElementById('order-form-container');
-        const assetInfo = getAssetInfo(symbol);
-        const lotValue = assetInfo ? assetInfo.lotValue : 100000; 
-
-        container.innerHTML = `
-            <form id="limit-order-form" class="space-y-3">
-                <p class="text-xl font-bold text-white mb-4">${symbol}</p>
-                <div class="grid grid-cols-2 gap-3">
-                    <div>
-                        <label class="block text-xs font-medium text-gray-400">Lots (Valeur estimée 1 lot: ${lotValue.toLocaleString()} USD)</label>
-                        <input type="number" id="lots" min="0.01" step="0.01" value="0.10" required class="w-full mt-1 p-2 bg-gray-700 border border-gray-600 rounded text-white focus:ring-indigo-500 focus:border-indigo-500">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-medium text-gray-400">Prix Limite</label>
-                        <input type="number" id="limit-price" step="any" class="w-full mt-1 p-2 bg-gray-700 border border-gray-600 rounded text-white focus:ring-indigo-500 focus:border-indigo-500" placeholder="Optionnel">
-                    </div>
-                </div>
-                <div>
-                    <label class="block text-xs font-medium text-gray-400">Stop Loss (SL)</label>
-                    <input type="number" id="sl-price" step="any" class="w-full mt-1 p-2 bg-gray-700 border border-gray-600 rounded text-white" placeholder="Optionnel">
-                </div>
-                <div>
-                    <label class="block text-xs font-medium text-gray-400">Take Profit (TP)</label>
-                    <input type="number" id="tp-price" step="any" class="w-full mt-1 p-2 bg-gray-700 border border-gray-600 rounded text-white" placeholder="Optionnel">
-                </div>
-                <div class="flex space-x-3 pt-2">
-                    <button type="button" onclick="placeOrder('${symbol}', 'BUY')" class="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-lg transition duration-150">Acheter (Market)</button>
-                    <button type="button" onclick="placeOrder('${symbol}', 'SELL')" class="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-lg transition duration-150">Vendre (Market)</button>
-                </div>
-            </form>
-        `;
-    }
-    
-    function showTab(tabName) {
-        document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
-        document.querySelectorAll('.tab-button').forEach(el => {
-            el.classList.remove('active', 'bg-indigo-600', 'text-white');
-            el.classList.add('text-gray-400', 'hover:bg-gray-700');
-        });
-
-        document.getElementById(`tab-content-${tabName}`).classList.remove('hidden');
-        document.getElementById(`tab-${tabName}`).classList.add('active', 'bg-indigo-600', 'text-white');
-        document.getElementById(`tab-${tabName}`).classList.remove('text-gray-400', 'hover:bg-gray-700');
-    }
-
-    // --- Logique de Trading et API TwelveData (CORRECTION APPLIQUÉE ICI) ---
-
-    /**
-     * Récupère la cotation actuelle via TwelveData.
-     * @param {string} symbol - Le symbole de l'actif.
-     * @returns {Promise<number|null>} Le prix de l'actif ou null en cas d'échec.
-     */
-    async function getQuote(symbol) {
-        // CORRECTION: Utilisation de l'endpoint `price` et s'assurer que l'URL est bien formée.
-        // L'API TwelveData est sensible à la casse des symboles.
-        const url = `${TWELVE_DATA_URL}/price?symbol=${symbol}&apikey=${API_KEY}`;
-        
-        try {
-            const response = await fetch(url);
-            const data = await response.json();
-
-            if (data.price) {
-                // Retourne le prix converti en nombre
-                return parseFloat(data.price);
-            } else if (data.status === 'error') {
-                // Gère les erreurs spécifiques de l'API (ex: symbole non trouvé, limite dépassée)
-                console.error(`Erreur API TwelveData pour ${symbol}:`, data.message);
-                return null;
-            }
-            // Si la réponse n'est ni un prix ni une erreur claire, c'est un échec
-            return null;
-
-        } catch (error) {
-            console.error(`Erreur de réseau ou de parsing pour ${symbol}:`, error);
-            return null;
-        }
-    }
-
-    // 7. Passer un ordre (Achat/Vente)
-    async function placeOrder(symbol, type) {
-        const lotsInput = document.getElementById('lots');
-        const lots = parseFloat(lotsInput.value);
-        if (!lots || lots <= 0) {
-            alert('Veuillez entrer un nombre de lots valide.');
-            return;
-        }
-
-        // 7.1. Récupération du prix d'entrée
-        const entryPrice = await getQuote(symbol);
-        if (!entryPrice) {
-            playRefusedSound();
-            // Le message d'erreur corrigé pour être plus informatif
-            alert(`Ordre refusé: Impossible d'obtenir la cotation pour ${symbol}. Veuillez vérifier l'API Key ou le symbole.`);
-            return;
-        }
-
-        // 7.2. Calcul de la marge requise et vérification du solde
-        const assetInfo = getAssetInfo(symbol);
-        const lotValue = assetInfo ? assetInfo.lotValue : 100000;
-        // Marge hypothétique de 5%
-        const requiredMargin = lots * lotValue * 0.05; 
-
-        if (requiredMargin > ACCOUNT_BALANCE) {
-            playRefusedSound();
-            alert(`Ordre refusé: Marge requise (${requiredMargin.toFixed(2)} USD) supérieure au solde disponible (${ACCOUNT_BALANCE.toFixed(2)} USD).`);
-            return;
-        }
-
-        // 7.3. Création et ajout de la position
-        const position = {
-            id: Date.now(),
-            symbol: symbol,
-            type: type,
-            lots: lots,
-            entryPrice: entryPrice,
-            currentPrice: entryPrice, 
-            sl: parseFloat(document.getElementById('sl-price').value) || null,
-            tp: parseFloat(document.getElementById('tp-price').value) || null,
-            openTime: new Date().toLocaleTimeString(),
-            lotValue: lotValue
-        };
-
-        activePositions.push(position);
-        ACCOUNT_BALANCE -= requiredMargin; // Déduire la marge du solde
-
-        renderPositions();
-        updateBalanceDisplay();
-        playValidatedSound();
-        
-        alert(`Ordre ${type} ${lots} lots sur ${symbol} exécuté à ${entryPrice.toFixed(5)}! Marge utilisée: ${requiredMargin.toFixed(2)} USD.`);
-    }
-
-    // 8. Rendre les positions actives et le PnL
-    function renderPositions() {
-        const tbody = document.getElementById('active-positions-body');
-        tbody.innerHTML = '';
-        
-        activePositions.forEach(pos => {
-            const pnl = calculatePnL(pos);
-            const pnlClass = pnl >= 0 ? 'text-green-400' : 'text-red-400';
-
-            const row = document.createElement('tr');
-            row.className = 'hover:bg-gray-700 cursor-pointer border-t border-gray-700';
-            row.innerHTML = `
-                <td class="px-3 py-2 font-bold">${pos.symbol}</td>
-                <td class="px-3 py-2 text-${pos.type === 'BUY' ? 'green' : 'red'}-400">${pos.type}</td>
-                <td class="px-3 py-2">${pos.lots.toFixed(2)}</td>
-                <td class="px-3 py-2">${pos.entryPrice.toFixed(5)}</td>
-                <td id="current-price-${pos.id}" class="px-3 py-2">${pos.currentPrice.toFixed(5)}</td>
-                <td id="pnl-${pos.id}" class="px-3 py-2 font-bold ${pnlClass}">${pnl.toFixed(2)}</td>
-                <td class="px-3 py-2 space-x-2">
-                    <button onclick="modifyPosition(${pos.id})" class="text-xs bg-yellow-600 hover:bg-yellow-700 py-1 px-2 rounded">TP/SL</button>
-                    <button onclick="closePosition(${pos.id})" class="text-xs bg-red-600 hover:bg-red-700 py-1 px-2 rounded">Fermer</button>
-                </td>
+        for (const symbol in WATCHLIST_ASSETS[category]) {
+            const asset = WATCHLIST_ASSETS[category][symbol];
+            const li = document.createElement('li');
+            li.className = 'flex justify-between items-center p-2 bg-gray-700 hover:bg-indigo-600 transition duration-150 rounded cursor-pointer';
+            li.innerHTML = `
+                <span class="font-bold">${symbol}</span>
+                <span class="text-xs text-gray-300">${asset.name}</span>
             `;
-            tbody.appendChild(row);
-        });
-    }
-
-    // 9. Calcul du PnL (Profit and Loss)
-    function calculatePnL(position) {
-        const priceDiff = position.currentPrice - position.entryPrice;
-        let pnl;
-
-        if (position.type === 'BUY') {
-            pnl = priceDiff * position.lots * position.lotValue;
-        } else { // SELL
-            pnl = -priceDiff * position.lots * position.lotValue;
+            li.onclick = () => initializeTradingView(symbol);
+            ul.appendChild(li);
         }
-
-        return pnl;
     }
-    
-    // 10. Mettre à jour le PnL en temps réel (SIMULÉ - nécessite WebSocket pour la vraie vie)
-    async function updateRealTimeData() {
-        const uniqueSymbols = [...new Set(activePositions.map(p => p.symbol))];
+}
 
-        for (const symbol of uniqueSymbols) {
-            const currentPrice = await getQuote(symbol);
-            if (currentPrice) {
+/* Render panneau d'ordre */
+function renderOrderPanel(symbol) {
+    const container = document.getElementById('order-form-container');
+    if (!container) return;
+    const assetInfo = getAssetInfo(symbol);
+    const lotValue = assetInfo ? assetInfo.lotValue : 100000;
+
+    container.innerHTML = `
+        <form id="limit-order-form" class="space-y-3" onsubmit="return false;">
+            <p class="text-xl font-bold text-white mb-4">${symbol}</p>
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="block text-xs font-medium text-gray-400">Lots (Valeur estimée 1 lot: ${lotValue.toLocaleString()} USD)</label>
+                    <input type="number" id="lots" min="0.01" step="0.01" value="0.10" required class="w-full mt-1 p-2 bg-gray-700 border border-gray-600 rounded text-white focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-400">Prix Limite</label>
+                    <input type="number" id="limit-price" step="any" class="w-full mt-1 p-2 bg-gray-700 border border-gray-600 rounded text-white focus:ring-indigo-500 focus:border-indigo-500" placeholder="Optionnel">
+                </div>
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-gray-400">Stop Loss (SL)</label>
+                <input type="number" id="sl-price" step="any" class="w-full mt-1 p-2 bg-gray-700 border border-gray-600 rounded text-white" placeholder="Optionnel">
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-gray-400">Take Profit (TP)</label>
+                <input type="number" id="tp-price" step="any" class="w-full mt-1 p-2 bg-gray-700 border border-gray-600 rounded text-white" placeholder="Optionnel">
+            </div>
+            <div class="flex space-x-3 pt-2">
+                <button type="button" onclick="placeOrder('${symbol}', 'BUY')" class="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-lg transition duration-150">Acheter (Market)</button>
+                <button type="button" onclick="placeOrder('${symbol}', 'SELL')" class="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-lg transition duration-150">Vendre (Market)</button>
+            </div>
+        </form>
+    `;
+}
+
+/* Onglets */
+function showTab(tabName) {
+    document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+    document.querySelectorAll('.tab-button').forEach(el => {
+        el.classList.remove('active', 'bg-indigo-600', 'text-white');
+        el.classList.add('text-gray-400', 'hover:bg-gray-700');
+    });
+
+    const content = document.getElementById(`tab-content-${tabName}`);
+    if (content) content.classList.remove('hidden');
+
+    const btn = document.getElementById(`tab-${tabName}`);
+    if (btn) {
+        btn.classList.add('active', 'bg-indigo-600', 'text-white');
+        btn.classList.remove('text-gray-400', 'hover:bg-gray-700');
+    }
+}
+
+/* ---------------------------
+   API TwelveData : récupération des cotations
+   - Essaie plusieurs variantes de symboles (EURUSD => EUR/USD, prefixes)
+   - Timeout, parsing robuste, logs
+   --------------------------- */
+
+/**
+ * Génère une liste de variantes de symboles à tester pour TwelveData.
+ * (augmenter les chances que TwelveData accepte le symbole depuis un navigateur)
+ */
+function buildSymbolCandidates(symbol) {
+    const candidates = new Set();
+    if (!symbol) return Array.from(candidates);
+
+    candidates.add(symbol); // tel quel
+
+    // si paire FX simple de 6 lettres (EURUSD, GBPUSD, etc.) -> ajouter EUR/USD
+    if (/^[A-Z]{6}$/.test(symbol)) {
+        candidates.add(symbol.slice(0,3) + '/' + symbol.slice(3));
+        candidates.add('FX:' + symbol);
+        candidates.add('OANDA:' + symbol);
+        candidates.add('CURRENCY:' + (symbol.slice(0,3) + '/' + symbol.slice(3)));
+    }
+
+    // Pour XAUUSD etc.
+    if (/^[A-Z]{3,4}[A-Z]{3}$/.test(symbol) && symbol.includes('X')) {
+        candidates.add(symbol.slice(0,3) + '/' + symbol.slice(-3));
+    }
+
+    // Ajout de variantes utiles pour indices
+    candidates.add('INDEX:' + symbol);
+    candidates.add('TVC:' + symbol);
+    candidates.add(symbol.toUpperCase());
+
+    return Array.from(candidates);
+}
+
+/**
+ * Récupère le prix via TwelveData en testant plusieurs variantes.
+ * Retourne un nombre (prix) ou null.
+ */
+async function getQuote(symbol) {
+    if (!symbol) return null;
+
+    const candidates = buildSymbolCandidates(symbol);
+    console.debug('getQuote: candidates ->', candidates);
+
+    // Fonction interne pour appeler l'API avec timeout
+    async function fetchWithTimeout(url, timeout = 8000) {
+        const controller = new AbortController();
+        const id = setTimeout(() => controller.abort(), timeout);
+        try {
+            const resp = await fetch(url, { signal: controller.signal });
+            clearTimeout(id);
+            return resp;
+        } catch (err) {
+            clearTimeout(id);
+            throw err;
+        }
+    }
+
+    for (const cand of candidates) {
+        try {
+            const encoded = encodeURIComponent(cand);
+            const url = `${TWELVE_DATA_URL}/price?symbol=${encoded}&apikey=${API_KEY}`;
+            console.debug('getQuote: trying', url);
+
+            const response = await fetchWithTimeout(url, 8000);
+
+            // gérer réponses non 200
+            if (!response.ok) {
+                console.warn(`TwelveData réponse HTTP ${response.status} pour ${cand}`);
+                // limiter les erreurs 4xx/5xx - essayer la prochaine variante
+                continue;
+            }
+
+            const data = await response.json();
+            // STRUCTURES attendues : { price: "1.1234" } ou { "status": "error", "message": "..."}
+            if (data && data.price) {
+                const price = parseFloat(data.price);
+                if (!isNaN(price)) {
+                    console.debug(`getQuote: success ${cand} -> ${price}`);
+                    return price;
+                }
+            } else if (data && data.status === 'error') {
+                console.warn(`TwelveData erreur (${cand}):`, data.message || data);
+                // try next candidate
+                continue;
+            } else {
+                console.debug('getQuote: réponse inattendue', data);
+            }
+
+        } catch (err) {
+            if (err.name === 'AbortError') {
+                console.warn(`getQuote: timeout pour ${cand}`);
+            } else {
+                console.warn(`getQuote: erreur réseau / parsing pour ${cand}:`, err);
+            }
+            // continuer sur la prochaine variante
+            continue;
+        }
+    }
+
+    console.error(`getQuote: impossible d'obtenir un prix pour ${symbol} après ${candidates.length} essais.`);
+    return null;
+}
+
+/* ---------------------------
+   Trading : placeOrder, close, modify, PnL, affichage
+   --------------------------- */
+
+async function placeOrder(symbol, type) {
+    const lotsInput = document.getElementById('lots');
+    const lots = lotsInput ? parseFloat(lotsInput.value) : 0;
+    if (!lots || lots <= 0) {
+        alert('Veuillez entrer un nombre de lots valide.');
+        return;
+    }
+
+    // Récupérer prix d'entrée (avec retries internes)
+    const entryPrice = await getQuote(symbol);
+    if (!entryPrice) {
+        playRefusedSound();
+        alert(`Ordre refusé : impossible d'obtenir la cotation pour ${symbol}. Voir console pour détails.`);
+        return;
+    }
+
+    const assetInfo = getAssetInfo(symbol);
+    const lotValue = assetInfo ? assetInfo.lotValue : 100000;
+    const requiredMargin = lots * lotValue * 0.05; // marge hypothétique 5%
+
+    if (requiredMargin > ACCOUNT_BALANCE) {
+        playRefusedSound();
+        alert(`Ordre refusé : marge requise (${requiredMargin.toFixed(2)} USD) supérieure au solde disponible (${ACCOUNT_BALANCE.toFixed(2)} USD).`);
+        return;
+    }
+
+    // Créer position simulée
+    const position = {
+        id: Date.now() + Math.floor(Math.random() * 1000),
+        symbol: symbol,
+        type: type,
+        lots: lots,
+        entryPrice: entryPrice,
+        currentPrice: entryPrice,
+        sl: parseFloat(document.getElementById('sl-price')?.value) || null,
+        tp: parseFloat(document.getElementById('tp-price')?.value) || null,
+        openTime: new Date().toLocaleString(),
+        lotValue: lotValue
+    };
+
+    activePositions.push(position);
+    ACCOUNT_BALANCE -= requiredMargin;
+
+    renderPositions();
+    updateBalanceDisplay();
+    playValidatedSound();
+
+    alert(`Ordre ${type} ${lots} lots sur ${symbol} exécuté à ${entryPrice.toFixed(5)} — Marge utilisée: ${requiredMargin.toFixed(2)} USD.`);
+}
+
+/* Calcul PnL */
+function calculatePnL(position) {
+    const priceDiff = position.currentPrice - position.entryPrice;
+    let pnl;
+    if (position.type === 'BUY') {
+        pnl = priceDiff * position.lots * position.lotValue;
+    } else {
+        pnl = -priceDiff * position.lots * position.lotValue;
+    }
+    return pnl;
+}
+
+/* Rendu positions */
+function renderPositions() {
+    const tbody = document.getElementById('active-positions-body');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+
+    activePositions.forEach(pos => {
+        const pnl = calculatePnL(pos);
+        const pnlClass = pnl >= 0 ? 'text-green-400' : 'text-red-400';
+        const typeClass = pos.type === 'BUY' ? 'text-green-400' : 'text-red-400';
+
+        const row = document.createElement('tr');
+        row.className = 'hover:bg-gray-700 cursor-pointer border-t border-gray-700';
+        row.innerHTML = `
+            <td class="px-3 py-2 font-bold">${pos.symbol}</td>
+            <td class="px-3 py-2 ${typeClass}">${pos.type}</td>
+            <td class="px-3 py-2">${pos.lots.toFixed(2)}</td>
+            <td class="px-3 py-2">${pos.entryPrice.toFixed(5)}</td>
+            <td id="current-price-${pos.id}" class="px-3 py-2">${pos.currentPrice.toFixed(5)}</td>
+            <td id="pnl-${pos.id}" class="px-3 py-2 font-bold ${pnlClass}">${pnl.toFixed(2)}</td>
+            <td class="px-3 py-2 space-x-2">
+                <button onclick="modifyPosition(${pos.id})" class="text-xs bg-yellow-600 hover:bg-yellow-700 py-1 px-2 rounded">TP/SL</button>
+                <button onclick="closePosition(${pos.id})" class="text-xs bg-red-600 hover:bg-red-700 py-1 px-2 rounded">Fermer</button>
+            </td>
+        `;
+        tbody.appendChild(row);
+    });
+}
+
+/* Clôturer position */
+function closePosition(positionId, isAutoClosure = false) {
+    const index = activePositions.findIndex(p => p.id === positionId);
+    if (index === -1) return;
+
+    const closedPosition = activePositions[index];
+    const pnl = calculatePnL(closedPosition);
+
+    const requiredMargin = closedPosition.lots * (closedPosition.lotValue || 100000) * 0.05;
+
+    ACCOUNT_BALANCE += requiredMargin + pnl;
+    activePositions.splice(index, 1);
+
+    renderPositions();
+    updateBalanceDisplay();
+    playClosedSound();
+
+    const closeType = isAutoClosure ? (pnl >= 0 ? 'TP' : 'SL') : 'Manuelle';
+    alert(`Position ${closedPosition.symbol} clôturée. PnL: ${pnl.toFixed(2)} USD. Clôture: ${closeType}.`);
+}
+
+/* Modifier TP/SL via prompt */
+function modifyPosition(positionId) {
+    const pos = activePositions.find(p => p.id === positionId);
+    if (!pos) return;
+
+    const newSL = prompt(`Modifier le Stop Loss pour ${pos.symbol} (actuel: ${pos.sl || 'N/A'}) :`);
+    const newTP = prompt(`Modifier le Take Profit pour ${pos.symbol} (actuel: ${pos.tp || 'N/A'}) :`);
+
+    if (newSL !== null) pos.sl = parseFloat(newSL) || null;
+    if (newTP !== null) pos.tp = parseFloat(newTP) || null;
+
+    renderPositions();
+    alert('TP/SL mis à jour.');
+}
+
+/* Mise à jour affichage solde */
+function updateBalanceDisplay() {
+    const el = document.getElementById('account-balance');
+    if (!el) return;
+    el.innerText = `${ACCOUNT_BALANCE.toLocaleString('fr-FR', { style: 'currency', currency: 'USD' })}`;
+}
+
+/* Sons (simulés) */
+function playSound(type) { console.log(`[Sound Effect]: ${type} played.`); }
+function playValidatedSound() { playSound('Order Validated'); }
+function playRefusedSound() { playSound('Order Refused'); }
+function playClosedSound() { playSound('Position Closed'); }
+
+/* ---------------------------
+   Mise à jour temps réel (boucle)
+   - utilisation d'un setInterval unique pour éviter empilement
+   - on met à jour chaque symbole actif via getQuote
+   --------------------------- */
+
+let realtimeIntervalId = null;
+async function updateRealTimeDataOnce() {
+    try {
+        const uniqueSymbols = [...new Set(activePositions.map(p => p.symbol))];
+        if (uniqueSymbols.length === 0) return;
+
+        // Parallel fetch des cotations
+        const promises = uniqueSymbols.map(s => getQuote(s).then(price => ({ symbol: s, price })).catch(err => ({ symbol: s, price: null })));
+        const results = await Promise.all(promises);
+
+        results.forEach(res => {
+            if (res.price) {
                 activePositions = activePositions.map(pos => {
-                    if (pos.symbol === symbol) {
-                        pos.currentPrice = currentPrice;
-                    }
+                    if (pos.symbol === res.symbol) pos.currentPrice = res.price;
                     return pos;
                 });
             }
-        }
-        
+        });
+
         renderPositions();
 
+        // Vérifier TP/SL
+        const toClose = [];
         activePositions.forEach(pos => {
-            const pnl = calculatePnL(pos);
             const price = pos.currentPrice;
-
             let shouldClose = false;
             if (pos.type === 'BUY') {
                 if (pos.sl && price <= pos.sl) shouldClose = true;
                 if (pos.tp && price >= pos.tp) shouldClose = true;
-            } else { // SELL
+            } else {
                 if (pos.sl && price >= pos.sl) shouldClose = true;
                 if (pos.tp && price <= pos.tp) shouldClose = true;
             }
-
-            if (shouldClose) {
-                closePosition(pos.id, true);
-            }
+            if (shouldClose) toClose.push(pos.id);
         });
 
-        // Loop
-        setTimeout(updateRealTimeData, 5000); 
+        // Clôturer après vérification (ne modifie pas la collection durant l'itération)
+        toClose.forEach(id => closePosition(id, true));
+    } catch (err) {
+        console.error('updateRealTimeDataOnce erreur:', err);
     }
+}
 
-    // 11. Clôturer une position
-    function closePosition(positionId, isAutoClosure = false) {
-        const index = activePositions.findIndex(p => p.id === positionId);
-        if (index === -1) return;
+function startRealtimeLoop(intervalMs = 5000) {
+    if (realtimeIntervalId) clearInterval(realtimeIntervalId);
+    realtimeIntervalId = setInterval(updateRealTimeDataOnce, intervalMs);
+    // lancer une fois immédiatement
+    updateRealTimeDataOnce();
+}
 
-        const closedPosition = activePositions[index];
-        const pnl = calculatePnL(closedPosition);
-        
-        const assetInfo = getAssetInfo(closedPosition.symbol);
-        const lotValue = assetInfo ? assetInfo.lotValue : 100000;
-        const requiredMargin = closedPosition.lots * lotValue * 0.05; 
-        
-        ACCOUNT_BALANCE += requiredMargin + pnl;
+/* Initialisation de l'application */
+function initApp() {
+    initializeTradingView(CURRENT_SYMBOL);
+    renderWatchlist();
+    updateBalanceDisplay();
+    renderOrderPanel(CURRENT_SYMBOL);
+    renderPositions();
+    showTab('positions');
 
-        activePositions.splice(index, 1);
-        
-        renderPositions();
-        updateBalanceDisplay();
-        playClosedSound();
-        
-        const closeType = isAutoClosure ? (pnl >= 0 ? 'TP' : 'SL') : 'Manuelle';
-        alert(`Position ${closedPosition.symbol} clôturée. PnL: ${pnl.toFixed(2)} USD. Clôture: ${closeType}.`);
-    }
+    startRealtimeLoop(5000);
+}
 
-    // 12. Modifier SL/TP
-    function modifyPosition(positionId) {
-        const pos = activePositions.find(p => p.id === positionId);
-        if (!pos) return;
+/* Démarrage */
+initApp();
 
-        const newSL = prompt(`Modifier le Stop Loss pour ${pos.symbol} (actuel: ${pos.sl || 'N/A'}):`);
-        const newTP = prompt(`Modifier le Take Profit pour ${pos.symbol} (actuel: ${pos.tp || 'N/A'}):`);
-
-        if (newSL !== null) pos.sl = parseFloat(newSL) || null;
-        if (newTP !== null) pos.tp = parseFloat(newTP) || null;
-        
-        renderPositions();
-        alert('TP/SL mis à jour.');
-    }
-
-    // 13. Mettre à jour l'affichage du solde
-    function updateBalanceDisplay() {
-        document.getElementById('account-balance').innerText = `${ACCOUNT_BALANCE.toLocaleString('fr-FR', { style: 'currency', currency: 'USD' })}`;
-    }
-
-    // --- Gestion des Sons ---
-
-    function playSound(type) {
-        console.log(`[Sound Effect]: ${type} played.`);
-    }
-
-    function playValidatedSound() {
-        playSound('Order Validated');
-    }
-
-    function playRefusedSound() {
-        playSound('Order Refused');
-    }
-
-    function playClosedSound() {
-        playSound('Position Closed');
-    }
-
-    // --- Initialisation de l'Application ---
-    function initApp() {
-        initializeTradingView(CURRENT_SYMBOL);
-        renderWatchlist();
-        updateBalanceDisplay();
-        renderOrderPanel(CURRENT_SYMBOL);
-        renderPositions();
-        showTab('positions');
-        
-        updateRealTimeData();
-    }
-
-    initApp();
-
+/* Export pour console/debug (optionnel) */
+window._tvApp = {
+    getQuote,
+    placeOrder,
+    activePositions,
+    ACCOUNT_BALANCE,
+    startRealtimeLoop,
+    stopRealtimeLoop: () => { if (realtimeIntervalId) clearInterval(realtimeIntervalId); realtimeIntervalId = null; }
+};
 </script>
 
 
