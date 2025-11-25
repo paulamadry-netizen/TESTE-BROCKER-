@@ -228,7 +228,7 @@
 </div>
 
 <script>
-const API_KEY='d4is89hr01queuakbspgd4is89hr01queuakbsq0';
+const API_KEY='d4g61b9r01qm5b343fo0d4g61b9r01qm5b343fog';
 const WS_ENDPOINT='wss://ws.finnhub.io';
 const KEEPALIVE_INTERVAL=25000;
 const RECONNECT_MAX=60000;
@@ -285,6 +285,13 @@ function pipValuePerLot(symbol, price){
 function describePip(symbol, price){
   const perLot=pipValuePerLot(symbol, price||priceCache[symbol]||1);
   return `1 lot ≈ ${formatMoney(perLot)} USD/par pip`;
+}
+function calculateMargin(symbol, lots, price){
+  const resolvedPrice=Number(price);
+  const resolvedLots=Number(lots);
+  if(!resolvedPrice||!resolvedLots) return 0;
+  const units=lotUnits(symbol);
+  return (resolvedPrice * units * resolvedLots) / LEVERAGE;
 }
 
 WATCHLIST.forEach(w=>{
@@ -461,19 +468,43 @@ function computePnl(pos){
   return pos.side==='BUY'?pnlPerLot: -pnlPerLot;
 }
 
-async function openPosition(symObj,side,lots=1,forcedEntry=null, tp=null, sl=null){
-  let price=forcedEntry!==null?forcedEntry:priceCache[symObj.api];
-  if(price===undefined||price===null){
-    const fetched=await fetchPriceREST(symObj.api);
-    if(fetched!==null) price=fetched;
+function openPosition(symObj,side,lots=1,forcedEntry=null, tp=null, sl=null){
+  const resolvedLots=Number(lots)||0;
+  if(resolvedLots<=0){
+    audioDenied.play();
+    alert('Le nombre de lots doit être supérieur à 0');
+    return false;
   }
-  if(price===undefined||price===null){audioDenied.play();alert('Prix indisponible');return false;}
-  const required=(price*lotUnits(symObj.api)*lots)/LEVERAGE;
-  if(required>availableBalance){audioDenied.play();alert('Solde insuffisant');return false;}
+  let price=forcedEntry!==null?Number(forcedEntry):Number(priceCache[symObj.api]);
+  if(!price){
+    const fetched=fetchPriceREST(symObj.api);
+    price=fetched!==null?Number(fetched):null;
+  }
+  if(!price){
+    audioDenied.play();
+    alert('Prix indisponible');
+    return false;
+  }
+  const required=calculateMargin(symObj.api,resolvedLots,price);
+  if(required>availableBalance){
+    audioDenied.play();
+    alert('Solde insuffisant');
+    return false;
+  }
   availableBalance-=required;
-  const pos={id:'pos_'+Math.random().toString(36).slice(2,9),symbol:symObj,side,entry:price,size:lots,current:price,tp:tp?Number(tp):null,sl:sl?Number(sl):null};
+  const pos={
+    id:'pos_'+Math.random().toString(36).slice(2,9),
+    symbol:symObj,
+    side,
+    entry:price,
+    size:resolvedLots,
+    current:price,
+    tp:tp?Number(tp):null,
+    sl:sl?Number(sl):null
+  };
   positions.push(pos);
-  renderPositions();renderTotals();
+  renderPositions();
+  renderTotals();
   audioOpen.play();
   audioConfirm.play();
   return true;
@@ -483,24 +514,31 @@ function closePosition(id, lotsToSell=null){
   const idx=positions.findIndex(p=>p.id===id);
   if(idx===-1) return;
   const pos=positions[idx];
-  const lots=lotsToSell!==null?Math.min(lotsToSell,pos.size):pos.size;
+  const sellLots=lotsToSell!==null?Math.min(Number(lotsToSell),pos.size):pos.size;
+  if(sellLots<=0) return;
   const closePrice=priceCache[pos.symbol.api]??pos.current;
-  const pnl=computePnl({...pos,size:lots,current:closePrice});
-  const released=(closePrice*lotUnits(pos.symbol.api)*lots)/LEVERAGE;
+  const pnl=computePnl({...pos,size:sellLots,current:closePrice});
+  const released=calculateMargin(pos.symbol.api,sellLots,closePrice);
   availableBalance+=released;
   availableBalance+=pnl;
-  history.unshift({symbol:pos.symbol,side:pos.side,entry:pos.entry,close:closePrice,pnl,lots,closedAt:Date.now()});
-  if(lots<pos.size) pos.size-=lots;
+  history.unshift({symbol:pos.symbol,side:pos.side,entry:pos.entry,close:closePrice,pnl,lots:sellLots,closedAt:Date.now()});
+  if(sellLots<pos.size) pos.size-=sellLots;
   else positions.splice(idx,1);
   renderPositions();renderHistory();renderTotals();
   audioClose.play();
 }
 
 function addLimitOrder(symbol,side,price,lots,tp,sl){
-  const required=(price*lotUnits(symbol)*lots)/LEVERAGE;
-  if(required>availableBalance){audioDenied.play();alert('Solde insuffisant pour cet ordre');return;}
+  const resolvedLots=Number(lots)||0;
+  const resolvedPrice=Number(price)||0;
+  const required=calculateMargin(symbol,resolvedLots,resolvedPrice);
+  if(required>availableBalance){
+    audioDenied.play();
+    alert('Solde insuffisant pour cet ordre');
+    return;
+  }
   availableBalance-=required;
-  orders.push({id:'ord_'+Math.random().toString(36).slice(2,9),symbol,side,price:Number(price),size:Number(lots),tp:tp?Number(tp):null,sl:sl?Number(sl):null,margin:required});
+  orders.push({id:'ord_'+Math.random().toString(36).slice(2,9),symbol,side,price:Number(price),size:resolvedLots,tp:tp?Number(tp):null,sl:sl?Number(sl):null,margin:required});
   renderOrders();renderTotals();
   audioOpen.play();
   audioConfirm.play();
