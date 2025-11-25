@@ -468,19 +468,19 @@ function computePnl(pos){
   return pos.side==='BUY'?pnlPerLot: -pnlPerLot;
 }
 
-function openPosition(symObj,side,lots=1,forcedEntry=null, tp=null, sl=null){
-  const resolvedLots=Number(lots)||0;
-  if(resolvedLots<=0){
+async function openPosition(symObj,side,lots=1,forcedEntry=null, tp=null, sl=null){
+  const resolvedLots=Number(lots);
+  if(!resolvedLots||resolvedLots<=0){
     audioDenied.play();
     alert('Le nombre de lots doit être supérieur à 0');
     return false;
   }
   let price=forcedEntry!==null?Number(forcedEntry):Number(priceCache[symObj.api]);
-  if(!price){
-    const fetched=fetchPriceREST(symObj.api);
+  if(!price||Number.isNaN(price)){
+    const fetched=await fetchPriceREST(symObj.api);
     price=fetched!==null?Number(fetched):null;
   }
-  if(!price){
+  if(!price||Number.isNaN(price)){
     audioDenied.play();
     alert('Prix indisponible');
     return false;
@@ -529,8 +529,11 @@ function closePosition(id, lotsToSell=null){
 }
 
 function addLimitOrder(symbol,side,price,lots,tp,sl){
-  const resolvedLots=Number(lots)||0;
-  const resolvedPrice=Number(price)||0;
+  const resolvedLots=Number(lots);
+  const resolvedPrice=Number(price);
+  if(!resolvedLots||!resolvedPrice){
+    return alert('Prix et lots valides requis');
+  }
   const required=calculateMargin(symbol,resolvedLots,resolvedPrice);
   if(required>availableBalance){
     audioDenied.play();
@@ -538,7 +541,16 @@ function addLimitOrder(symbol,side,price,lots,tp,sl){
     return;
   }
   availableBalance-=required;
-  orders.push({id:'ord_'+Math.random().toString(36).slice(2,9),symbol,side,price:Number(price),size:resolvedLots,tp:tp?Number(tp):null,sl:sl?Number(sl):null,margin:required});
+  orders.push({
+    id:'ord_'+Math.random().toString(36).slice(2,9),
+    symbol,
+    side,
+    price:resolvedPrice,
+    size:resolvedLots,
+    tp:tp?Number(tp):null,
+    sl:sl?Number(sl):null,
+    margin:required
+  });
   renderOrders();renderTotals();
   audioOpen.play();
   audioConfirm.play();
