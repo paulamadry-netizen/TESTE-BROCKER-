@@ -422,7 +422,7 @@ function computePnl(pos){
   const delta=pos.side==='BUY'?(current-pos.entry):(pos.entry-current);
   const pip_cnt=delta/pipSize(pos.symbol.api);
   const value_per_pip=pipValue(pos.symbol.api);
-  return Number(pip_cnt*value_per_pip*LEVERAGE*pos.size)/10;
+  return Number(pip_cnt*value_per_pip*LEVERAGE*pos.size)/30;
 }
 
 async function openPosition(symObj,side,lots=1,forcedEntry=null, tp=null, sl=null){
@@ -644,7 +644,6 @@ startWebSocket();
 </script>
 </body>
 </html>
-
 
 
 
