@@ -228,7 +228,7 @@
 </div>
 
 <script>
-const API_KEY='d4is89hr01queuakbspgd4is89hr01queuakbsq0';
+const API_KEY='d4g61b9r01qm5b343fo0d4g61b9r01qm5b343fog';
 const WS_ENDPOINT='wss://ws.finnhub.io';
 const KEEPALIVE_INTERVAL=25000;
 const RECONNECT_MAX=60000;
@@ -256,6 +256,7 @@ let simBalance=50000.00;
 let availableBalance=50000.00;
 let tvWidget=null;
 let activeModalId=null;
+const NON_XAU_FLUCT_FACTOR=1.6;
 
 const audioOpen=document.getElementById('sound-open');
 const audioDenied=document.getElementById('sound-denied');
@@ -277,10 +278,12 @@ function pipStep(symbol){
 function pipValuePerLot(symbol, price){
   const step=pipStep(symbol);
   const units=lotUnits(symbol);
-  if(symbol.includes('XAU')) return step * units;
-  if(symbol.endsWith('USD')) return step * units;
-  if(symbol.startsWith('USD')&&price>0) return (step * units) / price;
-  return price>0 ? (step*units)/price : step*units;
+  const baseValue= symbol.includes('XAU')
+    ? step * units
+    : symbol.endsWith('USD')
+      ? step * units
+      : (price>0 ? (step*units)/price : step*units);
+  return symbol.includes('XAU') ? baseValue : baseValue * NON_XAU_FLUCT_FACTOR;
 }
 function describePip(symbol, price){
   const perLot=pipValuePerLot(symbol, price||priceCache[symbol]||1);
