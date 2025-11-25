@@ -32,20 +32,22 @@
   #tv_chart_container{flex:1;min-height:420px;border-radius:16px;overflow:hidden;margin-top:12px}
   .watchlist{grid-column:2/3;grid-row:1/2;background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01));border-radius:var(--radius);padding:16px;box-shadow:var(--card-shadow);display:flex;flex-direction:column}
   .watchlist h3{margin:0 0 10px 0;font-size:16px;color:var(--muted)}
-  .wl-item{display:flex;justify-content:space-between;align-items:center;padding:10px;border-radius:12px;cursor:pointer;transition:transform .15s ease,background .15s ease;background:rgba(255,255,255,0.01)}
-  .wl-item:hover{transform:translateY(-4px);background:rgba(255,255,255,0.08)}
+  .wl-item{display:flex;justify-content:space-between;align-items:center;padding:12px;border-radius:14px;cursor:pointer;transition:transform .15s ease,background .15s ease;background:rgba(255,255,255,0.01)}
+  .wl-item:hover{transform:translateY(-4px);background:rgba(255,255,255,0.12)}
   .wl-symbol{font-weight:700}
   .wl-details{text-align:right}
-  .orders-card{margin-top:12px;background:rgba(255,255,255,0.01);padding:12px;border-radius:14px;display:flex;flex-direction:column;gap:10px;border:1px solid rgba(255,255,255,0.06)}
+  .orders-card{margin-top:12px;background:rgba(255,255,255,0.01);padding:16px;border-radius:14px;display:flex;flex-direction:column;gap:12px;border:1px solid rgba(255,255,255,0.06)}
   .orders-card h4{margin:0;color:var(--muted);font-size:15px}
-  .orders-table{width:100%;border-collapse:collapse;font-size:13px}
-  .orders-table th,.orders-table td{padding:8px 10px;text-align:left;border-bottom:1px dashed rgba(255,255,255,0.08)}
-  .orders-table th{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:0.2em}
-  .orders-table tbody tr:nth-child(even){background:rgba(255,255,255,0.015)}
-  .orders-table tbody tr:hover{background:rgba(255,255,255,0.05)}
-  .order-input{width:100%;padding:8px;border-radius:10px;border:1px solid rgba(255,255,255,0.2);background:transparent;color:inherit;font-size:13px}
-  .order-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-  .order-grid-two{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .orders-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
+  .order-input{width:100%;padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,0.2);background:transparent;color:inherit;font-size:13px}
+  .order-grid-actions{display:flex;gap:10px}
+  .order-grid-actions .btn{flex:1}
+  .orders-list{display:flex;flex-direction:column;gap:8px}
+  .order-line{display:grid;grid-template-columns:1.5fr repeat(5,1fr) auto;gap:8px;padding:10px;border-radius:12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);align-items:center;font-size:13px}
+  .order-line strong{font-weight:600}
+  .order-line small{color:var(--muted)}
+  .order-actions button{padding:4px 8px;border-radius:8px;border:1px solid rgba(255,255,255,0.2);background:transparent;color:var(--muted);cursor:pointer}
+  .orders-head{display:grid;grid-template-columns:1.5fr repeat(5,1fr) auto;gap:8px;font-size:11px;text-transform:uppercase;letter-spacing:0.1em;color:var(--muted);}
   .small-muted{color:var(--muted);font-size:12px}
   .bottom-left{grid-column:1/2;grid-row:2/3;background:linear-gradient(180deg,rgba(255,255,255,0.01),rgba(255,255,255,0));border-radius:var(--radius);padding:16px;box-shadow:var(--card-shadow);display:flex;flex-direction:column;overflow:auto}
   .tabs{display:flex;gap:10px;margin-bottom:12px}
@@ -76,6 +78,7 @@
 <audio id="sound-open" src="https://cdn.pixabay.com/download/audio/2022/03/04/audio_0707e31ce3.mp3?filename=good-news-1366.mp3"></audio>
 <audio id="sound-denied" src="https://cdn.pixabay.com/download/audio/2021/09/25/audio_3143bf48f6.mp3?filename=warning-high-15563.mp3"></audio>
 <audio id="sound-close" src="https://cdn.pixabay.com/download/audio/2022/03/15/audio_3d3c5e3272.mp3?filename=notification-6076.mp3"></audio>
+<audio id="sound-confirm" src="https://cdn.pixabay.com/download/audio/2024/01/16/audio_4e3f2bce3f.mp3?filename=success-notification-99725.mp3"></audio>
 
 <div class="app">
   <div class="card chart-card">
@@ -104,10 +107,10 @@
 
   <div class="card watchlist">
     <h3>Watchlist</h3>
-    <div id="wlList" style="display:flex;flex-direction:column;gap:6px;max-height:360px;overflow:auto;"></div>
+    <div id="wlList" style="display:flex;flex-direction:column;gap:8px;max-height:360px;overflow:auto;"></div>
     <div class="orders-card">
       <h4>Ordres Limites</h4>
-      <div class="order-grid">
+      <div class="orders-grid">
         <select id="ordSymbol" class="order-input"></select>
         <select id="ordSide" class="order-input">
           <option value="BUY">BUY</option>
@@ -115,27 +118,23 @@
         </select>
         <input id="ordPrice" class="order-input" placeholder="Prix cible" />
         <input id="ordSize" class="order-input" placeholder="Lots" value="1" />
-      </div>
-      <div class="order-grid-two">
         <input id="ordTp" class="order-input" placeholder="TP (price)" />
         <input id="ordSl" class="order-input" placeholder="SL (price)" />
       </div>
-      <button class="btn btn-buy" id="addOrderBtn">Ajouter l'ordre</button>
-      <table class="orders-table">
-        <thead>
-          <tr>
-            <th>Symbole</th>
-            <th>Side</th>
-            <th>Prix cible</th>
-            <th>Lots</th>
-            <th>TP</th>
-            <th>SL</th>
-            <th>Marge</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody id="ordersBody"></tbody>
-      </table>
+      <div class="order-grid-actions">
+        <button class="btn btn-buy" id="addOrderBtn">Ajouter l'ordre</button>
+      </div>
+      <div class="orders-head">
+        <span>Symbole</span>
+        <span>Side</span>
+        <span>Prix cible</span>
+        <span>Lots</span>
+        <span>TP</span>
+        <span>SL</span>
+        <span>Marge</span>
+        <span></span>
+      </div>
+      <div class="orders-list" id="ordersBody"></div>
     </div>
   </div>
 
@@ -229,7 +228,7 @@
 </div>
 
 <script>
-const API_KEY='d4is89hr01queuakbspgd4is89hr01queuakbsq0';
+const API_KEY='d4g61b9r01qm5b343fo0d4g61b9r01qm5b343fog';
 const WS_ENDPOINT='wss://ws.finnhub.io';
 const KEEPALIVE_INTERVAL=25000;
 const RECONNECT_MAX=60000;
@@ -256,6 +255,7 @@ let activeModalId=null;
 const audioOpen=document.getElementById('sound-open');
 const audioDenied=document.getElementById('sound-denied');
 const audioClose=document.getElementById('sound-close');
+const audioConfirm=document.getElementById('sound-confirm');
 
 function escapeId(val){return String(val).replace(/[^\w]/g,'_');}
 function formatPrice(val){return val===undefined||val===null?'—':Number(val).toFixed(5).replace(/\.0+$|0+$/,'').replace(/\.$/,'');}
@@ -276,7 +276,6 @@ WATCHLIST.forEach(w=>{
   item.innerHTML=`<div><div class="wl-symbol">${w.label}</div><div class="small-muted" style="margin-top:4px">${w.tv}</div></div>
     <div class="wl-details">
       <div class="wl-price" id="price_${escapeId(w.api)}">—</div>
-      <div class="small-muted" id="lotValue_${escapeId(w.api)}">Lot: —</div>
     </div>`;
   item.addEventListener('click',()=>selectSymbol(w));
   wlList.appendChild(item);
@@ -335,7 +334,7 @@ function startWebSocket(){
       reconnectDelay=1000;
       WATCHLIST.forEach(w=>{try{ws.send(JSON.stringify({type:'subscribe',symbol:w.api}));}catch(e){console.warn('subscribe',e);} });
       startKeepalive();
-      WATCHLIST.forEach(async w=>{if(priceCache[w.api]===undefined){const fetched=await fetchPriceREST(w.api);if(fetched!==null){priceCache[w.api]=fetched;smoothedPrices[w.api]=fetched;updatePriceUI(w.api);updateLotUI(w.api);} }});
+      WATCHLIST.forEach(async w=>{if(priceCache[w.api]===undefined){const fetched=await fetchPriceREST(w.api);if(fetched!==null){priceCache[w.api]=fetched;smoothedPrices[w.api]=fetched;updatePriceUI(w.api);} }});
     });
     ws.addEventListener('message',ev=>{
       try{const msg=JSON.parse(ev.data);handleWsMessage(msg);}catch(e){console.warn('WS parse',e);}
@@ -362,7 +361,6 @@ function handleWsMessage(msg){
       smoothedPrices[sym]=smoothedPrices[sym]??value;
       smoothedPrices[sym]=SMOOTHING_ALPHA*value+(1-SMOOTHING_ALPHA)*smoothedPrices[sym];
       updatePriceUI(sym);
-      updateLotUI(sym);
       onPriceUpdate(sym,smoothedPrices[sym]);
     });
     return;
@@ -376,7 +374,6 @@ function handleWsMessage(msg){
       smoothedPrices[sym]=smoothedPrices[sym]??value;
       smoothedPrices[sym]=SMOOTHING_ALPHA*value+(1-SMOOTHING_ALPHA)*smoothedPrices[sym];
       updatePriceUI(sym);
-      updateLotUI(sym);
       onPriceUpdate(sym,smoothedPrices[sym]);
     }
   }
@@ -387,17 +384,6 @@ function updatePriceUI(symbol){
   const price=smoothedPrices[symbol]??priceCache[symbol];
   if(el) el.innerText=formatPrice(price);
   if(symbol===currentSymbol.api) document.getElementById('currentPriceMini').innerText='Prix: '+formatPrice(price);
-}
-
-function updateLotUI(symbol){
-  const price=smoothedPrices[symbol]??priceCache[symbol];
-  const el=document.getElementById('lotValue_'+escapeId(symbol));
-  if(!el) return;
-  if(price===undefined){el.innerText='Lot: —';return;}
-  const units=lotUnits(symbol);
-  const lotValue=price*units;
-  el.innerText=`1 lot = ${lotValue.toFixed(2)} USD`;
-  if(symbol===currentSymbol.api) refreshLotInfo();
 }
 
 function refreshLotInfo(){
@@ -413,9 +399,9 @@ function refreshLotInfo(){
   }
 }
 
-function onPriceUpdate(symbol,price){
+function onPriceUpdate(symbol){
   let updated=false;
-  positions.forEach(pos=>{if(pos.symbol.api===symbol){pos.current=price;updated=true;}});
+  positions.forEach(pos=>{if(pos.symbol.api===symbol){pos.current=smoothedPrices[symbol];updated=true;}});
   checkOrdersForSymbol(symbol);
   if(updated) renderPositions();
   renderTotals();
@@ -436,7 +422,7 @@ function computePnl(pos){
   const delta=pos.side==='BUY'?(current-pos.entry):(pos.entry-current);
   const pip_cnt=delta/pipSize(pos.symbol.api);
   const value_per_pip=pipValue(pos.symbol.api);
-  return Number(pip_cnt*value_per_pip*LEVERAGE*pos.size);
+  return Number(pip_cnt*value_per_pip*LEVERAGE*pos.size)/10;
 }
 
 async function openPosition(symObj,side,lots=1,forcedEntry=null, tp=null, sl=null){
@@ -451,6 +437,7 @@ async function openPosition(symObj,side,lots=1,forcedEntry=null, tp=null, sl=nul
     positions.push(pos);
     renderPositions();renderTotals();
     audioOpen.play();
+    audioConfirm.play();
     resolve(true);
   });
 }
@@ -483,6 +470,7 @@ function addLimitOrder(symbol,side,price,lots,tp,sl){
   renderOrders();
   renderTotals();
   audioOpen.play();
+  audioConfirm.play();
 }
 
 function removeOrder(id){
@@ -556,23 +544,23 @@ function renderHistory(){
 }
 
 function renderOrders(){
-  const tbody=document.getElementById('ordersBody');
-  tbody.innerHTML='';
+  const container=document.getElementById('ordersBody');
+  container.innerHTML='';
   orders.forEach(o=>{
-    const tr=document.createElement('tr');
-    tr.innerHTML=`
-      <td>${o.symbol}</td>
-      <td>${o.side}</td>
-      <td>${formatPrice(o.price)}</td>
-      <td>${o.size}</td>
-      <td>${o.tp?formatPrice(o.tp):'—'}</td>
-      <td>${o.sl?formatPrice(o.sl):'—'}</td>
-      <td>${formatMoney(o.margin)}</td>
-      <td><button class="btn btn-ghost" data-id="${o.id}">Annuler</button></td>
+    const line=document.createElement('div');
+    line.className='order-line';
+    line.innerHTML=`
+      <div><strong>${o.symbol}</strong><small>${o.side}</small></div>
+      <div>${formatPrice(o.price)}</div>
+      <div>${o.size}</div>
+      <div>${o.tp?formatPrice(o.tp):'—'}</div>
+      <div>${o.sl?formatPrice(o.sl):'—'}</div>
+      <div>${formatMoney(o.margin)}</div>
+      <div class="order-actions"><button data-id="${o.id}">Annuler</button></div>
     `;
-    tbody.appendChild(tr);
+    container.appendChild(line);
   });
-  tbody.querySelectorAll('button[data-id]').forEach(btn=>btn.onclick=()=>removeOrder(btn.dataset.id));
+  container.querySelectorAll('button[data-id]').forEach(btn=>btn.onclick=()=>removeOrder(btn.dataset.id));
 }
 
 function renderTotals(){
@@ -656,7 +644,6 @@ startWebSocket();
 </script>
 </body>
 </html>
-
 
 
 
