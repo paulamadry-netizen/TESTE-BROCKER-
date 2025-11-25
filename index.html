@@ -97,7 +97,7 @@
     <div class="lot-grid">
       <label>Lots :</label>
       <input type="number" id="lotInput" min="0.01" step="0.01" value="1"/>
-      <div class="lot-info" id="lotValueInfo">1 lot = 100 000 unités · marge 1:1.5</div>
+      <div class="lot-info" id="lotValueInfo">1 lot = 100 000 unités · marge 1:20</div>
     </div>
     <div id="tv_chart_container"></div>
   </div>
@@ -145,7 +145,7 @@
         <div class="tab active" id="tabPositions">Positions</div>
         <div class="tab" id="tabHistory">Historique</div>
       </div>
-      <div class="small-muted">Simulé · Finnhub WS · Effet 1:1.5</div>
+      <div class="small-muted">Simulé · Finnhub WS · Effet 1:20</div>
     </div>
     <div id="positionsPane">
       <table class="positions-table">
@@ -229,12 +229,13 @@
 </div>
 
 <script>
-const API_KEY='d4is89hr01queuakbspgd4is89hr01queuakbsq0';
+const API_KEY='d4g61b9r01qm5b343fo0d4g61b9r01qm5b343fog';
 const WS_ENDPOINT='wss://ws.finnhub.io';
 const KEEPALIVE_INTERVAL=25000;
 const RECONNECT_MAX=60000;
 const BASE_LOT_SIZE=100000;
-const LEVERAGE=1.5;
+const LEVERAGE=20;
+const SMOOTHING_ALPHA=0.2;
 const WATCHLIST=[
   {tv:'OANDA:EUR_USD',label:'EUR / USD',api:'OANDA:EUR_USD'},
   {tv:'OANDA:USD_JPY',label:'USD / JPY',api:'OANDA:USD_JPY'},
@@ -246,7 +247,7 @@ const WATCHLIST=[
 
 let ws=null,wsConnected=false,reconnectDelay=1000,keepaliveTimer=null;
 let currentSymbol=WATCHLIST[0];
-let priceCache={},positions=[],history=[],orders=[];
+let priceCache={},smoothedPrices={},positions=[],history=[],orders=[];
 let simBalance=50000.00;
 let availableBalance=50000.00;
 let tvWidget=null;
@@ -262,7 +263,7 @@ function formatMoney(val){return val===undefined||val===null?'0.00':Number(val).
 function pipSize(symbol){if(symbol.includes('JPY'))return 0.01;if(symbol.includes('XAU'))return 0.1;return 0.0001;}
 function lotUnits(symbol){return symbol.includes('XAU')?100:BASE_LOT_SIZE;}
 function pipValue(symbol){
-  const price=priceCache[symbol];
+  const price=smoothedPrices[symbol]??priceCache[symbol];
   if(!price) return 0;
   return (pipSize(symbol)/price)*lotUnits(symbol);
 }
@@ -303,7 +304,7 @@ function selectSymbol(sym){
   currentSymbol=sym;
   document.getElementById('currentSymbolBadge').innerText=sym.tv;
   document.getElementById('currentSymbolTitle').innerText=sym.label;
-  const price=priceCache[sym.api];
+  const price=smoothedPrices[sym.api]??priceCache[sym.api];
   document.getElementById('currentPriceMini').innerText=price!==undefined?'Prix: '+formatPrice(price):'Prix: —';
   refreshLotInfo();
   initTradingView();
@@ -334,7 +335,7 @@ function startWebSocket(){
       reconnectDelay=1000;
       WATCHLIST.forEach(w=>{try{ws.send(JSON.stringify({type:'subscribe',symbol:w.api}));}catch(e){console.warn('subscribe',e);} });
       startKeepalive();
-      WATCHLIST.forEach(async w=>{if(priceCache[w.api]===undefined){const fetched=await fetchPriceREST(w.api);if(fetched!==null){priceCache[w.api]=fetched;updatePriceUI(w.api);updateLotUI(w.api);} }});
+      WATCHLIST.forEach(async w=>{if(priceCache[w.api]===undefined){const fetched=await fetchPriceREST(w.api);if(fetched!==null){priceCache[w.api]=fetched;smoothedPrices[w.api]=fetched;updatePriceUI(w.api);updateLotUI(w.api);} }});
     });
     ws.addEventListener('message',ev=>{
       try{const msg=JSON.parse(ev.data);handleWsMessage(msg);}catch(e){console.warn('WS parse',e);}
@@ -356,10 +357,13 @@ function handleWsMessage(msg){
       const sym=d.s||d.symbol;
       const price=d.p||d.price;
       if(!sym||price===undefined) return;
-      priceCache[sym]=Number(price);
+      const value=Number(price);
+      priceCache[sym]=value;
+      smoothedPrices[sym]=smoothedPrices[sym]??value;
+      smoothedPrices[sym]=SMOOTHING_ALPHA*value+(1-SMOOTHING_ALPHA)*smoothedPrices[sym];
       updatePriceUI(sym);
       updateLotUI(sym);
-      onPriceUpdate(sym,Number(price));
+      onPriceUpdate(sym,smoothedPrices[sym]);
     });
     return;
   }
@@ -367,22 +371,26 @@ function handleWsMessage(msg){
     const sym=msg.data.s||msg.data.symbol;
     const price=msg.data.p||msg.data.price||msg.data.c;
     if(sym&&price!==undefined){
-      priceCache[sym]=Number(price);
+      const value=Number(price);
+      priceCache[sym]=value;
+      smoothedPrices[sym]=smoothedPrices[sym]??value;
+      smoothedPrices[sym]=SMOOTHING_ALPHA*value+(1-SMOOTHING_ALPHA)*smoothedPrices[sym];
       updatePriceUI(sym);
       updateLotUI(sym);
-      onPriceUpdate(sym,Number(price));
+      onPriceUpdate(sym,smoothedPrices[sym]);
     }
   }
 }
 
 function updatePriceUI(symbol){
   const el=document.getElementById('price_'+escapeId(symbol));
-  if(el) el.innerText=formatPrice(priceCache[symbol]);
-  if(symbol===currentSymbol.api) document.getElementById('currentPriceMini').innerText='Prix: '+formatPrice(priceCache[symbol]);
+  const price=smoothedPrices[symbol]??priceCache[symbol];
+  if(el) el.innerText=formatPrice(price);
+  if(symbol===currentSymbol.api) document.getElementById('currentPriceMini').innerText='Prix: '+formatPrice(price);
 }
 
 function updateLotUI(symbol){
-  const price=priceCache[symbol];
+  const price=smoothedPrices[symbol]??priceCache[symbol];
   const el=document.getElementById('lotValue_'+escapeId(symbol));
   if(!el) return;
   if(price===undefined){el.innerText='Lot: —';return;}
@@ -393,13 +401,13 @@ function updateLotUI(symbol){
 }
 
 function refreshLotInfo(){
-  const price=priceCache[currentSymbol.api];
+  const price=smoothedPrices[currentSymbol.api]??priceCache[currentSymbol.api];
   const lots=parseFloat(document.getElementById('lotInput').value)||1;
   if(price!==undefined){
     const units=lotUnits(currentSymbol.api);
     const lotValue=price*units*lots;
     const pip=pipSize(currentSymbol.api);
-    document.getElementById('lotValueInfo').innerText=`${lots} lots = ${(lotValue/LEVERAGE).toFixed(2)} USD de marge · 1 pip ≈ ${pipValue(currentSymbol.api).toFixed(2)} USD · levier 1:${LEVERAGE}`;
+    document.getElementById('lotValueInfo').innerText=`${lots} lots = ${(lotValue/LEVERAGE).toFixed(2)} USD de marge · 1 pip ≈ ${(pipValue(currentSymbol.api)*lots).toFixed(2)} USD · levier 1:${LEVERAGE}`;
   } else {
     document.getElementById('lotValueInfo').innerText=`1 lot = ${lotUnits(currentSymbol.api)}u · marge 1:${LEVERAGE}`;
   }
@@ -423,16 +431,17 @@ async function fetchPriceREST(symbol){
 }
 
 function computePnl(pos){
-  const current=pos.current!==undefined?pos.current:(priceCache[pos.symbol.api]!==undefined?priceCache[pos.symbol.api]:pos.entry);
+  const current=pos.current!==undefined?pos.current:(smoothedPrices[pos.symbol.api]??priceCache[pos.symbol.api]);
+  if(current===undefined) return 0;
   const delta=pos.side==='BUY'?(current-pos.entry):(pos.entry-current);
   const pip_cnt=delta/pipSize(pos.symbol.api);
   const value_per_pip=pipValue(pos.symbol.api);
   return Number(pip_cnt*value_per_pip*LEVERAGE*pos.size);
 }
 
-function openPosition(symObj,side,lots=1,forcedEntry=null, tp=null, sl=null){
+async function openPosition(symObj,side,lots=1,forcedEntry=null, tp=null, sl=null){
   return new Promise(async resolve=>{
-    let price=forcedEntry!==null?forcedEntry:priceCache[symObj.api];
+    let price=forcedEntry!==null?forcedEntry:smoothedPrices[symObj.api]??priceCache[symObj.api];
     if(price===undefined||price===null){const fetched=await fetchPriceREST(symObj.api);if(fetched!==null) price=fetched;}
     if(price===undefined||price===null){audioDenied.play();alert('Prix indisponible');return resolve(false);}
     const required=(price*lotUnits(symObj.api)*lots)/LEVERAGE;
@@ -451,7 +460,7 @@ function closePosition(id, lotsToSell=null){
   if(idx===-1) return;
   const pos=positions[idx];
   const lots=lotsToSell!==null?Math.min(lotsToSell,pos.size):pos.size;
-  const closePrice=priceCache[pos.symbol.api]!==undefined?priceCache[pos.symbol.api]:pos.current;
+  const closePrice=smoothedPrices[pos.symbol.api]??priceCache[pos.symbol.api]??pos.current;
   const pnl=computePnl({...pos,size:lots});
   const released=(closePrice*lotUnits(pos.symbol.api)*lots)/LEVERAGE;
   availableBalance+=released;
@@ -487,7 +496,7 @@ function removeOrder(id){
 }
 
 function checkOrdersForSymbol(symbol){
-  const price=priceCache[symbol];
+  const price=smoothedPrices[symbol]??priceCache[symbol];
   if(price===undefined) return;
   const matches=orders.filter(o=>o.symbol===symbol&&((o.side==='BUY'&&price<=o.price)||(o.side==='SELL'&&price>=o.price)));
   matches.forEach(async m=>{
@@ -501,7 +510,7 @@ function renderPositions(){
   const tbody=document.getElementById('positionsBody');
   tbody.innerHTML='';
   positions.forEach(pos=>{
-    const current=pos.current!==undefined?pos.current:(priceCache[pos.symbol.api]!==undefined?priceCache[pos.symbol.api]:pos.entry);
+    const current=pos.current!==undefined?pos.current:(smoothedPrices[pos.symbol.api]??priceCache[pos.symbol.api]);
     pos.current=current;
     const pnl=computePnl(pos);
     const cls=pnl>=0?'positive':'negative';
@@ -515,13 +524,13 @@ function renderPositions(){
       <td><span class="${cls}">${formatMoney(pnl)}</span></td>
       <td>
         <button class="btn btn-ghost" data-id="${pos.id}">Modifier</button>
-        <button class="btn btn-ghost" data-close="${pos.id}">Vendre</button>
+        <button class="btn btn-ghost" data-close="${pos.id}">Vendre 0.01</button>
       </td>
     `;
     tbody.appendChild(tr);
   });
   tbody.querySelectorAll('button[data-id]').forEach(btn=>btn.onclick=()=>openPositionModal(btn.dataset.id));
-  tbody.querySelectorAll('button[data-close]').forEach(btn=>btn.onclick=()=>closePosition(btn.dataset.close,1));
+  tbody.querySelectorAll('button[data-close]').forEach(btn=>btn.onclick=()=>closePosition(btn.dataset.close,0.01));
   const details=document.getElementById('posDetails');
   if(positions.length>0){
     const p=positions[0];
@@ -647,7 +656,6 @@ startWebSocket();
 </script>
 </body>
 </html>
-
 
 
 
