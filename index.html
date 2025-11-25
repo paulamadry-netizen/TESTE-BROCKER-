@@ -71,14 +71,16 @@
   .modal-row label{font-size:12px;margin-bottom:4px;color:var(--muted)}
   .modal-row input{padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.2);background:transparent;color:inherit}
   .modal-actions{display:flex;gap:10px;justify-content:flex-end}
+  .toast{position:fixed;bottom:20px;right:20px;background:rgba(0,0,0,0.8);color:#fff;padding:12px 18px;border-radius:12px;font-weight:600;opacity:0;transform:translateY(12px);transition:opacity .25s ease,transform .25s ease;pointer-events:none;z-index:200}
+  .toast.visible{opacity:1;transform:translateY(0);}
   @media (max-width:1100px){.app{grid-template-columns:1fr;grid-template-rows:auto auto auto}.watchlist{grid-column:1/-1;grid-row:2/3}.bottom-left{grid-row:3/4}.bottom-right{display:none}}
 </style>
 </head>
 <body>
 <audio id="sound-open" src="https://cdn.pixabay.com/download/audio/2022/03/04/audio_0707e31ce3.mp3?filename=good-news-1366.mp3"></audio>
-<audio id="sound-denied" src="https://cdn.pixabay.com/download/audio/2021/09/25/audio_3143bf48f6.mp3?filename=warning-high-15563.mp3"></audio>
-<audio id="sound-close" src="https://cdn.pixabay.com/download/audio/2022/03/15/audio_3d3c5e3272.mp3?filename=notification-6076.mp3"></audio>
-<audio id="sound-confirm" src="https://cdn.pixabay.com/download/audio/2024/01/16/audio_4e3f2bce3f.mp3?filename=success-notification-99725.mp3"></audio>
+<audio id="sound-close" src="https://cdn.pixabay.com/download/audio/2024/03/08/audio_d6c92f75c2.mp3?filename=confirmation-110888.mp3"></audio>
+<audio id="sound-reject" src="https://cdn.pixabay.com/download/audio/2021/09/25/audio_3143bf48f6.mp3?filename=warning-high-15563.mp3"></audio>
+<audio id="sound-validate" src="https://cdn.pixabay.com/download/audio/2022/03/15/audio_c8c58c296d.mp3?filename=notification-6081.mp3"></audio>
 
 <div class="app">
   <div class="card chart-card">
@@ -227,6 +229,8 @@
   </div>
 </div>
 
+<div id="toast" class="toast" aria-live="polite"></div>
+
 <script>
 const API_KEY='d4is89hr01queuakbspgd4is89hr01queuakbsq0';
 const WS_ENDPOINT='wss://ws.finnhub.io';
@@ -260,12 +264,21 @@ let tvWidget=null;
 let activeModalId=null;
 
 const audioOpen=document.getElementById('sound-open');
-const audioDenied=document.getElementById('sound-denied');
 const audioClose=document.getElementById('sound-close');
-const audioConfirm=document.getElementById('sound-confirm');
+const audioReject=document.getElementById('sound-reject');
+const audioValidate=document.getElementById('sound-validate');
 
 const wlList=document.getElementById('wlList');
 const ordSymbol=document.getElementById('ordSymbol');
+const toastEl=document.getElementById('toast');
+let toastTimer=null;
+
+function showToast(message){
+  if(toastTimer){clearTimeout(toastTimer);}
+  toastEl.textContent=message;
+  toastEl.classList.add('visible');
+  toastTimer=setTimeout(()=>toastEl.classList.remove('visible'),2200);
+}
 
 function escapeId(val){return String(val).replace(/[^\w]/g,'_');}
 function formatPrice(val){return val===undefined||val===null?'—':Number(val).toFixed(5).replace(/\.0+$|0+$/,'').replace(/\.$/,'');}
@@ -299,16 +312,15 @@ function describePip(symbol, price){
   return `1 lot ≈ ${formatMoney(perLot)} USD/par pip`;
 }
 function marginRequirement(symbol, lots, price){
-  const resolvedPrice=Number(price);
   const resolvedLots=Number(lots);
   if(!resolvedLots) return 0;
+  if(isBaseUsd(symbol)){
+    return (lotUnits(symbol) * resolvedLots) / LEVERAGE;
+  }
+  const resolvedPrice=Number(price)||0;
   const units=lotUnits(symbol);
-  const exposureUsd=isBaseUsd(symbol)
-    ? units
-    : isQuoteUsd(symbol)
-      ? (resolvedPrice? resolvedPrice*units : units)
-      : (resolvedPrice? resolvedPrice*units : units);
-  return (exposureUsd * resolvedLots) / LEVERAGE;
+  const exposure=resolvedPrice? resolvedPrice*units*resolvedLots : units*resolvedLots;
+  return exposure / LEVERAGE;
 }
 
 WATCHLIST.forEach(w=>{
@@ -403,7 +415,7 @@ function handleWsMessage(msg){
   if(msg.type==='error'){console.warn('WS error',msg);return;}
   if(msg.type==='trade'&&Array.isArray(msg.data)){
     msg.data.forEach(d=>{
-      const sym=d.s||d.symbol;
+      const sym=d.s||d.sym||d.symbol;
       const price=d.p||d.price;
       if(!sym||price===undefined) return;
       priceCache[sym]=Number(price);
@@ -433,16 +445,12 @@ function updatePriceUI(symbol){
 function refreshLotInfo(){
   const price=priceCache[currentSymbol.api];
   const lots=parseFloat(document.getElementById('lotInput').value)||1;
-  let lotValue;
   if(price!==undefined){
     const exposure=isBaseUsd(currentSymbol.api)
-      ? lotUnits(currentSymbol.api) * lots
-      : isQuoteUsd(currentSymbol.api)
-        ? price*lotUnits(currentSymbol.api)*lots
-        : price*lotUnits(currentSymbol.api)*lots;
-    lotValue=exposure;
+      ? lotUnits(currentSymbol.api)*lots
+      : price*lotUnits(currentSymbol.api)*lots;
     const pipInfo=describePip(currentSymbol.api, price);
-    document.getElementById('lotValueInfo').innerText=`${lots} lots = ${(lotValue/LEVERAGE).toFixed(2)} USD de marge · ${pipInfo} · levier 1:${LEVERAGE}`;
+    document.getElementById('lotValueInfo').innerText=`${lots} lots = ${(exposure/LEVERAGE).toFixed(2)} USD de marge · ${pipInfo} · levier 1:${LEVERAGE}`;
     return;
   }
   document.getElementById('lotValueInfo').innerText=`1 lot = ${lotUnits(currentSymbol.api)}u · marge 1:${LEVERAGE}`;
@@ -494,7 +502,7 @@ function computePnl(pos){
 async function openPosition(symObj,side,lots=1,forcedEntry=null, tp=null, sl=null){
   const resolvedLots=Number(lots);
   if(!resolvedLots||resolvedLots<=0){
-    audioDenied.play();
+    audioReject.play();
     alert('Le nombre de lots doit être supérieur à 0');
     return false;
   }
@@ -504,13 +512,13 @@ async function openPosition(symObj,side,lots=1,forcedEntry=null, tp=null, sl=nul
     price=fetched!==null?Number(fetched):null;
   }
   if(!price||Number.isNaN(price)){
-    audioDenied.play();
+    audioReject.play();
     alert('Prix indisponible');
     return false;
   }
   const required=marginRequirement(symObj.api,resolvedLots,price);
   if(required>availableBalance){
-    audioDenied.play();
+    audioReject.play();
     alert('Solde insuffisant');
     return false;
   }
@@ -529,7 +537,6 @@ async function openPosition(symObj,side,lots=1,forcedEntry=null, tp=null, sl=nul
   renderPositions();
   renderTotals();
   audioOpen.play();
-  audioConfirm.play();
   return true;
 }
 
@@ -555,11 +562,12 @@ function addLimitOrder(symbol,side,price,lots,tp,sl){
   const resolvedLots=Number(lots);
   const resolvedPrice=Number(price);
   if(!resolvedLots||!resolvedPrice){
+    audioReject.play();
     return alert('Prix et lots valides requis');
   }
   const required=marginRequirement(symbol,resolvedLots,resolvedPrice);
   if(required>availableBalance){
-    audioDenied.play();
+    audioReject.play();
     alert('Solde insuffisant pour cet ordre');
     return;
   }
@@ -576,7 +584,6 @@ function addLimitOrder(symbol,side,price,lots,tp,sl){
   });
   renderOrders();renderTotals();
   audioOpen.play();
-  audioConfirm.play();
 }
 
 function removeOrder(id){
@@ -684,7 +691,7 @@ document.getElementById('addOrderBtn').addEventListener('click',()=>{
   const size=parseFloat(document.getElementById('ordSize').value)||1;
   const tp=document.getElementById('ordTp').value;
   const sl=document.getElementById('ordSl').value;
-  if(!symbol||!price){return alert('Symbole et prix requis');}
+  if(!symbol||!price){audioReject.play();return alert('Symbole et prix requis');}
   addLimitOrder(symbol,side,price,size,tp,sl);
 });
 
@@ -724,7 +731,9 @@ function openPositionModal(id){
   document.getElementById('positionModal').style.display='flex';
 }
 
-document.getElementById('modalCancel').addEventListener('click',()=>document.getElementById('positionModal').style.display='none');
+document.getElementById('modalCancel').addEventListener('click',()=>{
+  document.getElementById('positionModal').style.display='none';
+});
 document.getElementById('modalSave').addEventListener('click',()=>{
   const pos=positions.find(p=>p.id===activeModalId);
   if(!pos) return;
@@ -736,6 +745,9 @@ document.getElementById('modalSave').addEventListener('click',()=>{
   if(sellLots>0) closePosition(pos.id,sellLots);
   document.getElementById('positionModal').style.display='none';
   renderPositions();
+  renderTotals();
+  showToast('TP/SL enregistré');
+  audioValidate.play();
 });
 
 window.closePosition=closePosition;
