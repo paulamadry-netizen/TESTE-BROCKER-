@@ -243,6 +243,12 @@ const WATCHLIST=[
   {tv:'OANDA:XAUUSD',label:'Gold / USD',api:'OANDA:XAU_USD'}
 ];
 
+const PIP_STEPS={
+  default:0.0001,
+  jpy:0.01,
+  xau:0.1
+};
+
 let ws=null,wsConnected=false,reconnectDelay=1000,keepaliveTimer=null;
 let currentSymbol=WATCHLIST[0];
 let priceCache={},positions=[],history=[],orders=[];
@@ -256,13 +262,31 @@ const audioDenied=document.getElementById('sound-denied');
 const audioClose=document.getElementById('sound-close');
 const audioConfirm=document.getElementById('sound-confirm');
 
+const wlList=document.getElementById('wlList');
+const ordSymbol=document.getElementById('ordSymbol');
+
 function escapeId(val){return String(val).replace(/[^\w]/g,'_');}
 function formatPrice(val){return val===undefined||val===null?'—':Number(val).toFixed(5).replace(/\.0+$|0+$/,'').replace(/\.$/,'');}
 function formatMoney(val){return val===undefined||val===null?'0.00':Number(val).toFixed(2);}
 function lotUnits(symbol){return symbol.includes('XAU')?100:BASE_LOT_SIZE;}
+function pipStep(symbol){
+  if(symbol.includes('JPY')) return PIP_STEPS.jpy;
+  if(symbol.includes('XAU')) return PIP_STEPS.xau;
+  return PIP_STEPS.default;
+}
+function pipValuePerLot(symbol, price){
+  const step=pipStep(symbol);
+  const units=lotUnits(symbol);
+  if(symbol.includes('XAU')) return step * units;
+  if(symbol.endsWith('USD')) return step * units;
+  if(symbol.startsWith('USD')&&price>0) return (step * units) / price;
+  return price>0 ? (step*units)/price : step*units;
+}
+function describePip(symbol, price){
+  const perLot=pipValuePerLot(symbol, price||priceCache[symbol]||1);
+  return `1 lot ≈ ${formatMoney(perLot)} USD/par pip`;
+}
 
-const wlList=document.getElementById('wlList');
-const ordSymbol=document.getElementById('ordSymbol');
 WATCHLIST.forEach(w=>{
   const item=document.createElement('div');
   item.className='wl-item';
@@ -387,7 +411,8 @@ function refreshLotInfo(){
   const lots=parseFloat(document.getElementById('lotInput').value)||1;
   if(price!==undefined){
     const lotValue=price*lotUnits(currentSymbol.api)*lots;
-    document.getElementById('lotValueInfo').innerText=`${lots} lots = ${(lotValue/LEVERAGE).toFixed(2)} USD de marge · levier 1:${LEVERAGE}`;
+    const pipInfo=describePip(currentSymbol.api, price);
+    document.getElementById('lotValueInfo').innerText=`${lots} lots = ${(lotValue/LEVERAGE).toFixed(2)} USD de marge · ${pipInfo} · levier 1:${LEVERAGE}`;
   } else {
     document.getElementById('lotValueInfo').innerText=`1 lot = ${lotUnits(currentSymbol.api)}u · marge 1:${LEVERAGE}`;
   }
@@ -429,9 +454,11 @@ function fetchPriceREST(symbol){
 function computePnl(pos){
   const current=pos.current!==undefined?pos.current:priceCache[pos.symbol.api];
   if(current===undefined) return 0;
-  const unitValue=current*lotUnits(pos.symbol.api)*pos.size;
-  const entryValue=pos.entry*lotUnits(pos.symbol.api)*pos.size;
-  return (pos.side==='BUY'?unitValue-entryValue:entryValue-unitValue)*LEVERAGE/lotUnits(pos.symbol.api);
+  const step=pipStep(pos.symbol.api);
+  const pipDiff=(current-pos.entry)/step;
+  const pipValue=getPipValuePerLot(pos.symbol.api,current);
+  const pnlPerLot=pipDiff * pipValue;
+  return pos.side==='BUY'?pnlPerLot: -pnlPerLot;
 }
 
 async function openPosition(symObj,side,lots=1,forcedEntry=null, tp=null, sl=null){
