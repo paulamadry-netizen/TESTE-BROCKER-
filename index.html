@@ -439,24 +439,25 @@ document.getElementById('tabHistory').addEventListener('click', ()=>{ document.g
 renderPositions(); renderHistory(); renderOrders(); renderTotals();
 
 // connect WS and fallback
+<!-- FIN DU SCRIPT À AJOUTER -->
+<script>
+// connect WS and fallback...
 (async ()=>{
   const ok = await startWebSocket();
-  if(!ok){
-    console.log('WS failed -> falling back to REST polling (rate-limited)');
-    cycleWatchlist();
+
+  // Si le WebSocket fonctionne → pas de fallback REST intensif
+  if(ok){
+    console.log("WebSocket actif — flux en temps réel.");
   } else {
-    console.log('WS connected — using push updates');
+    console.warn("WebSocket indisponible — fallback REST activé.");
+    // Force une mise à jour immédiate du symbole principal
+    queueApiCall(()=>fetchPriceAndUpdate(currentSymbol,false));
   }
 })();
-
-// expose functions for inline calls
-window.closePosition = closePosition;
-window.removeOrder = removeOrder;
-window.openPosition = openPosition;
-
 </script>
-</body>
-</html>
+
+
+
 
 
 
