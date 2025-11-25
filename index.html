@@ -3,60 +3,50 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Mini Broker — Web Trader (WS Active - Finnhub)</title>
-
-<!-- TradingView widget -->
+<title>Mini Broker — Web Trader (Finnhub WS)</title>
 <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
-
 <style>
-  :root{ --bg:#0f1720; --panel:#0b1220; --muted:#9aa4b2; --accent:#00c4a7; --danger:#ff6b6b; --glass: rgba(255,255,255,0.03); --card-shadow: 0 6px 20px rgba(2,6,23,0.7); --radius:12px; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; }
-  html,body{height:100%;margin:0;background:linear-gradient(180deg,#071025 0%, #071423 60%);color:#e6eef6}
-  .app{display:grid;grid-template-columns: 1fr 360px;grid-template-rows: 1fr 320px;gap:18px;height:100vh;padding:18px}
-
-  .chart-card{grid-column:1/2;grid-row:1/2;background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));border-radius:var(--radius);padding:14px;box-shadow:var(--card-shadow);display:flex;flex-direction:column;min-width:0}
-  .chart-header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px}
+  :root{ --bg:#0f1720; --panel:#0b1220; --muted:#9aa4b2; --accent:#00c4a7; --danger:#ff6b6b; --glass: rgba(255,255,255,0.03); --card-shadow: 0 6px 20px rgba(2,6,23,0.7); --radius:12px; font-family: Inter,system-ui,Roboto,sans-serif; }
+  html,body{height:100%;margin:0;background:linear-gradient(180deg,#071025,#071423);color:#e6eef6}
+  .app{display:grid;grid-template-columns:1fr 360px;grid-template-rows:1fr 320px;gap:18px;height:100vh;padding:18px}
+  .card{background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01));border-radius:var(--radius);padding:14px;box-shadow:var(--card-shadow);display:flex;flex-direction:column}
+  .chart-card{grid-column:1/2;grid-row:1/2;min-width:0}
+  .chart-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
   .symbol-info{display:flex;gap:12px;align-items:center}
   .symbol-badge{background:var(--glass);padding:8px 12px;border-radius:10px;font-weight:600;color:var(--accent)}
   .control-row{display:flex;gap:10px;align-items:center}
-  .btn{padding:8px 12px;border-radius:10px;border:0;cursor:pointer;font-weight:700;letter-spacing:0.4px}
-  .btn-buy{ background:linear-gradient(90deg,#0ea5a3,#00c4a7); color:#022; }
-  .btn-sell{ background:linear-gradient(90deg,#ff6b6b,#ff8a8a); color:#fff; }
-  .btn-ghost{ background:transparent; color:var(--muted); border:1px solid rgba(255,255,255,0.03); }
-  #tv_chart_container{flex:1 1 auto;min-height:420px;border-radius:10px;overflow:hidden}
-
-  .watchlist{grid-column:2/3;grid-row:1/2;background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));border-radius:var(--radius);padding:12px;box-shadow:var(--card-shadow);display:flex;flex-direction:column}
+  .btn{padding:8px 12px;border-radius:10px;border:0;cursor:pointer;font-weight:700}
+  .btn-buy{background:linear-gradient(90deg,#0ea5a3,#00c4a7);color:#022}
+  .btn-sell{background:linear-gradient(90deg,#ff6b6b,#ff8a8a);color:#111}
+  .btn-ghost{background:transparent;color:var(--muted);border:1px solid rgba(255,255,255,0.03)}
+  #tv_chart_container{flex:1;min-height:420px;border-radius:10px;overflow:hidden}
+  .watchlist{grid-column:2/3;grid-row:1/2;background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01));border-radius:var(--radius);padding:12px;box-shadow:var(--card-shadow);display:flex;flex-direction:column}
   .watchlist h3{margin:0 0 8px 0;font-size:16px;color:var(--muted)}
   .wl-item{display:flex;justify-content:space-between;align-items:center;padding:10px;border-radius:10px;cursor:pointer;transition:all .12s;background:transparent}
-  .wl-item:hover{ transform:translateY(-4px); background:rgba(255,255,255,0.015); }
-  .wl-symbol{ font-weight:700; }
-  .wl-price{ color:var(--muted); font-size:13px; }
-  .wl-change{ font-size:13px; font-weight:700; padding:6px 8px; border-radius:8px; }
-  .positive{ color:#0f5132; background:rgba(16,185,129,0.09) }
-  .negative{ color:#7c1d1d; background:rgba(255,99,99,0.06) }
-
+  .wl-item:hover{transform:translateY(-4px);background:rgba(255,255,255,0.015)}
   .orders-card{margin-top:12px;background:rgba(255,255,255,0.01);padding:10px;border-radius:10px}
-  .orders-card h4{margin:0 0 8px 0;color:var(--muted)}
   .orders-table{width:100%;border-collapse:collapse}
   .orders-table th,.orders-table td{padding:8px;text-align:left;border-bottom:1px dashed rgba(255,255,255,0.03);font-size:13px}
   .order-input{width:100%;padding:6px;border-radius:6px;border:1px solid rgba(255,255,255,0.03);background:transparent;color:inherit}
-  .small-muted{ color:var(--muted); font-size:12px; }
-
-  .bottom-left{grid-column:1/2;grid-row:2/3;background:linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.00));border-radius:var(--radius);padding:12px;box-shadow:var(--card-shadow);display:flex;flex-direction:column;overflow:auto}
+  .small-muted{color:var(--muted);font-size:12px}
+  .bottom-left{grid-column:1/2;grid-row:2/3;background:linear-gradient(180deg,rgba(255,255,255,0.01),rgba(255,255,255,0));border-radius:var(--radius);padding:12px;box-shadow:var(--card-shadow);display:flex;flex-direction:column;overflow:auto}
   .tabs{display:flex;gap:10px;margin-bottom:12px}
   .tab{padding:8px 12px;border-radius:10px;cursor:pointer;background:transparent;color:var(--muted);font-weight:700}
-  .tab.active{ color:var(--accent); background:rgba(0,196,167,0.06); }
+  .tab.active{color:var(--accent);background:rgba(0,196,167,0.06)}
   .positions-table,.history-table{width:100%;border-collapse:collapse;font-size:13px;color:var(--muted)}
-  .positions-table th,.positions-table td,.history-table th,.history-table td{ text-align:left;padding:8px 10px;border-bottom:1px dashed rgba(255,255,255,0.02)}
-
-  .bottom-right{grid-column:2/3;grid-row:2/3;background:linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.00));border-radius:var(--radius);padding:12px;box-shadow:var(--card-shadow);display:flex;flex-direction:column;gap:10px;overflow:auto}
-
-  @media (max-width:1100px){ .app{ grid-template-columns: 1fr; grid-template-rows: 1fr 420px 260px;} .watchlist{ grid-column: 1 / -1; grid-row: 2 / 3;} .bottom-left{ grid-row: 3 / 4; grid-column: 1 / -1;} .bottom-right{ display:none; } }
+  .positions-table th,.positions-table td,.history-table th,.history-table td{padding:8px 10px;border-bottom:1px dashed rgba(255,255,255,0.02)}
+  .positive{color:#0f5132;background:rgba(16,185,129,0.09);border-radius:6px;padding:6px;font-weight:700}
+  .negative{color:#7c1d1d;background:rgba(255,99,99,0.06);border-radius:6px;padding:6px;font-weight:700}
+  .bottom-right{grid-column:2/3;grid-row:2/3;background:linear-gradient(180deg,rgba(255,255,255,0.01),rgba(255,255,255,0));border-radius:var(--radius);padding:12px;box-shadow:var(--card-shadow);display:flex;flex-direction:column;gap:10px;overflow:auto}
+  .status{padding:6px 10px;border-radius:8px;font-weight:700}
+  .status.connected{background:rgba(0,196,167,0.08);color:var(--accent)}
+  .status.disconnected{background:rgba(255,99,99,0.06);color:#ff8a8a}
+  @media (max-width:1100px){.app{grid-template-columns:1fr;grid-template-rows:auto auto auto}.watchlist{grid-column:1/-1;grid-row:2/3}.bottom-left{grid-row:3/4}.bottom-right{display:none}}
 </style>
 </head>
 <body>
 <div class="app">
-
-  <div class="chart-card" id="chartCard">
+  <div class="card chart-card">
     <div class="chart-header">
       <div class="symbol-info">
         <div class="symbol-badge" id="currentSymbolBadge">OANDA:EUR_USD</div>
@@ -65,70 +55,60 @@
           <div class="small-muted" id="currentPriceMini">Prix: —</div>
         </div>
       </div>
-
       <div class="control-row">
+        <div id="wsStatus" class="status disconnected">WS: Disconnected</div>
         <button class="btn btn-ghost" id="refreshPricesBtn" title="Forcer mise à jour">↺ Refresh</button>
         <button class="btn btn-buy" id="buyBtn">BUY</button>
         <button class="btn btn-sell" id="sellBtn">SELL</button>
       </div>
     </div>
-
     <div id="tv_chart_container"></div>
   </div>
 
-  <div class="watchlist">
+  <div class="card watchlist">
     <h3>Watchlist</h3>
     <div id="wlList" style="display:flex;flex-direction:column;gap:6px;max-height:360px;overflow:auto;"></div>
     <div class="orders-card">
       <h4>Ordres Limites</h4>
-      <table class="orders-table" id="ordersTable">
-        <thead>
-          <tr><th>Symbole</th><th>Side</th><th>Prix limite</th><th>Size</th><th></th></tr>
-        </thead>
+      <table class="orders-table">
+        <thead><tr><th>Symbole</th><th>Side</th><th>Prix</th><th>Size</th><th></th></tr></thead>
         <tbody id="ordersBody"></tbody>
       </table>
       <div style="display:flex;gap:8px;margin-top:8px">
         <select id="ordSymbol" class="order-input"></select>
         <select id="ordSide" class="order-input">
-          <option value="BUY">BUY</option>
-          <option value="SELL">SELL</option>
+          <option value="BUY">BUY</option><option value="SELL">SELL</option>
         </select>
-        <input id="ordPrice" class="order-input" placeholder="Prix" />
-        <input id="ordSize" class="order-input" placeholder="Size" value="1" />
+        <input id="ordPrice" class="order-input" placeholder="Prix"/>
+        <input id="ordSize" class="order-input" placeholder="Size" value="1"/>
         <button class="btn btn-buy" id="addOrderBtn">Placer</button>
       </div>
     </div>
   </div>
 
-  <div class="bottom-left">
+  <div class="card bottom-left">
     <div style="display:flex;justify-content:space-between;align-items:center">
       <div class="tabs">
         <div class="tab active" id="tabPositions">Positions</div>
         <div class="tab" id="tabHistory">Historique</div>
       </div>
-      <div class="small-muted">Simulé · WS connecté</div>
+      <div class="small-muted">Simulé · Finnhub WS</div>
     </div>
-
     <div id="positionsPane">
-      <table class="positions-table" id="positionsTable">
-        <thead>
-          <tr><th>Symbole</th><th>Side</th><th>Entry</th><th>Price</th><th>PNL</th><th>Actions</th></tr>
-        </thead>
+      <table class="positions-table">
+        <thead><tr><th>Symbole</th><th>Side</th><th>Entry</th><th>Actuel</th><th>PNL</th><th>Actions</th></tr></thead>
         <tbody id="positionsBody"></tbody>
       </table>
     </div>
-
     <div id="historyPane" style="display:none">
-      <table class="history-table" id="historyTable">
-        <thead>
-          <tr><th>Symbole</th><th>Side</th><th>Entry</th><th>Close</th><th>Result</th></tr>
-        </thead>
+      <table class="history-table">
+        <thead><tr><th>Symbole</th><th>Side</th><th>Entry</th><th>Close</th><th>Result</th></tr></thead>
         <tbody id="historyBody"></tbody>
       </table>
     </div>
   </div>
 
-  <div class="bottom-right">
+  <div class="card bottom-right">
     <div style="display:flex;justify-content:space-between;align-items:center">
       <div>
         <div style="font-size:14px;font-weight:800">Compte Démo</div>
@@ -139,7 +119,6 @@
         <div id="totalPnl" style="font-weight:800;font-size:18px">0.00</div>
       </div>
     </div>
-
     <div style="margin-top:8px">
       <div style="font-weight:700">Détails position sélectionnée</div>
       <div class="small-muted" id="posDetails">Aucune position sélectionnée</div>
@@ -148,56 +127,49 @@
 </div>
 
 <script>
-/* CONFIG */
 const API_KEY = 'd4g61b9r01qm5b343fo0d4g61b9r01qm5b343fog';
 const WS_ENDPOINT = 'wss://ws.finnhub.io';
 const KEEPALIVE_INTERVAL = 25000;
 const RECONNECT_MAX = 60000;
-
-/* WATCHLIST : 5 principales devises + XAU */
 const WATCHLIST = [
   { tv:'OANDA:EUR_USD', label:'EUR / USD', api:'OANDA:EUR_USD' },
   { tv:'OANDA:USD_JPY', label:'USD / JPY', api:'OANDA:USD_JPY' },
   { tv:'OANDA:GBP_USD', label:'GBP / USD', api:'OANDA:GBP_USD' },
   { tv:'OANDA:USD_CHF', label:'USD / CHF', api:'OANDA:USD_CHF' },
   { tv:'OANDA:AUD_USD', label:'AUD / USD', api:'OANDA:AUD_USD' },
-  { tv:'OANDA:XAU_USD', label:'Gold (XAU / USD)', api:'OANDA:XAU_USD' }
+  { tv:'OANDA:XAU_USD', label:'Gold / USD', api:'OANDA:XAU_USD' }
 ];
 
-let currentSymbol = WATCHLIST[0];
-let positions = [];
-let history = [];
-let orders = [];
-let priceCache = {};
-let tvWidget = null;
 let ws = null;
 let wsConnected = false;
 let reconnectDelay = 1000;
 let keepaliveTimer = null;
+let currentSymbol = WATCHLIST[0];
+let priceCache = {};
+let positions = [];
+let history = [];
+let orders = [];
 let simBalance = 10000.00;
+let tvWidget = null;
 
-function escapeId(s){ return String(s).replace(/[^\w]/g,'_'); }
-function formatPrice(x){ return (x===undefined||x===null)?'—':Number(x).toFixed(5).replace(/\.0+$|0+$/,'').replace(/\.$/,''); }
-function formatMoney(x){ return (x===undefined||x===null)?'0.00':Number(x).toFixed(2); }
-function now(){ return new Date().toISOString(); }
+function escapeId(val){ return String(val).replace(/[^\w]/g,'_'); }
+function formatPrice(val){ return val===undefined||val===null?'—':Number(val).toFixed(5).replace(/\.0+$|0+$/,'').replace(/\.$/,''); }
+function formatMoney(val){ return val===undefined||val===null?'0.00':Number(val).toFixed(2); }
 
-/* UI Build */
 const wlList = document.getElementById('wlList');
 WATCHLIST.forEach(w=>{
-  const item = document.createElement('div'); item.className='wl-item';
-  item.innerHTML = `<div><div class="wl-symbol">${w.label}</div><div class="small-muted" style="margin-top:4px">${w.tv}</div></div><div style="text-align:right"><div class="wl-price" id="price_${escapeId(w.api)}">—</div></div>`;
-  item.addEventListener('click', ()=> loadSymbol(w));
+  const item = document.createElement('div');
+  item.className = 'wl-item';
+  item.innerHTML = `<div><div class="wl-symbol">${w.label}</div><div class="small-muted" style="margin-top:4px">${w.tv}</div></div><div style="text-align:right"><div id="price_${escapeId(w.api)}" class="wl-price">—</div></div>`;
+  item.addEventListener('click', ()=> selectSymbol(w));
   wlList.appendChild(item);
 });
 const ordSymbol = document.getElementById('ordSymbol');
 WATCHLIST.forEach(w=>{ const opt=document.createElement('option'); opt.value=w.api; opt.text=w.label; ordSymbol.appendChild(opt); });
 
-/* TradingView */
 function initTradingView(){
-  try{
-    if(tvWidget && typeof tvWidget.remove === 'function'){ tvWidget.remove(); tvWidget = null; document.getElementById('tv_chart_container').innerHTML=''; }
-  }catch(e){}
-  if(typeof TradingView === 'undefined') return;
+  try{ if(tvWidget && typeof tvWidget.remove==='function'){ tvWidget.remove(); tvWidget=null; document.getElementById('tv_chart_container').innerHTML=''; } }catch(e){}
+  if(typeof TradingView==='undefined') return;
   try{
     tvWidget = new TradingView.widget({
       container_id: 'tv_chart_container',
@@ -212,16 +184,15 @@ function initTradingView(){
 }
 initTradingView();
 
-function loadSymbol(sym){
+function selectSymbol(sym){
   currentSymbol = sym;
   document.getElementById('currentSymbolBadge').innerText = sym.tv;
   document.getElementById('currentSymbolTitle').innerText = sym.label;
-  const p = priceCache[sym.api];
-  document.getElementById('currentPriceMini').innerText = p!==undefined ? 'Prix: ' + formatPrice(p) : 'Prix: —';
+  const price = priceCache[sym.api];
+  document.getElementById('currentPriceMini').innerText = price!==undefined ? 'Prix: ' + formatPrice(price) : 'Prix: —';
   initTradingView();
 }
 
-/* WebSocket */
 function setWsStatus(connected){
   const el = document.getElementById('wsStatus');
   wsConnected = !!connected;
@@ -230,34 +201,37 @@ function setWsStatus(connected){
 }
 
 function buildWsUrl(){ return `${WS_ENDPOINT}?token=${API_KEY}`; }
-function startKeepalive(){ stopKeepalive(); keepaliveTimer = setInterval(()=>{ try{ if(ws && ws.readyState===WebSocket.OPEN){ ws.send(JSON.stringify({ type:'ping' })); } }catch(e){ console.warn('keepalive send failed', e); } }, KEEPALIVE_INTERVAL); }
+
+function startKeepalive(){
+  stopKeepalive();
+  keepaliveTimer = setInterval(()=>{
+    if(ws && ws.readyState===WebSocket.OPEN){
+      ws.send(JSON.stringify({ type:'ping' }));
+    }
+  }, KEEPALIVE_INTERVAL);
+}
 function stopKeepalive(){ if(keepaliveTimer){ clearInterval(keepaliveTimer); keepaliveTimer=null; } }
 
 function scheduleReconnect(){
   stopKeepalive();
-  if(reconnectDelay > RECONNECT_MAX) reconnectDelay = RECONNECT_MAX;
-  console.log(now(), `Reconnexion WS dans ${reconnectDelay}ms`);
-  setTimeout(()=>{ reconnectDelay = Math.min(RECONNECT_MAX, Math.floor(reconnectDelay * 1.8)); startWebSocket(); }, reconnectDelay);
+  if(reconnectDelay>RECONNECT_MAX) reconnectDelay=RECONNECT_MAX;
+  setTimeout(()=>{ reconnectDelay=Math.min(RECONNECT_MAX,Math.floor(reconnectDelay*1.8)); startWebSocket(); }, reconnectDelay);
 }
 
 function startWebSocket(){
   try{
-    const url = buildWsUrl();
-    console.log(now(), 'Connexion Finnhub WS ->', url);
-    ws = new WebSocket(url);
-
+    ws = new WebSocket(buildWsUrl());
     ws.addEventListener('open', ()=>{
-      console.log(now(), 'WS OPEN');
       setWsStatus(true);
       reconnectDelay = 1000;
       WATCHLIST.forEach(w=>{
-        try{ ws.send(JSON.stringify({ type: 'subscribe', symbol: w.api })); }catch(e){ console.warn('subscribe failed', e); }
+        try{ ws.send(JSON.stringify({ type:'subscribe', symbol:w.api })); }catch(e){ console.warn('subscribe failed', e); }
       });
       startKeepalive();
       WATCHLIST.forEach(async w=>{
-        if(priceCache[w.api] === undefined){
-          const p = await fetchPriceREST(w.api);
-          if(p!==null){ priceCache[w.api]=p; updatePriceUI(w.api); }
+        if(priceCache[w.api]===undefined){
+          const fetched = await fetchPriceREST(w.api);
+          if(fetched!==null){ priceCache[w.api]=fetched; updatePriceUI(w.api); }
         }
       });
     });
@@ -270,29 +244,25 @@ function startWebSocket(){
     });
 
     ws.addEventListener('close', evt=>{
-      console.warn(now(), 'WS CLOSED', evt.code, evt.reason);
       setWsStatus(false);
       scheduleReconnect();
     });
 
     ws.addEventListener('error', err=>{
-      console.error(now(), 'WS ERROR', err);
       setWsStatus(false);
       try{ ws.close(); }catch(e){}
       scheduleReconnect();
     });
   }catch(e){
-    console.error(now(), 'startWebSocket exception', e);
     scheduleReconnect();
   }
 }
 
-/* Message handling */
 function handleWsMessage(msg){
   if(!msg) return;
   if(Array.isArray(msg)){ msg.forEach(m=>handleWsMessage(m)); return; }
   if(msg.type==='ping') return;
-  if(msg.type==='error'){ console.warn('WS server error', msg); return; }
+  if(msg.type==='error'){ console.warn('WS error', msg); return; }
   if(msg.type==='trade' && Array.isArray(msg.data)){
     msg.data.forEach(d=>{
       const sym = d.s || d.symbol;
@@ -304,10 +274,9 @@ function handleWsMessage(msg){
     });
     return;
   }
-  if(msg.data && typeof msg.data==='object' && !Array.isArray(msg.data)){
-    const d = msg.data;
-    const sym = d.s || d.symbol;
-    const price = d.p || d.price || d.c;
+  if(msg.data && typeof msg.data === 'object'){
+    const sym = msg.data.s || msg.data.symbol;
+    const price = msg.data.p || msg.data.price || msg.data.c;
     if(sym && price!==undefined){
       priceCache[sym] = Number(price);
       updatePriceUI(sym);
@@ -316,52 +285,47 @@ function handleWsMessage(msg){
   }
 }
 
-function updatePriceUI(symbolApi){
-  const el = document.getElementById('price_' + escapeId(symbolApi));
-  if(el) el.innerText = formatPrice(priceCache[symbolApi]);
-  if(symbolApi === currentSymbol.api) document.getElementById('currentPriceMini').innerText = 'Prix: ' + formatPrice(priceCache[symbolApi]);
+function updatePriceUI(symbol){
+  const el = document.getElementById('price_' + escapeId(symbol));
+  if(el) el.innerText = formatPrice(priceCache[symbol]);
+  if(symbol===currentSymbol.api) document.getElementById('currentPriceMini').innerText = 'Prix: ' + formatPrice(priceCache[symbol]);
 }
-function onPriceUpdate(symbolApi, price){
-  checkOrdersForSymbol(symbolApi);
-  let updated = false;
+
+function onPriceUpdate(symbol, price){
+  let needsRender=false;
   positions.forEach(p=>{
-    if(p.symbol.api === symbolApi){
-      p.current = price;
-      updated = true;
+    if(p.symbol.api===symbol){
+      p.current=price;
+      needsRender=true;
     }
   });
-  if(updated) renderPositions();
+  checkOrdersForSymbol(symbol);
+  if(needsRender) renderPositions();
   renderTotals();
 }
 
-/* REST fallback */
-async function fetchPriceREST(symbolApi){
+async function fetchPriceREST(symbol){
   try{
-    const res = await fetch(`https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(symbolApi)}&token=${API_KEY}`);
+    const res = await fetch(`https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(symbol)}&token=${API_KEY}`);
     if(!res.ok) return null;
-    const body = await res.json();
-    if(body && body.c) return Number(body.c);
-  }catch(e){ console.warn('REST fetch failed', e); }
-  return null;
+    const data = await res.json();
+    return data?.c ? Number(data.c) : null;
+  }catch(e){ return null; }
 }
 
-/* Positions */
 function computePnl(pos){
-  const current = pos.current !== undefined ? pos.current : (priceCache[pos.symbol.api] !== undefined ? priceCache[pos.symbol.api] : pos.entry);
-  const delta = pos.side === 'BUY' ? (current - pos.entry) : (pos.entry - current);
+  const current = pos.current!==undefined ? pos.current : (priceCache[pos.symbol.api]!==undefined ? priceCache[pos.symbol.api] : pos.entry);
+  const delta = pos.side==='BUY' ? (current - pos.entry) : (pos.entry - current);
   return Number(delta * pos.size);
 }
 
 async function openPosition(symObj, side, size=1, forcedEntry=null){
-  let price = forcedEntry !== null ? forcedEntry : priceCache[symObj.api];
-  if(price===undefined || price===null){
-    const fetched = await fetchPriceREST(symObj.api);
+  let price = forcedEntry!==null ? forcedEntry : priceCache[symObj.api];
+  if(price===undefined||price===null){
+    const fetched=await fetchPriceREST(symObj.api);
     if(fetched!==null) price=fetched;
   }
-  if(price===undefined || price===null){
-    alert('Prix non disponible pour ' + symObj.label);
-    return;
-  }
+  if(price===undefined||price===null){ alert('Prix indisponible'); return; }
   const pos = { id:'pos_'+Math.random().toString(36).slice(2,9), symbol:symObj, side, entry:Number(price), size:Number(size), current:Number(price), openAt:Date.now() };
   positions.push(pos);
   renderPositions();
@@ -369,27 +333,30 @@ async function openPosition(symObj, side, size=1, forcedEntry=null){
 }
 
 function closePosition(id){
-  const idx = positions.findIndex(p=>p.id===id); if(idx===-1) return;
-  const pos = positions[idx];
-  const closePrice = priceCache[pos.symbol.api] !== undefined ? priceCache[pos.symbol.api] : pos.current;
-  const pnl = computePnl(pos);
-  history.unshift({ symbol: pos.symbol, side: pos.side, entry: pos.entry, close: closePrice, pnl, closedAt: Date.now() });
-  simBalance += pnl;
+  const idx = positions.findIndex(p=>p.id===id);
+  if(idx===-1) return;
+  const pos=positions[idx];
+  const closePrice=priceCache[pos.symbol.api]!==undefined ? priceCache[pos.symbol.api] : pos.current;
+  const pnl=computePnl(pos);
+  history.unshift({ symbol:pos.symbol, side:pos.side, entry:pos.entry, close:closePrice, pnl, closedAt:Date.now() });
+  simBalance+=pnl;
   positions.splice(idx,1);
   renderPositions();
   renderHistory();
   renderTotals();
 }
 
-/* Orders */
-function addLimitOrder(symbolApi, side, price, size){
-  orders.push({ id:'ord_'+Math.random().toString(36).slice(2,9), symbol:symbolApi, side, price:Number(price), size:Number(size), placedAt:Date.now() });
+function addLimitOrder(symbol, side, price, size){
+  orders.push({ id:'ord_'+Math.random().toString(36).slice(2,9), symbol, side, price:Number(price), size:Number(size) });
   renderOrders();
 }
-function removeOrder(id){ orders = orders.filter(o=>o.id!==id); renderOrders(); }
-function checkOrdersForSymbol(symbolApi){
-  const price = priceCache[symbolApi]; if(price===undefined) return;
-  const matches = orders.filter(o=>o.symbol===symbolApi && ((o.side==='BUY' && price<=o.price) || (o.side==='SELL' && price>=o.price)));
+
+function removeOrder(id){ orders=orders.filter(o=>o.id!==id); renderOrders(); }
+
+function checkOrdersForSymbol(symbol){
+  const price=priceCache[symbol];
+  if(price===undefined) return;
+  const matches=orders.filter(o=>o.symbol===symbol && ((o.side==='BUY' && price<=o.price) || (o.side==='SELL' && price>=o.price)));
   matches.forEach(m=>{
     const symObj = WATCHLIST.find(w=>w.api===m.symbol) || { label:m.symbol, tv:m.symbol, api:m.symbol };
     openPosition(symObj, m.side, m.size, m.price);
@@ -397,86 +364,119 @@ function checkOrdersForSymbol(symbolApi){
   });
 }
 
-/* Renderers */
 function renderPositions(){
-  const tbody = document.getElementById('positionsBody'); tbody.innerHTML='';
+  const tbody=document.getElementById('positionsBody');
+  tbody.innerHTML='';
   positions.forEach(pos=>{
-    const current = pos.current !== undefined ? pos.current : (priceCache[pos.symbol.api] !== undefined ? priceCache[pos.symbol.api] : pos.entry);
-    pos.current = current;
-    const pnl = computePnl(pos);
-    const cls = pnl>=0?'positive':'negative';
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td><div style="font-weight:700">${pos.symbol.label}</div><div class="small-muted">${pos.symbol.tv || pos.symbol.api}</div></td>
+    const current=pos.current!==undefined ? pos.current : (priceCache[pos.symbol.api]!==undefined ? priceCache[pos.symbol.api] : pos.entry);
+    pos.current=current;
+    const pnl=computePnl(pos);
+    const cls=pnl>=0?'positive':'negative';
+    const tr=document.createElement('tr');
+    tr.innerHTML=`
+      <td><strong>${pos.symbol.label}</strong><div class="small-muted">${pos.symbol.tv}</div></td>
       <td>${pos.side}</td>
       <td>${formatPrice(pos.entry)}</td>
       <td>${formatPrice(current)}</td>
-      <td><span class="${cls}" style="padding:6px 8px;border-radius:8px;font-weight:700">${formatMoney(pnl)}</span></td>
+      <td><span class="${cls}">${formatMoney(pnl)}</span></td>
       <td><button class="btn btn-ghost" data-id="${pos.id}">Close</button></td>
     `;
     tbody.appendChild(tr);
   });
-  tbody.querySelectorAll('button[data-id]').forEach(btn=> btn.onclick = ()=> closePosition(btn.getAttribute('data-id')));
-  const details = document.getElementById('posDetails');
-  if(positions.length>0){ const p=positions[0]; details.innerHTML=`${p.symbol.label} · ${p.side} · Entry ${formatPrice(p.entry)} · Current ${formatPrice(p.current)}`; }
-  else details.innerText='Aucune position ouverte';
-}
-function renderHistory(){
-  const tbody=document.getElementById('historyBody'); tbody.innerHTML='';
-  history.forEach(h=>{
-    const tr=document.createElement('tr');
-    const cls=h.pnl>=0?'positive':'negative';
-    tr.innerHTML=`<td><div style="font-weight:700">${h.symbol.label}</div><div class="small-muted">${h.symbol.tv||h.symbol.api}</div></td><td>${h.side}</td><td>${formatPrice(h.entry)}</td><td>${formatPrice(h.close)}</td><td><span class="${cls}" style="padding:6px 8px;border-radius:8px;font-weight:700">${formatMoney(h.pnl)}</span></td>`;
-    tbody.appendChild(tr);
-  });
-}
-function renderOrders(){
-  const tbody=document.getElementById('ordersBody'); tbody.innerHTML='';
-  orders.forEach(o=>{
-    const tr=document.createElement('tr');
-    tr.innerHTML=`<td>${o.symbol}</td><td>${o.side}</td><td>${formatPrice(o.price)}</td><td>${o.size}</td><td><button class="btn btn-ghost" data-id="${o.id}">Annuler</button></td>`;
-    tbody.appendChild(tr);
-  });
-  tbody.querySelectorAll('button[data-id]').forEach(btn=> btn.onclick = ()=> removeOrder(btn.getAttribute('data-id')));
-}
-function renderTotals(){
-  const totalPnl = positions.reduce((s,p)=> s + computePnl(p), 0);
-  document.getElementById('totalPnl').innerText = formatMoney(totalPnl);
-  document.getElementById('simBalance').innerText = formatMoney(simBalance);
+  tbody.querySelectorAll('button[data-id]').forEach(btn=> btn.onclick=()=>closePosition(btn.dataset.id));
+  const details=document.getElementById('posDetails');
+  if(positions.length>0){ const first=positions[0]; details.innerText=`${first.symbol.label} · ${first.side} · Entry ${formatPrice(first.entry)} · Current ${formatPrice(first.current)}`; }
+  else details.innerText='Aucune position sélectionnée';
 }
 
-/* UI handlers */
+function renderHistory(){
+  const tbody=document.getElementById('historyBody');
+  tbody.innerHTML='';
+  history.forEach(h=>{
+    const cls=h.pnl>=0?'positive':'negative';
+    const tr=document.createElement('tr');
+    tr.innerHTML=`
+      <td>${h.symbol.label}</td>
+      <td>${h.side}</td>
+      <td>${formatPrice(h.entry)}</td>
+      <td>${formatPrice(h.close)}</td>
+      <td><span class="${cls}">${formatMoney(h.pnl)}</span></td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function renderOrders(){
+  const tbody=document.getElementById('ordersBody');
+  tbody.innerHTML='';
+  orders.forEach(o=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML=`
+      <td>${o.symbol}</td>
+      <td>${o.side}</td>
+      <td>${formatPrice(o.price)}</td>
+      <td>${o.size}</td>
+      <td><button class="btn btn-ghost" data-id="${o.id}">Annuler</button></td>
+    `;
+    tbody.appendChild(tr);
+  });
+  tbody.querySelectorAll('button[data-id]').forEach(btn=> btn.onclick=()=>removeOrder(btn.dataset.id));
+}
+
+function renderTotals(){
+  const total=positions.reduce((sum,pos)=> sum + computePnl(pos), 0);
+  document.getElementById('totalPnl').innerText=formatMoney(total);
+  document.getElementById('simBalance').innerText=formatMoney(simBalance);
+}
+
+function renderAll(){ renderPositions(); renderHistory(); renderOrders(); renderTotals(); }
+renderAll();
+
 document.getElementById('addOrderBtn').addEventListener('click', ()=>{
-  const sym=document.getElementById('ordSymbol').value;
+  const symbol=document.getElementById('ordSymbol').value;
   const side=document.getElementById('ordSide').value;
   const price=document.getElementById('ordPrice').value;
   const size=document.getElementById('ordSize').value || 1;
-  if(!sym||!price) return alert('Remplis symbole et prix');
-  addLimitOrder(sym,side,price,size);
+  if(!symbol||!price){ return alert('Symbole et prix requis'); }
+  addLimitOrder(symbol, side, price, size);
 });
+
 document.getElementById('refreshPricesBtn').addEventListener('click', ()=>{
-  if(ws&&ws.readyState===WebSocket.OPEN){
-    WATCHLIST.forEach(w=>{ try{ ws.send(JSON.stringify({ type:'subscribe', symbol:w.api })); }catch(e){} });
+  if(ws && ws.readyState===WebSocket.OPEN){
+    WATCHLIST.forEach(w=>{
+      try{ ws.send(JSON.stringify({ type:'subscribe', symbol:w.api })); }catch(e){}
+    });
   } else {
-    renderPositions(); renderOrders(); renderTotals();
+    renderAll();
   }
 });
-document.getElementById('buyBtn').addEventListener('click', async ()=>{ await openPosition(currentSymbol,'BUY',1); });
-document.getElementById('sellBtn').addEventListener('click', async ()=>{ await openPosition(currentSymbol,'SELL',1); });
-document.getElementById('tabPositions').addEventListener('click', ()=>{ document.getElementById('tabPositions').classList.add('active'); document.getElementById('tabHistory').classList.remove('active'); document.getElementById('positionsPane').style.display='block'; document.getElementById('historyPane').style.display='none'; renderPositions(); });
-document.getElementById('tabHistory').addEventListener('click', ()=>{ document.getElementById('tabHistory').classList.add('active'); document.getElementById('tabPositions').classList.remove('active'); document.getElementById('positionsPane').style.display='none'; document.getElementById('historyPane').style.display='block'; renderHistory(); });
 
-renderPositions(); renderHistory(); renderOrders(); renderTotals();
+document.getElementById('buyBtn').addEventListener('click', ()=> openPosition(currentSymbol,'BUY',1));
+document.getElementById('sellBtn').addEventListener('click', ()=> openPosition(currentSymbol,'SELL',1));
 
-/* launch WS */
-startWebSocket();
+document.getElementById('tabPositions').addEventListener('click', ()=>{
+  document.getElementById('tabPositions').classList.add('active');
+  document.getElementById('tabHistory').classList.remove('active');
+  document.getElementById('positionsPane').style.display='block';
+  document.getElementById('historyPane').style.display='none';
+  renderPositions();
+});
+document.getElementById('tabHistory').addEventListener('click', ()=>{
+  document.getElementById('tabHistory').classList.add('active');
+  document.getElementById('tabPositions').classList.remove('active');
+  document.getElementById('positionsPane').style.display='none';
+  document.getElementById('historyPane').style.display='block';
+  renderHistory();
+});
 
 window.closePosition = closePosition;
 window.removeOrder = removeOrder;
+
+selectSymbol(WATCHLIST[0]);
+startWebSocket();
 </script>
 </body>
 </html>
-
 
 
 
