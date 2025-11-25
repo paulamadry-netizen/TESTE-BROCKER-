@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Mini Broker — Web Trader (Finnhub WS + Polygon indices)</title>
+<title>Mini Broker — Web Trader (Finnhub + Twelve Data indices)</title>
 <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
 <style>
   :root{
@@ -234,8 +234,8 @@
 <script>
 const API_KEY='d4is89hr01queuakbspgd4is89hr01queuakbsq0';
 const WS_ENDPOINT='wss://ws.finnhub.io';
-const POLYGON_WS='wss://socket.polygon.io/stocks';
-const POLYGON_KEY='pQBZtKLBm1kWfGLcSU5WMAlWnD0Wee69';
+const TWELVE_WS='wss://ws.twelvedata.com/v1/quotes/price';
+const TWELVE_KEY='fe1276c5129c4045a0eeecc9edeb6fb8';
 const KEEPALIVE_INTERVAL=25000;
 const RECONNECT_MAX=60000;
 const BASE_LOT_SIZE=100000;
@@ -247,11 +247,11 @@ const WATCHLIST=[
   {tv:'OANDA:USDCHF',label:'USD / CHF',api:'OANDA:USD_CHF'},
   {tv:'OANDA:AUDUSD',label:'AUD / USD',api:'OANDA:AUD_USD'},
   {tv:'OANDA:XAUUSD',label:'Gold / USD',api:'OANDA:XAU_USD'},
-  {tv:'DJ30',label:'Dow Jones',api:'DJ30',polygon:'DJI'},
-  {tv:'USA S&P 500 Index',label:'S&P 500',api:'US500',polygon:'SPX'},
-  {tv:'NDX',label:'Nasdaq 100',api:'NDX',polygon:'NDX'},
-  {tv:'DAX',label:'DAX 40',api:'DAX',polygon:'DAX'},
-  {tv:'Indice CAC40',label:'CAC 40',api:'CAC40',polygon:'FCHI'}
+  {tv:'DJ30',label:'Dow Jones',api:'DJ30',twelve:'DJ30'},
+  {tv:'USA S&P 500 Index',label:'S&P 500',api:'US500',twelve:'SPX'},
+  {tv:'NDX',label:'Nasdaq 100',api:'NDX',twelve:'NDX'},
+  {tv:'DAX',label:'DAX 40',api:'DAX',twelve:'DAX'},
+  {tv:'Indice CAC40',label:'CAC 40',api:'CAC40',twelve:'CAC40'}
 ];
 
 const PIP_STEPS={
@@ -261,7 +261,7 @@ const PIP_STEPS={
 };
 const PNL_BOOST_NON_XAU=4.5;
 
-let ws=null,polygonWs=null,wsConnected=false,reconnectDelay=1000,keepaliveTimer=null,polygonReconnectDelay=1000;
+let ws=null,twelveWs=null,wsConnected=false,reconnectDelay=1000,keepaliveTimer=null,twelveReconnect=1000;
 let currentSymbol=WATCHLIST[0];
 let priceCache={},positions=[],history=[],orders=[];
 let simBalance=50000.00;
@@ -278,10 +278,10 @@ const ordSymbol=document.getElementById('ordSymbol');
 const toastEl=document.getElementById('toast');
 let toastTimer=null;
 
-const polygonSymbolToApi={};
+const twelveSymbolMap={};
 WATCHLIST.forEach(w=>{
-  if(w.polygon){
-    polygonSymbolToApi[w.polygon]=w.api;
+  if(w.twelve){
+    twelveSymbolMap[w.twelve]=w.api;
   }
 });
 
@@ -760,57 +760,59 @@ document.getElementById('modalSave').addEventListener('click',()=>{
   audioValidate.play();
 });
 
-function handlePolygonMessage(raw){
+function handleTwelveMessage(raw){
   try{
-    const data=JSON.parse(raw);
-    if(data.ev==='status'){
+    const msg=JSON.parse(raw);
+    if(msg.event==='subscription'){
       return;
     }
-    if(data.ev==='XA'){
-      const symbolKey=data.sym?.startsWith('XA.')?data.sym.slice(3):data.sym;
-      const apiKey=polygonSymbolToApi[symbolKey];
-      const price=data.p??data.price??data.last??null;
-      if(apiKey&&price!==null){
+    if(msg.event==='price'){
+      const symbolKey=msg.symbol;
+      const apiKey=twelveSymbolMap[symbolKey];
+      const price=msg.price;
+      if(apiKey&&price!==undefined){
         priceCache[apiKey]=Number(price);
         updatePriceUI(apiKey);
         onPriceUpdate(apiKey);
       }
     }
   }catch(e){
-    console.warn('Polygon parse error',e);
+    console.warn('Twelve parse error',e);
   }
 }
 
-function startPolygonWS(){
+function startTwelveWS(){
   try{
-    polygonWs=new WebSocket(POLYGON_WS);
-    polygonWs.addEventListener('open',()=>{
-      polygonReconnectDelay=1000;
-      polygonWs.send(JSON.stringify({action:'auth',params:POLYGON_KEY}));
-      WATCHLIST.filter(w=>w.polygon).forEach(w=>{
-        polygonWs.send(JSON.stringify({action:'subscribe',params:`XA.${w.polygon}`}));
-      });
+    twelveWs=new WebSocket(TWELVE_WS);
+    twelveWs.addEventListener('open',()=>{
+      twelveReconnect=1000;
+      twelveWs.send(JSON.stringify({action:'authenticate',params:TWELVE_KEY}));
+      const subs=WATCHLIST.filter(w=>w.twelve).map(w=>w.twelve);
+      if(subs.length) twelveWs.send(JSON.stringify({action:'subscribe',params:subs.join(',')}));
     });
-    polygonWs.addEventListener('message',ev=>handlePolygonMessage(ev.data));
-    polygonWs.addEventListener('close',()=>schedulePolygonReconnect());
-    polygonWs.addEventListener('error',()=>{try{polygonWs.close();}catch(e){}schedulePolygonReconnect();});
+    twelveWs.addEventListener('message',ev=>handleTwelveMessage(ev.data));
+    twelveWs.addEventListener('close',()=>scheduleTwelveReconnect());
+    twelveWs.addEventListener('error',()=>{try{twelveWs.close();}catch(e){}scheduleTwelveReconnect();});
   }catch(e){
-    schedulePolygonReconnect();
+    scheduleTwelveReconnect();
   }
 }
 
-function schedulePolygonReconnect(){
-  if(polygonReconnectDelay>RECONNECT_MAX) polygonReconnectDelay=RECONNECT_MAX;
-  setTimeout(()=>{polygonReconnectDelay=Math.min(RECONNECT_MAX,Math.floor(polygonReconnectDelay*1.8));startPolygonWS();},polygonReconnectDelay);
+function scheduleTwelveReconnect(){
+  if(twelveReconnect>RECONNECT_MAX) twelveReconnect=RECONNECT_MAX;
+  setTimeout(()=>{twelveReconnect=Math.min(RECONNECT_MAX,Math.floor(twelveReconnect*1.8));startTwelveWS();},twelveReconnect);
 }
 
-watchPolygonInitialPrices();
-
-async function watchPolygonInitialPrices(){
-  await Promise.all(WATCHLIST.filter(w=>w.polygon).map(async w=>{
+async function pollTwelveREST(){
+  await Promise.all(WATCHLIST.filter(w=>w.twelve).map(async w=>{
     if(priceCache[w.api]!==undefined) return;
-    const value=await fetchPriceREST(w.polygon);
-    if(value!==null){priceCache[w.api]=value;updatePriceUI(w.api);}
+    const res=await fetch(`https://api.twelvedata.com/price?symbol=${w.twelve}&apikey=${TWELVE_KEY}`);
+    const data=await res.json();
+    const price=data.price?Number(data.price):null;
+    if(price!==null){
+      priceCache[w.api]=price;
+      updatePriceUI(w.api);
+    }
   }));
 }
 
@@ -819,11 +821,11 @@ window.removeOrder=removeOrder;
 
 selectSymbol(WATCHLIST[0]);
 startWebSocket();
-startPolygonWS();
+startTwelveWS();
+pollTwelveREST();
 </script>
 </body>
 </html>
-
 
 
 
