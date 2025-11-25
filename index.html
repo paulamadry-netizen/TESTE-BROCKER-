@@ -228,7 +228,7 @@
 </div>
 
 <script>
-const API_KEY='d4is89hr01queuakbspgd4is89hr01queuakbsq0';
+const API_KEY='d4g61b9r01qm5b343fo0d4g61b9r01qm5b343fog';
 const WS_ENDPOINT='wss://ws.finnhub.io';
 const KEEPALIVE_INTERVAL=25000;
 const RECONNECT_MAX=60000;
@@ -361,7 +361,7 @@ function handleWsMessage(msg){
       smoothedPrices[sym]=smoothedPrices[sym]??value;
       smoothedPrices[sym]=SMOOTHING_ALPHA*value+(1-SMOOTHING_ALPHA)*smoothedPrices[sym];
       updatePriceUI(sym);
-      onPriceUpdate(sym,smoothedPrices[sym]);
+      onPriceUpdate(sym);
     });
     return;
   }
@@ -374,7 +374,7 @@ function handleWsMessage(msg){
       smoothedPrices[sym]=smoothedPrices[sym]??value;
       smoothedPrices[sym]=SMOOTHING_ALPHA*value+(1-SMOOTHING_ALPHA)*smoothedPrices[sym];
       updatePriceUI(sym);
-      onPriceUpdate(sym,smoothedPrices[sym]);
+      onPriceUpdate(sym);
     }
   }
 }
@@ -402,9 +402,27 @@ function refreshLotInfo(){
 function onPriceUpdate(symbol){
   let updated=false;
   positions.forEach(pos=>{if(pos.symbol.api===symbol){pos.current=smoothedPrices[symbol];updated=true;}});
+  checkPositionTargets(symbol,smoothedPrices[symbol]);
   checkOrdersForSymbol(symbol);
   if(updated) renderPositions();
   renderTotals();
+}
+
+function checkPositionTargets(symbol, price){
+  if(price===undefined) return;
+  const toClose=[];
+  positions.forEach(pos=>{
+    if(pos.symbol.api!==symbol) return;
+    if(pos.side==='BUY'){
+      if(pos.tp!==null&&pos.tp!==undefined&&price>=pos.tp) toClose.push({id:pos.id,reason:'tp'});
+      if(pos.sl!==null&&pos.sl!==undefined&&price<=pos.sl) toClose.push({id:pos.id,reason:'sl'});
+    } else {
+      if(pos.tp!==null&&pos.tp!==undefined&&price<=pos.tp) toClose.push({id:pos.id,reason:'tp'});
+      if(pos.sl!==null&&pos.sl!==undefined&&price>=pos.sl) toClose.push({id:pos.id,reason:'sl'});
+    }
+  });
+  const unique=new Set(toClose.map(item=>item.id));
+  unique.forEach(id=>closePosition(id));
 }
 
 async function fetchPriceREST(symbol){
@@ -422,7 +440,7 @@ function computePnl(pos){
   const delta=pos.side==='BUY'?(current-pos.entry):(pos.entry-current);
   const pip_cnt=delta/pipSize(pos.symbol.api);
   const value_per_pip=pipValue(pos.symbol.api);
-  return Number(pip_cnt*value_per_pip*LEVERAGE*pos.size)/30;
+  return Number(pip_cnt*value_per_pip*LEVERAGE*pos.size)/20;
 }
 
 async function openPosition(symObj,side,lots=1,forcedEntry=null, tp=null, sl=null){
@@ -433,7 +451,7 @@ async function openPosition(symObj,side,lots=1,forcedEntry=null, tp=null, sl=nul
     const required=(price*lotUnits(symObj.api)*lots)/LEVERAGE;
     if(required>availableBalance){audioDenied.play();alert('Solde insuffisant');return resolve(false);}
     availableBalance-=required;
-    const pos={id:'pos_'+Math.random().toString(36).slice(2,9),symbol:symObj,side,entry:price,size:lots,current:price,openAt:Date.now(),tp,sl};
+    const pos={id:'pos_'+Math.random().toString(36).slice(2,9),symbol:symObj,side,entry:price,size:lots,current:price,openAt:Date.now(),tp,tp,sl};
     positions.push(pos);
     renderPositions();renderTotals();
     audioOpen.play();
@@ -644,8 +662,6 @@ startWebSocket();
 </script>
 </body>
 </html>
-
-
 
 
 
