@@ -35,7 +35,6 @@
   .wl-item{display:flex;justify-content:space-between;align-items:center;padding:12px;border-radius:14px;cursor:pointer;transition:transform .15s ease,background .15s ease;background:rgba(255,255,255,0.01)}
   .wl-item:hover{transform:translateY(-4px);background:rgba(255,255,255,0.12)}
   .wl-symbol{font-weight:700}
-  .wl-details{text-align:right}
   .orders-card{margin-top:12px;background:rgba(255,255,255,0.01);padding:16px;border-radius:14px;display:flex;flex-direction:column;gap:12px;border:1px solid rgba(255,255,255,0.06)}
   .orders-card h4{margin:0;color:var(--muted);font-size:15px}
   .orders-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
@@ -234,7 +233,6 @@ const KEEPALIVE_INTERVAL=25000;
 const RECONNECT_MAX=60000;
 const BASE_LOT_SIZE=100000;
 const LEVERAGE=20;
-const SMOOTHING_ALPHA=0.2;
 const WATCHLIST=[
   {tv:'OANDA:EURUSD',label:'EUR / USD',api:'OANDA:EUR_USD'},
   {tv:'OANDA:USDJPY',label:'USD / JPY',api:'OANDA:USD_JPY'},
@@ -246,7 +244,7 @@ const WATCHLIST=[
 
 let ws=null,wsConnected=false,reconnectDelay=1000,keepaliveTimer=null;
 let currentSymbol=WATCHLIST[0];
-let priceCache={},smoothedPrices={},positions=[],history=[],orders=[];
+let priceCache={},positions=[],history=[],orders=[];
 let simBalance=50000.00;
 let availableBalance=50000.00;
 let tvWidget=null;
@@ -262,11 +260,6 @@ function formatPrice(val){return val===undefined||val===null?'—':Number(val).t
 function formatMoney(val){return val===undefined||val===null?'0.00':Number(val).toFixed(2);}
 function pipSize(symbol){if(symbol.includes('JPY'))return 0.01;if(symbol.includes('XAU'))return 0.1;return 0.0001;}
 function lotUnits(symbol){return symbol.includes('XAU')?100:BASE_LOT_SIZE;}
-function pipValue(symbol){
-  const price=smoothedPrices[symbol]??priceCache[symbol];
-  if(!price) return 0;
-  return (pipSize(symbol)/price)*lotUnits(symbol);
-}
 
 const wlList=document.getElementById('wlList');
 const ordSymbol=document.getElementById('ordSymbol');
@@ -303,7 +296,7 @@ function selectSymbol(sym){
   currentSymbol=sym;
   document.getElementById('currentSymbolBadge').innerText=sym.tv;
   document.getElementById('currentSymbolTitle').innerText=sym.label;
-  const price=smoothedPrices[sym.api]??priceCache[sym.api];
+  const price=priceCache[sym.api];
   document.getElementById('currentPriceMini').innerText=price!==undefined?'Prix: '+formatPrice(price):'Prix: —';
   refreshLotInfo();
   initTradingView();
@@ -334,7 +327,6 @@ function startWebSocket(){
       reconnectDelay=1000;
       WATCHLIST.forEach(w=>{try{ws.send(JSON.stringify({type:'subscribe',symbol:w.api}));}catch(e){console.warn('subscribe',e);} });
       startKeepalive();
-      WATCHLIST.forEach(async w=>{if(priceCache[w.api]===undefined){const fetched=await fetchPriceREST(w.api);if(fetched!==null){priceCache[w.api]=fetched;smoothedPrices[w.api]=fetched;updatePriceUI(w.api);} }});
     });
     ws.addEventListener('message',ev=>{
       try{const msg=JSON.parse(ev.data);handleWsMessage(msg);}catch(e){console.warn('WS parse',e);}
@@ -356,10 +348,7 @@ function handleWsMessage(msg){
       const sym=d.s||d.symbol;
       const price=d.p||d.price;
       if(!sym||price===undefined) return;
-      const value=Number(price);
-      priceCache[sym]=value;
-      smoothedPrices[sym]=smoothedPrices[sym]??value;
-      smoothedPrices[sym]=SMOOTHING_ALPHA*value+(1-SMOOTHING_ALPHA)*smoothedPrices[sym];
+      priceCache[sym]=Number(price);
       updatePriceUI(sym);
       onPriceUpdate(sym);
     });
@@ -369,10 +358,7 @@ function handleWsMessage(msg){
     const sym=msg.data.s||msg.data.symbol;
     const price=msg.data.p||msg.data.price||msg.data.c;
     if(sym&&price!==undefined){
-      const value=Number(price);
-      priceCache[sym]=value;
-      smoothedPrices[sym]=smoothedPrices[sym]??value;
-      smoothedPrices[sym]=SMOOTHING_ALPHA*value+(1-SMOOTHING_ALPHA)*smoothedPrices[sym];
+      priceCache[sym]=Number(price);
       updatePriceUI(sym);
       onPriceUpdate(sym);
     }
@@ -381,19 +367,17 @@ function handleWsMessage(msg){
 
 function updatePriceUI(symbol){
   const el=document.getElementById('price_'+escapeId(symbol));
-  const price=smoothedPrices[symbol]??priceCache[symbol];
+  const price=priceCache[symbol];
   if(el) el.innerText=formatPrice(price);
   if(symbol===currentSymbol.api) document.getElementById('currentPriceMini').innerText='Prix: '+formatPrice(price);
 }
 
 function refreshLotInfo(){
-  const price=smoothedPrices[currentSymbol.api]??priceCache[currentSymbol.api];
+  const price=priceCache[currentSymbol.api];
   const lots=parseFloat(document.getElementById('lotInput').value)||1;
   if(price!==undefined){
-    const units=lotUnits(currentSymbol.api);
-    const lotValue=price*units*lots;
-    const pip=pipSize(currentSymbol.api);
-    document.getElementById('lotValueInfo').innerText=`${lots} lots = ${(lotValue/LEVERAGE).toFixed(2)} USD de marge · 1 pip ≈ ${(pipValue(currentSymbol.api)*lots).toFixed(2)} USD · levier 1:${LEVERAGE}`;
+    const lotValue=price*lotUnits(currentSymbol.api)*lots;
+    document.getElementById('lotValueInfo').innerText=`${lots} lots = ${(lotValue/LEVERAGE).toFixed(2)} USD de marge · levier 1:${LEVERAGE}`;
   } else {
     document.getElementById('lotValueInfo').innerText=`1 lot = ${lotUnits(currentSymbol.api)}u · marge 1:${LEVERAGE}`;
   }
@@ -401,62 +385,50 @@ function refreshLotInfo(){
 
 function onPriceUpdate(symbol){
   let updated=false;
-  positions.forEach(pos=>{if(pos.symbol.api===symbol){pos.current=smoothedPrices[symbol];updated=true;}});
-  checkPositionTargets(symbol,smoothedPrices[symbol]);
+  positions.forEach(pos=>{if(pos.symbol.api===symbol){pos.current=priceCache[symbol];updated=true;}});
+  checkPositionTargets(symbol);
   checkOrdersForSymbol(symbol);
   if(updated) renderPositions();
   renderTotals();
 }
 
-function checkPositionTargets(symbol, price){
+function checkPositionTargets(symbol){
+  const price=priceCache[symbol];
   if(price===undefined) return;
   const toClose=[];
   positions.forEach(pos=>{
     if(pos.symbol.api!==symbol) return;
     if(pos.side==='BUY'){
-      if(pos.tp!==null&&pos.tp!==undefined&&price>=pos.tp) toClose.push(pos.id);
-      if(pos.sl!==null&&pos.sl!==undefined&&price<=pos.sl) toClose.push(pos.id);
+      if(pos.tp!==null&&price>=pos.tp) toClose.push(pos.id);
+      if(pos.sl!==null&&price<=pos.sl) toClose.push(pos.id);
     } else {
-      if(pos.tp!==null&&pos.tp!==undefined&&price<=pos.tp) toClose.push(pos.id);
-      if(pos.sl!==null&&pos.sl!==undefined&&price>=pos.sl) toClose.push(pos.id);
+      if(pos.tp!==null&&price<=pos.tp) toClose.push(pos.id);
+      if(pos.sl!==null&&price>=pos.sl) toClose.push(pos.id);
     }
   });
   [...new Set(toClose)].forEach(id=>closePosition(id));
 }
 
-async function fetchPriceREST(symbol){
-  try{
-    const res=await fetch(`https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(symbol)}&token=${API_KEY}`);
-    if(!res.ok) return null;
-    const body=await res.json();
-    return body?.c?Number(body.c):null;
-  }catch(e){return null;}
-}
-
 function computePnl(pos){
-  const current=pos.current!==undefined?pos.current:(smoothedPrices[pos.symbol.api]??priceCache[pos.symbol.api]);
+  const current=pos.current!==undefined?pos.current:priceCache[pos.symbol.api];
   if(current===undefined) return 0;
-  const delta=pos.side==='BUY'?(current-pos.entry):(pos.entry-current);
-  const pip_cnt=delta/pipSize(pos.symbol.api);
-  const value_per_pip=pipValue(pos.symbol.api);
-  return Number(pip_cnt*value_per_pip*LEVERAGE*pos.size);
+  const unitValue=current*lotUnits(pos.symbol.api)*pos.size;
+  const entryValue=pos.entry*lotUnits(pos.symbol.api)*pos.size;
+  return (pos.side==='BUY'?unitValue-entryValue:entryValue-unitValue)*LEVERAGE/lotUnits(pos.symbol.api);
 }
 
 async function openPosition(symObj,side,lots=1,forcedEntry=null, tp=null, sl=null){
-  return new Promise(async resolve=>{
-    let price=forcedEntry!==null?forcedEntry:smoothedPrices[symObj.api]??priceCache[symObj.api];
-    if(price===undefined||price===null){const fetched=await fetchPriceREST(symObj.api);if(fetched!==null) price=fetched;}
-    if(price===undefined||price===null){audioDenied.play();alert('Prix indisponible');return resolve(false);}
-    const required=(price*lotUnits(symObj.api)*lots)/LEVERAGE;
-    if(required>availableBalance){audioDenied.play();alert('Solde insuffisant');return resolve(false);}
-    availableBalance-=required;
-    const pos={id:'pos_'+Math.random().toString(36).slice(2,9),symbol:symObj,side,entry:price,size:lots,current:price,openAt:Date.now(),tp:tp?Number(tp):null,sl:sl?Number(sl):null};
-    positions.push(pos);
-    renderPositions();renderTotals();
-    audioOpen.play();
-    audioConfirm.play();
-    resolve(true);
-  });
+  const price=forcedEntry!==null?forcedEntry:priceCache[symObj.api];
+  if(price===undefined||price===null){audioDenied.play();alert('Prix indisponible');return false;}
+  const required=(price*lotUnits(symObj.api)*lots)/LEVERAGE;
+  if(required>availableBalance){audioDenied.play();alert('Solde insuffisant');return false;}
+  availableBalance-=required;
+  const pos={id:'pos_'+Math.random().toString(36).slice(2,9),symbol:symObj,side,entry:price,size:lots,current:price,tp:tp?Number(tp):null,sl:sl?Number(sl):null};
+  positions.push(pos);
+  renderPositions();renderTotals();
+  audioOpen.play();
+  audioConfirm.play();
+  return true;
 }
 
 function closePosition(id, lotsToSell=null){
@@ -464,17 +436,14 @@ function closePosition(id, lotsToSell=null){
   if(idx===-1) return;
   const pos=positions[idx];
   const lots=lotsToSell!==null?Math.min(lotsToSell,pos.size):pos.size;
-  const closePrice=smoothedPrices[pos.symbol.api]??priceCache[pos.symbol.api]??pos.current;
-  const pnl=computePnl({...pos,size:lots});
+  const closePrice=priceCache[pos.symbol.api]??pos.current;
+  const pnl=computePnl({...pos,size:lots,current:closePrice});
   const released=(closePrice*lotUnits(pos.symbol.api)*lots)/LEVERAGE;
   availableBalance+=released;
   availableBalance+=pnl;
   history.unshift({symbol:pos.symbol,side:pos.side,entry:pos.entry,close:closePrice,pnl,lots,closedAt:Date.now()});
-  if(lots<pos.size){
-    pos.size-=lots;
-  } else {
-    positions.splice(idx,1);
-  }
+  if(lots<pos.size) pos.size-=lots;
+  else positions.splice(idx,1);
   renderPositions();renderHistory();renderTotals();
   audioClose.play();
 }
@@ -484,24 +453,20 @@ function addLimitOrder(symbol,side,price,lots,tp,sl){
   if(required>availableBalance){audioDenied.play();alert('Solde insuffisant pour cet ordre');return;}
   availableBalance-=required;
   orders.push({id:'ord_'+Math.random().toString(36).slice(2,9),symbol,side,price:Number(price),size:Number(lots),tp:tp?Number(tp):null,sl:sl?Number(sl):null,margin:required});
-  renderOrders();
-  renderTotals();
+  renderOrders();renderTotals();
   audioOpen.play();
   audioConfirm.play();
 }
 
 function removeOrder(id){
   const order=orders.find(o=>o.id===id);
-  if(order){
-    availableBalance+=order.margin;
-  }
+  if(order) availableBalance+=order.margin;
   orders=orders.filter(o=>o.id!==id);
-  renderOrders();
-  renderTotals();
+  renderOrders();renderTotals();
 }
 
 function checkOrdersForSymbol(symbol){
-  const price=smoothedPrices[symbol]??priceCache[symbol];
+  const price=priceCache[symbol];
   if(price===undefined) return;
   const matches=orders.filter(o=>o.symbol===symbol&&((o.side==='BUY'&&price<=o.price)||(o.side==='SELL'&&price>=o.price)));
   matches.forEach(async m=>{
@@ -515,7 +480,7 @@ function renderPositions(){
   const tbody=document.getElementById('positionsBody');
   tbody.innerHTML='';
   positions.forEach(pos=>{
-    const current=pos.current!==undefined?pos.current:(smoothedPrices[pos.symbol.api]??priceCache[pos.symbol.api]);
+    const current=pos.current!==undefined?pos.current:priceCache[pos.symbol.api];
     pos.current=current;
     const pnl=computePnl(pos);
     const cls=pnl>=0?'positive':'negative';
@@ -535,7 +500,7 @@ function renderPositions(){
     tbody.appendChild(tr);
   });
   tbody.querySelectorAll('button[data-id]').forEach(btn=>btn.onclick=()=>openPositionModal(btn.dataset.id));
-  tbody.querySelectorAll('button[data-close]').forEach(btn=>btn.onclick=()=>closePosition(btn.dataset.close));
+  tbody.querySelectorAll('button[data-close]').forEach(btn=>closePosition(btn.dataset.close));
   const details=document.getElementById('posDetails');
   if(positions.length>0){
     const p=positions[0];
@@ -591,7 +556,6 @@ function renderAll(){renderPositions();renderHistory();renderOrders();renderTota
 renderAll();
 
 document.getElementById('lotInput').addEventListener('input',refreshLotInfo);
-
 document.getElementById('addOrderBtn').addEventListener('click',()=>{
   const symbol=document.getElementById('ordSymbol').value;
   const side=document.getElementById('ordSide').value;
