@@ -245,11 +245,11 @@ const WATCHLIST=[
   {tv:'OANDA:USDCHF',label:'USD / CHF',api:'OANDA:USD_CHF'},
   {tv:'OANDA:AUDUSD',label:'AUD / USD',api:'OANDA:AUD_USD'},
   {tv:'OANDA:XAUUSD',label:'Gold / USD',api:'OANDA:XAU_USD'},
-  {tv:'INDEX:US30',label:'Dow Jones',api:'^DJI'},
-  {tv:'INDEX:US500',label:'S&P 500',api:'^GSPC'},
-  {tv:'INDEX:NDX',label:'Nasdaq 100',api:'^NDX'},
-  {tv:'INDEX:DE30',label:'DAX 40',api:'^GDAXI'},
-  {tv:'INDEX:FR40',label:'CAC 40',api:'^FCHI'}
+  {tv:'INDEX:DJ30',label:'Dow Jones',api:'DJ30'},
+  {tv:'INDEX:US 500',label:'S&P 500',api:'US500'},
+  {tv:'INDEX:NDX',label:'Nasdaq 100',api:'NDX'},
+  {tv:'INDEX:DAX',label:'DAX 40',api:'DAX'},
+  {tv:'INDEX:CAC 40',label:'CAC 40',api:'CAC40'}
 ];
 
 const PIP_STEPS={
@@ -271,6 +271,7 @@ const audioOpen=document.getElementById('sound-open');
 const audioClose=document.getElementById('sound-close');
 const audioReject=document.getElementById('sound-reject');
 const audioValidate=document.getElementById('sound-validate');
+
 const wlList=document.getElementById('wlList');
 const ordSymbol=document.getElementById('ordSymbol');
 const toastEl=document.getElementById('toast');
