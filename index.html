@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Mini Broker — Web Trader (Finnhub WS)</title>
+<title>Mini Broker — Web Trader (Finnhub WS + Polygon indices)</title>
 <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
 <style>
   :root{
@@ -232,8 +232,10 @@
 <div id="toast" class="toast" aria-live="polite"></div>
 
 <script>
-const API_KEY='d4is89hr01queuakbspgd4is89hr01queuakbsq0';
+const API_KEY='d4g61b9r01qm5b343fo0d4g61b9r01qm5b343fog';
 const WS_ENDPOINT='wss://ws.finnhub.io';
+const POLYGON_WS='wss://socket.polygon.io/stocks';
+const POLYGON_KEY='pQBZtKLBm1kWfGLcSU5WMAlWnD0Wee69';
 const KEEPALIVE_INTERVAL=25000;
 const RECONNECT_MAX=60000;
 const BASE_LOT_SIZE=100000;
@@ -245,11 +247,11 @@ const WATCHLIST=[
   {tv:'OANDA:USDCHF',label:'USD / CHF',api:'OANDA:USD_CHF'},
   {tv:'OANDA:AUDUSD',label:'AUD / USD',api:'OANDA:AUD_USD'},
   {tv:'OANDA:XAUUSD',label:'Gold / USD',api:'OANDA:XAU_USD'},
-  {tv:'DJ30',label:'Dow Jones',api:'DJ30'},
-  {tv:'USA S&P 500 Index',label:'S&P 500',api:'US500'},
-  {tv:'NDX',label:'Nasdaq 100',api:'NDX'},
-  {tv:'DAX',label:'DAX 40',api:'DAX'},
-  {tv:'Indice CAC40',label:'CAC 40',api:'CAC40'}
+  {tv:'DJ30',label:'Dow Jones',api:'DJ30',polygon:'DJI'},
+  {tv:'USA S&P 500 Index',label:'S&P 500',api:'US500',polygon:'SPX'},
+  {tv:'NDX',label:'Nasdaq 100',api:'NDX',polygon:'NDX'},
+  {tv:'DAX',label:'DAX 40',api:'DAX',polygon:'DAX'},
+  {tv:'Indice CAC40',label:'CAC 40',api:'CAC40',polygon:'FCHI'}
 ];
 
 const PIP_STEPS={
@@ -259,7 +261,7 @@ const PIP_STEPS={
 };
 const PNL_BOOST_NON_XAU=4.5;
 
-let ws=null,wsConnected=false,reconnectDelay=1000,keepaliveTimer=null;
+let ws=null,polygonWs=null,wsConnected=false,reconnectDelay=1000,keepaliveTimer=null,polygonReconnectDelay=1000;
 let currentSymbol=WATCHLIST[0];
 let priceCache={},positions=[],history=[],orders=[];
 let simBalance=50000.00;
@@ -275,6 +277,13 @@ const wlList=document.getElementById('wlList');
 const ordSymbol=document.getElementById('ordSymbol');
 const toastEl=document.getElementById('toast');
 let toastTimer=null;
+
+const polygonSymbolToApi={};
+WATCHLIST.forEach(w=>{
+  if(w.polygon){
+    polygonSymbolToApi[w.polygon]=w.api;
+  }
+});
 
 function showToast(message){
   if(toastTimer){clearTimeout(toastTimer);}
@@ -751,11 +760,66 @@ document.getElementById('modalSave').addEventListener('click',()=>{
   audioValidate.play();
 });
 
+function handlePolygonMessage(raw){
+  try{
+    const data=JSON.parse(raw);
+    if(data.ev==='status'){
+      return;
+    }
+    if(data.ev==='XA'){
+      const symbolKey=data.sym?.startsWith('XA.')?data.sym.slice(3):data.sym;
+      const apiKey=polygonSymbolToApi[symbolKey];
+      const price=data.p??data.price??data.last??null;
+      if(apiKey&&price!==null){
+        priceCache[apiKey]=Number(price);
+        updatePriceUI(apiKey);
+        onPriceUpdate(apiKey);
+      }
+    }
+  }catch(e){
+    console.warn('Polygon parse error',e);
+  }
+}
+
+function startPolygonWS(){
+  try{
+    polygonWs=new WebSocket(POLYGON_WS);
+    polygonWs.addEventListener('open',()=>{
+      polygonReconnectDelay=1000;
+      polygonWs.send(JSON.stringify({action:'auth',params:POLYGON_KEY}));
+      WATCHLIST.filter(w=>w.polygon).forEach(w=>{
+        polygonWs.send(JSON.stringify({action:'subscribe',params:`XA.${w.polygon}`}));
+      });
+    });
+    polygonWs.addEventListener('message',ev=>handlePolygonMessage(ev.data));
+    polygonWs.addEventListener('close',()=>schedulePolygonReconnect());
+    polygonWs.addEventListener('error',()=>{try{polygonWs.close();}catch(e){}schedulePolygonReconnect();});
+  }catch(e){
+    schedulePolygonReconnect();
+  }
+}
+
+function schedulePolygonReconnect(){
+  if(polygonReconnectDelay>RECONNECT_MAX) polygonReconnectDelay=RECONNECT_MAX;
+  setTimeout(()=>{polygonReconnectDelay=Math.min(RECONNECT_MAX,Math.floor(polygonReconnectDelay*1.8));startPolygonWS();},polygonReconnectDelay);
+}
+
+watchPolygonInitialPrices();
+
+async function watchPolygonInitialPrices(){
+  await Promise.all(WATCHLIST.filter(w=>w.polygon).map(async w=>{
+    if(priceCache[w.api]!==undefined) return;
+    const value=await fetchPriceREST(w.polygon);
+    if(value!==null){priceCache[w.api]=value;updatePriceUI(w.api);}
+  }));
+}
+
 window.closePosition=closePosition;
 window.removeOrder=removeOrder;
 
 selectSymbol(WATCHLIST[0]);
 startWebSocket();
+startPolygonWS();
 </script>
 </body>
 </html>
