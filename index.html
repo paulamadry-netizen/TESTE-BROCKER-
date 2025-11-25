@@ -35,7 +35,6 @@
   .wl-item{display:flex;justify-content:space-between;align-items:center;padding:12px;border-radius:14px;cursor:pointer;transition:transform .15s ease,background .15s ease;background:rgba(255,255,255,0.01)}
   .wl-item:hover{transform:translateY(-4px);background:rgba(255,255,255,0.12)}
   .wl-symbol{font-weight:700}
-  .wl-details{text-align:right}
   .orders-card{margin-top:12px;background:rgba(255,255,255,0.01);padding:16px;border-radius:14px;display:flex;flex-direction:column;gap:12px;border:1px solid rgba(255,255,255,0.06)}
   .orders-card h4{margin:0;color:var(--muted);font-size:15px}
   .orders-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
@@ -84,7 +83,7 @@
   <div class="card chart-card">
     <div class="chart-header">
       <div class="symbol-info">
-        <div class="symbol-badge" id="currentSymbolBadge">OANDA:EUR_USD</div>
+        <div class="symbol-badge" id="currentSymbolBadge">OANDA:EURUSD</div>
         <div>
           <div style="font-weight:800;font-size:16px" id="currentSymbolTitle">EUR / USD</div>
           <div class="small-muted" id="currentPriceMini">Prix: —</div>
@@ -218,7 +217,7 @@
     </div>
     <div class="modal-row">
       <label>Lots à vendre</label>
-      <input type="number" id="modalSellLots" min="0.01" step="0.01" value="0.01" />
+      <input type="number" id="modalSellLots" min="0" step="0.01" value="0" />
     </div>
     <div class="modal-actions">
       <button class="btn btn-ghost" id="modalCancel">Annuler</button>
@@ -228,7 +227,7 @@
 </div>
 
 <script>
-const API_KEY='d4is89hr01queuakbspgd4is89hr01queuakbsq0';
+const API_KEY='d4g61b9r01qm5b343fo0d4g61b9r01qm5b343fog';
 const WS_ENDPOINT='wss://ws.finnhub.io';
 const KEEPALIVE_INTERVAL=25000;
 const RECONNECT_MAX=60000;
@@ -236,12 +235,12 @@ const BASE_LOT_SIZE=100000;
 const LEVERAGE=20;
 const SMOOTHING_ALPHA=0.2;
 const WATCHLIST=[
-  {tv:'OANDA:EUR_USD',label:'EUR / USD',api:'OANDA:EUR_USD'},
-  {tv:'OANDA:USD_JPY',label:'USD / JPY',api:'OANDA:USD_JPY'},
-  {tv:'OANDA:GBP_USD',label:'GBP / USD',api:'OANDA:GBP_USD'},
-  {tv:'OANDA:USD_CHF',label:'USD / CHF',api:'OANDA:USD_CHF'},
-  {tv:'OANDA:AUD_USD',label:'AUD / USD',api:'OANDA:AUD_USD'},
-  {tv:'OANDA:XAU_USD',label:'Gold / USD',api:'OANDA:XAU_USD'}
+  {tv:'OANDA:EURUSD',label:'EUR / USD',api:'OANDA:EUR_USD'},
+  {tv:'OANDA:USDJPY',label:'USD / JPY',api:'OANDA:USD_JPY'},
+  {tv:'OANDA:GBPUSD',label:'GBP / USD',api:'OANDA:GBP_USD'},
+  {tv:'OANDA:USDCHF',label:'USD / CHF',api:'OANDA:USD_CHF'},
+  {tv:'OANDA:AUDUSD',label:'AUD / USD',api:'OANDA:AUD_USD'},
+  {tv:'OANDA:XAUUSD',label:'Gold / USD',api:'OANDA:XAU_USD'}
 ];
 
 let ws=null,wsConnected=false,reconnectDelay=1000,keepaliveTimer=null;
@@ -414,15 +413,14 @@ function checkPositionTargets(symbol, price){
   positions.forEach(pos=>{
     if(pos.symbol.api!==symbol) return;
     if(pos.side==='BUY'){
-      if(pos.tp!==null&&pos.tp!==undefined&&price>=pos.tp) toClose.push({id:pos.id,reason:'tp'});
-      if(pos.sl!==null&&pos.sl!==undefined&&price<=pos.sl) toClose.push({id:pos.id,reason:'sl'});
+      if(pos.tp!==null&&pos.tp!==undefined&&price>=pos.tp) toClose.push(pos.id);
+      if(pos.sl!==null&&pos.sl!==undefined&&price<=pos.sl) toClose.push(pos.id);
     } else {
-      if(pos.tp!==null&&pos.tp!==undefined&&price<=pos.tp) toClose.push({id:pos.id,reason:'tp'});
-      if(pos.sl!==null&&pos.sl!==undefined&&price>=pos.sl) toClose.push({id:pos.id,reason:'sl'});
+      if(pos.tp!==null&&pos.tp!==undefined&&price<=pos.tp) toClose.push(pos.id);
+      if(pos.sl!==null&&pos.sl!==undefined&&price>=pos.sl) toClose.push(pos.id);
     }
   });
-  const unique=new Set(toClose.map(item=>item.id));
-  unique.forEach(id=>closePosition(id));
+  [...new Set(toClose)].forEach(id=>closePosition(id));
 }
 
 async function fetchPriceREST(symbol){
@@ -530,13 +528,13 @@ function renderPositions(){
       <td><span class="${cls}">${formatMoney(pnl)}</span></td>
       <td>
         <button class="btn btn-ghost" data-id="${pos.id}">Modifier</button>
-        <button class="btn btn-ghost" data-close="${pos.id}">Vendre 0.01</button>
+        <button class="btn btn-ghost" data-close="${pos.id}">Vendre Tout</button>
       </td>
     `;
     tbody.appendChild(tr);
   });
   tbody.querySelectorAll('button[data-id]').forEach(btn=>btn.onclick=()=>openPositionModal(btn.dataset.id));
-  tbody.querySelectorAll('button[data-close]').forEach(btn=>btn.onclick=()=>closePosition(btn.dataset.close,0.01));
+  tbody.querySelectorAll('button[data-close]').forEach(btn=>btn.onclick=()=>closePosition(btn.dataset.close));
   const details=document.getElementById('posDetails');
   if(positions.length>0){
     const p=positions[0];
@@ -636,7 +634,7 @@ function openPositionModal(id){
   document.getElementById('modalLots').innerText=pos.size;
   document.getElementById('modalTp').value=pos.tp||'';
   document.getElementById('modalSl').value=pos.sl||'';
-  document.getElementById('modalSellLots').value='0.01';
+  document.getElementById('modalSellLots').value='0';
   document.getElementById('positionModal').style.display='flex';
 }
 
