@@ -168,16 +168,15 @@
 
 <script>
 /*
-  WS-first mini-broker
-  - API key you gave
-  - WebSocket primary; REST fallback limited to 8 calls/min
-  - Limit orders below watchlist; executed automatically when price meets the condition
+  WS-first mini-broker - FULL FILE
+  - Uses WebSocket only for price updates (no REST polling)
+  - Robust WS message parsing (handles multiple shapes)
+  - Auto-reconnect with backoff
+  - Limit orders executed locally when price condition met
 */
 
 const API_KEY = '8906aa7f29ca470da317f72ae7efab51';
-const MAX_CALLS_PER_MIN = 8;
-const CALL_INTERVAL_MS = Math.ceil(60000 / MAX_CALLS_PER_MIN); // ~7500ms
-const USE_WS = true; // use WS as first option
+const USE_WS = true;
 
 // Watchlist definition
 const WATCHLIST = [
@@ -199,12 +198,10 @@ let currentSymbol = WATCHLIST[0];
 let positions = [];
 let history = [];
 let orders = [];
-let priceCache = {};
-let apiQueue = [];
-let lastCall = 0;
-let wlIndex = 0;
-let wsConnected = false;
+let priceCache = {}; // keyed by API symbol e.g. "EUR/USD"
 let ws = null;
+let wsConnected = false;
+let reconnectDelay = 1000; // ms, exponential backoff
 let simBalance = 10000.00;
 
 // helpers
@@ -235,22 +232,17 @@ function loadSymbol(sym){
   document.getElementById('currentSymbolBadge').innerText = sym.tv;
   document.getElementById('currentSymbolTitle').innerText = sym.label;
   if(tvWidget && tvWidget.onChartReady) tvWidget.onChartReady(()=>{ try{ tvWidget.chart().setSymbol(sym.tv); }catch(e){} });
-  if(!wsConnected) queueApiCall(()=>fetchPriceAndUpdate(sym,false));
+  // update current price display if we have it
+  if(priceCache[sym.api] !== undefined) document.getElementById('currentPriceMini').innerText = 'Prix: ' + formatPrice(priceCache[sym.api]);
 }
 
-// api queue (rate-limiter for REST fallback)
-function queueApiCall(fn){ apiQueue.push(fn); }
-setInterval(async ()=>{
-  if(apiQueue.length===0) return;
-  const now = Date.now();
-  if(now - lastCall >= CALL_INTERVAL_MS){
-    const fn = apiQueue.shift();
-    lastCall = now;
-    try{ await fn(); }catch(e){ console.error('queued call error', e); }
-  }
-}, 500);
+// === WEBSOCKET ===
+function buildSubscribeSymbols(){
+  // TwelveData WS expects symbols like EURUSD (no slash) for many endpoints. We'll provide both forms for safety.
+  // We'll send symbols without slash for the typical formats.
+  return WATCHLIST.map(w=>w.api.replace('/','')).join(',');
+}
 
-// start websocket (TwelveData style) and subscribe watchlist
 async function startWebSocket(){
   if(!USE_WS) return false;
   try{
@@ -258,80 +250,100 @@ async function startWebSocket(){
     ws = new WebSocket(endpoint);
 
     ws.addEventListener('open', ()=>{
-      wsConnected = true;
+      wsConnected = true; reconnectDelay = 1000;
       console.log('WS open');
-      const symbols = WATCHLIST.map(w=>w.api.replace('/',''));
-      const msg = { action: 'subscribe', params: symbols };
-      try{ ws.send(JSON.stringify(msg)); }catch(e){ console.warn('ws subscribe send', e); }
+      // send subscribe for price channel
+      const symbolsPlain = buildSubscribeSymbols();
+      const msg = { action: 'subscribe', params: { symbols: symbolsPlain, channels: 'price' } };
+      try{ ws.send(JSON.stringify(msg)); }
+      catch(e){ console.warn('ws subscribe send', e); }
     });
 
     ws.addEventListener('message', ev=>{
       try{
         const data = JSON.parse(ev.data);
-        if(Array.isArray(data)) data.forEach(handleWsPrice);
-        else handleWsPrice(data);
-      }catch(e){}
+        handleWsMessage(data);
+      }catch(e){ console.warn('ws parse error', e); }
     });
 
-    ws.addEventListener('close', ()=>{ wsConnected = false; console.log('WS closed'); });
-    ws.addEventListener('error', e=>{ wsConnected = false; console.warn('WS error', e); });
+    ws.addEventListener('close', ()=>{ wsConnected = false; console.log('WS closed'); scheduleReconnect(); });
+    ws.addEventListener('error', e=>{ wsConnected = false; console.warn('WS error', e); try{ ws.close(); }catch(_){} scheduleReconnect(); });
 
     // small wait to confirm connection
-    await new Promise(res=>setTimeout(res,900));
+    await new Promise(res=>setTimeout(res,800));
     return wsConnected;
-  }catch(e){ console.warn('ws start error', e); return false; }
+  }catch(e){ console.warn('ws start error', e); scheduleReconnect(); return false; }
 }
 
-function handleWsPrice(msg){
-  // supports multiple shapes
-  const symbolRaw = msg.symbol || msg.s || msg.sym || msg.t || msg.symbols || null;
-  let price = msg.price || msg.p || msg.last || msg.l || null;
+function scheduleReconnect(){
+  if(reconnectDelay > 60000) reconnectDelay = 60000;
+  console.log(`Reconnecting WS in ${reconnectDelay}ms`);
+  setTimeout(()=>{ reconnectDelay *= 1.8; startWebSocket(); }, reconnectDelay);
+}
 
-  if(!price && typeof msg === 'object' && msg.data && Array.isArray(msg.data)){
-    msg.data.forEach(d=>handleWsPrice(d)); return;
+function handleWsMessage(msg){
+  // TwelveData and various providers can send different shapes. Handle commonly seen ones.
+  // Examples handled:
+  // { event: 'price', symbol: 'EUR/USD', price: '1.12345' }
+  // { s: 'EURUSD', p: '1.12345' }
+  // { symbol: 'EURUSD', price: 1.12345 }
+  // { data: [ { symbol: 'EURUSD', price: '1.12' }, ... ] }
+
+  if(!msg) return;
+  if(Array.isArray(msg)) { msg.forEach(m=>handleWsMessage(m)); return; }
+
+  // if message contains data array
+  if(msg.data && Array.isArray(msg.data)){
+    msg.data.forEach(d=>handleWsMessage(d));
+    return;
   }
-  if(!symbolRaw || price===null) return;
-  const normalized = normalizeApiSymbol(String(symbolRaw));
-  priceCache[normalized] = Number(price);
-  updatePriceUI(normalized);
-  checkOrdersForSymbol(normalized);
-  renderPositions(); renderTotals();
+
+  // sometimes payload is nested under "quote" or "price"
+  const payload = msg.quote || msg.price || msg;
+
+  // extract symbol
+  let symRaw = msg.symbol || msg.s || payload.symbol || payload.sym || payload.t || null;
+  // extract price from many possible keys
+  let price = payload.price || payload.p || payload.last || payload.l || payload.close || payload.c || payload.bid || payload.ask || null;
+
+  // if price is object with bid/ask, take mid
+  if(price && typeof price === 'object'){
+    if(price.bid && price.ask) price = (Number(price.bid)+Number(price.ask))/2;
+    else price = price.last || price.p || null;
+  }
+
+  if(symRaw && typeof symRaw === 'string'){
+    // normalize common forms like EURUSD -> EUR/USD or EUR/USD -> EUR/USD
+    const normalized = normalizeApiSymbol(symRaw);
+    if(price !== null && price !== undefined && !Number.isNaN(Number(price))){
+      priceCache[normalized] = Number(price);
+      updatePriceUI(normalized);
+      checkOrdersForSymbol(normalized);
+      renderPositions(); renderTotals();
+    }
+    return;
+  }
+
+  // some messages include map of symbols
+  if(msg.price && typeof msg.price === 'object'){
+    Object.keys(msg.price).forEach(k=>{
+      const normalized = normalizeApiSymbol(k);
+      const p = Number(msg.price[k]);
+      if(!Number.isNaN(p)){ priceCache[normalized]=p; updatePriceUI(normalized); checkOrdersForSymbol(normalized); }
+    });
+    renderPositions(); renderTotals();
+  }
 }
 
 function normalizeApiSymbol(s){
-  if(s.includes('/')) return s.toUpperCase();
+  if(!s) return s;
+  s = String(s).toUpperCase();
+  // handle forms like EURUSD, EUR/USD, EUR_USD
+  if(s.includes('/')) return s.replace('_','/');
   if(s.length===6) return s.slice(0,3) + '/' + s.slice(3);
-  return s.toUpperCase();
-}
-
-// REST fetch fallback
-async function fetchPrice(symbolApi){
-  const url = `https://api.twelvedata.com/price?symbol=${encodeURIComponent(symbolApi)}&apikey=${encodeURIComponent(API_KEY)}`;
-  try{
-    const r = await fetch(url);
-    if(!r.ok) throw new Error('HTTP ' + r.status);
-    const data = await r.json();
-    if(data && (data.price !== undefined && data.price !== null)) return {ok:true, price:Number(data.price), raw:data};
-    return {ok:false, error:data};
-  }catch(e){ return {ok:false, error:e.message||e}; }
-}
-
-async function fetchPriceAndUpdate(sym, silent=false){
-  const res = await fetchPrice(sym.api);
-  const id = escapeId(sym.api);
-  const priceEl = document.getElementById('price_' + id);
-  if(!silent && sym.api === currentSymbol.api) document.getElementById('currentPriceMini').innerText = 'Prix: …';
-  if(res.ok){
-    priceCache[sym.api] = res.price;
-    if(priceEl) priceEl.innerText = formatPrice(res.price);
-    if(!silent && sym.api === currentSymbol.api) document.getElementById('currentPriceMini').innerText = 'Prix: ' + formatPrice(res.price);
-    checkOrdersForSymbol(sym.api);
-    renderPositions(); renderTotals();
-    return {ok:true, price:res.price};
-  } else {
-    if(priceEl) priceEl.innerText = 'err';
-    return {ok:false, error:res.error};
-  }
+  // fallback: try insert slash before last 3
+  if(s.length>3) return s.slice(0,s.length-3) + '/' + s.slice(s.length-3);
+  return s;
 }
 
 function updatePriceUI(normalizedApiSymbol){
@@ -340,20 +352,6 @@ function updatePriceUI(normalizedApiSymbol){
   if(el) el.innerText = formatPrice(priceCache[normalizedApiSymbol]);
   if(normalizedApiSymbol === currentSymbol.api) document.getElementById('currentPriceMini').innerText = 'Prix: ' + formatPrice(priceCache[normalizedApiSymbol]);
 }
-
-// when WS not connected, we cycle watchlist through the queue (1 symbol per interval)
-function cycleWatchlist(){
-  if(wsConnected) return;
-  const sym = WATCHLIST[wlIndex];
-  queueApiCall(async ()=>{ await fetchPriceAndUpdate(sym, true); });
-  queueApiCall(async ()=>{ await fetchPriceAndUpdate(currentSymbol, false); });
-  wlIndex = (wlIndex + 1) % WATCHLIST.length;
-}
-setInterval(()=>{ cycleWatchlist(); }, CALL_INTERVAL_MS);
-
-// seed initial calls via queue
-queueApiCall(()=>fetchPriceAndUpdate(currentSymbol,false));
-queueApiCall(()=>fetchPriceAndUpdate(WATCHLIST[0],true));
 
 // === Positions & orders ===
 function openPosition(symObj, side, size=1, entryPrice=null){
@@ -426,9 +424,22 @@ document.getElementById('addOrderBtn').addEventListener('click', ()=>{
   if(!sym || !price) return alert('Remplis symbole et prix');
   addLimitOrder(sym, side, price, size);
 });
+
+// Refresh button: if WS connected, request a snapshot via "quote" action if supported, otherwise just re-render
 document.getElementById('refreshPricesBtn').addEventListener('click', ()=>{
-  if(!wsConnected) queueApiCall(()=>fetchPriceAndUpdate(currentSymbol,false));
+  if(wsConnected && ws && ws.readyState===1){
+    try{
+      const symbolsPlain = buildSubscribeSymbols();
+      // attempt to request a quote snapshot (some endpoints support 'quote' or 'get')
+      const req = { action: 'quote', params: { symbols: symbolsPlain } };
+      ws.send(JSON.stringify(req));
+    }catch(e){ console.warn('refresh send failed', e); }
+  } else {
+    // fallback: just re-render UI
+    renderPositions(); renderOrders(); renderTotals();
+  }
 });
+
 document.getElementById('buyBtn').addEventListener('click', ()=>{ openPosition(currentSymbol,'BUY',1); });
 document.getElementById('sellBtn').addEventListener('click', ()=>{ openPosition(currentSymbol,'SELL',1); });
 
@@ -438,23 +449,27 @@ document.getElementById('tabHistory').addEventListener('click', ()=>{ document.g
 // initial render
 renderPositions(); renderHistory(); renderOrders(); renderTotals();
 
-// connect WS and fallback
-<!-- FIN DU SCRIPT À AJOUTER -->
-<script>
-// connect WS and fallback...
+// connect WS
 (async ()=>{
   const ok = await startWebSocket();
-
-  // Si le WebSocket fonctionne → pas de fallback REST intensif
-  if(ok){
-    console.log("WebSocket actif — flux en temps réel.");
+  if(!ok){
+    console.log('WS failed to connect — UI will still work but no live prices');
   } else {
-    console.warn("WebSocket indisponible — fallback REST activé.");
-    // Force une mise à jour immédiate du symbole principal
-    queueApiCall(()=>fetchPriceAndUpdate(currentSymbol,false));
+    console.log('WS connected — using push updates');
   }
 })();
+
+// expose functions for inline calls
+window.closePosition = closePosition;
+window.removeOrder = removeOrder;
+window.openPosition = openPosition;
+
 </script>
+</body>
+</html>
+
+
+
 
 
 
