@@ -246,10 +246,10 @@ const WATCHLIST=[
   {tv:'OANDA:AUDUSD',label:'AUD / USD',api:'OANDA:AUD_USD'},
   {tv:'OANDA:XAUUSD',label:'Gold / USD',api:'OANDA:XAU_USD'},
   {tv:'DJ30',label:'Dow Jones',api:'DJ30'},
-  {tv:'US 500',label:'S&P 500',api:'US500'},
+  {tv:'USA S&P 500 Index',label:'S&P 500',api:'US500'},
   {tv:'NDX',label:'Nasdaq 100',api:'NDX'},
   {tv:'DAX',label:'DAX 40',api:'DAX'},
-  {tv:'CAC 40',label:'CAC 40',api:'CAC40'}
+  {tv:'Indice CAC40',label:'CAC 40',api:'CAC40'}
 ];
 
 const PIP_STEPS={
@@ -271,7 +271,6 @@ const audioOpen=document.getElementById('sound-open');
 const audioClose=document.getElementById('sound-close');
 const audioReject=document.getElementById('sound-reject');
 const audioValidate=document.getElementById('sound-validate');
-
 const wlList=document.getElementById('wlList');
 const ordSymbol=document.getElementById('ordSymbol');
 const toastEl=document.getElementById('toast');
@@ -760,9 +759,6 @@ startWebSocket();
 </script>
 </body>
 </html>
-
-
-
 
 
 
