@@ -2,6 +2,9 @@
 <script>
 /* --- SCRIPT TRADING (CORRIGÉ & ROBUSTE) --- */
 
+/* On attend que toute la page soit chargée AVANT d’exécuter le code */
+document.addEventListener("DOMContentLoaded", () => {
+
 /* Configuration globale */
 const API_KEY = '1fc6cd30be484552ad303afda1087501';
 const TWELVE_DATA_URL = 'https://api.twelvedata.com';
@@ -66,7 +69,7 @@ function initializeTradingView(symbol) {
     renderOrderPanel(symbol);
 }
 
-/* Fullscreen toggle (inchangé fonctionnellement) */
+/* Fullscreen */
 function toggleFullScreen() {
     const elem = document.getElementById('tradingview-widget-container');
     const header = document.querySelector('header');
@@ -172,53 +175,32 @@ function showTab(tabName) {
 }
 
 /* ---------------------------
-   API TwelveData : récupération des cotations
-   - Essaie plusieurs variantes de symboles (EURUSD => EUR/USD, prefixes)
-   - Timeout, parsing robuste, logs
-   --------------------------- */
+   API TwelveData
+--------------------------- */
 
-/**
- * Génère une liste de variantes de symboles à tester pour TwelveData.
- * (augmenter les chances que TwelveData accepte le symbole depuis un navigateur)
- */
 function buildSymbolCandidates(symbol) {
     const candidates = new Set();
     if (!symbol) return Array.from(candidates);
-
-    candidates.add(symbol); // tel quel
-
-    // si paire FX simple de 6 lettres (EURUSD, GBPUSD, etc.) -> ajouter EUR/USD
+    candidates.add(symbol);
     if (/^[A-Z]{6}$/.test(symbol)) {
         candidates.add(symbol.slice(0,3) + '/' + symbol.slice(3));
         candidates.add('FX:' + symbol);
         candidates.add('OANDA:' + symbol);
         candidates.add('CURRENCY:' + (symbol.slice(0,3) + '/' + symbol.slice(3)));
     }
-
-    // Pour XAUUSD etc.
     if (/^[A-Z]{3,4}[A-Z]{3}$/.test(symbol) && symbol.includes('X')) {
         candidates.add(symbol.slice(0,3) + '/' + symbol.slice(-3));
     }
-
-    // Ajout de variantes utiles pour indices
     candidates.add('INDEX:' + symbol);
     candidates.add('TVC:' + symbol);
     candidates.add(symbol.toUpperCase());
-
     return Array.from(candidates);
 }
 
-/**
- * Récupère le prix via TwelveData en testant plusieurs variantes.
- * Retourne un nombre (prix) ou null.
- */
 async function getQuote(symbol) {
     if (!symbol) return null;
-
     const candidates = buildSymbolCandidates(symbol);
-    console.debug('getQuote: candidates ->', candidates);
 
-    // Fonction interne pour appeler l'API avec timeout
     async function fetchWithTimeout(url, timeout = 8000) {
         const controller = new AbortController();
         const id = setTimeout(() => controller.abort(), timeout);
@@ -234,53 +216,19 @@ async function getQuote(symbol) {
 
     for (const cand of candidates) {
         try {
-            const encoded = encodeURIComponent(cand);
-            const url = `${TWELVE_DATA_URL}/price?symbol=${encoded}&apikey=${API_KEY}`;
-            console.debug('getQuote: trying', url);
-
+            const url = `${TWELVE_DATA_URL}/price?symbol=${encodeURIComponent(cand)}&apikey=${API_KEY}`;
             const response = await fetchWithTimeout(url, 8000);
-
-            // gérer réponses non 200
-            if (!response.ok) {
-                console.warn(`TwelveData réponse HTTP ${response.status} pour ${cand}`);
-                // limiter les erreurs 4xx/5xx - essayer la prochaine variante
-                continue;
-            }
-
+            if (!response.ok) continue;
             const data = await response.json();
-            // STRUCTURES attendues : { price: "1.1234" } ou { "status": "error", "message": "..."}
-            if (data && data.price) {
-                const price = parseFloat(data.price);
-                if (!isNaN(price)) {
-                    console.debug(`getQuote: success ${cand} -> ${price}`);
-                    return price;
-                }
-            } else if (data && data.status === 'error') {
-                console.warn(`TwelveData erreur (${cand}):`, data.message || data);
-                // try next candidate
-                continue;
-            } else {
-                console.debug('getQuote: réponse inattendue', data);
-            }
-
-        } catch (err) {
-            if (err.name === 'AbortError') {
-                console.warn(`getQuote: timeout pour ${cand}`);
-            } else {
-                console.warn(`getQuote: erreur réseau / parsing pour ${cand}:`, err);
-            }
-            // continuer sur la prochaine variante
-            continue;
-        }
+            if (data && data.price) return parseFloat(data.price);
+        } catch {}
     }
-
-    console.error(`getQuote: impossible d'obtenir un prix pour ${symbol} après ${candidates.length} essais.`);
     return null;
 }
 
 /* ---------------------------
-   Trading : placeOrder, close, modify, PnL, affichage
-   --------------------------- */
+   Trading System
+--------------------------- */
 
 async function placeOrder(symbol, type) {
     const lotsInput = document.getElementById('lots');
@@ -290,36 +238,34 @@ async function placeOrder(symbol, type) {
         return;
     }
 
-    // Récupérer prix d'entrée (avec retries internes)
     const entryPrice = await getQuote(symbol);
     if (!entryPrice) {
         playRefusedSound();
-        alert(`Ordre refusé : impossible d'obtenir la cotation pour ${symbol}. Voir console pour détails.`);
+        alert(`Ordre refusé : impossible d'obtenir la cotation pour ${symbol}.`);
         return;
     }
 
     const assetInfo = getAssetInfo(symbol);
     const lotValue = assetInfo ? assetInfo.lotValue : 100000;
-    const requiredMargin = lots * lotValue * 0.05; // marge hypothétique 5%
+    const requiredMargin = lots * lotValue * 0.05;
 
     if (requiredMargin > ACCOUNT_BALANCE) {
         playRefusedSound();
-        alert(`Ordre refusé : marge requise (${requiredMargin.toFixed(2)} USD) supérieure au solde disponible (${ACCOUNT_BALANCE.toFixed(2)} USD).`);
+        alert(`Ordre refusé : Marge insuffisante.`);
         return;
     }
 
-    // Créer position simulée
     const position = {
         id: Date.now() + Math.floor(Math.random() * 1000),
-        symbol: symbol,
-        type: type,
-        lots: lots,
-        entryPrice: entryPrice,
+        symbol,
+        type,
+        lots,
+        entryPrice,
         currentPrice: entryPrice,
         sl: parseFloat(document.getElementById('sl-price')?.value) || null,
         tp: parseFloat(document.getElementById('tp-price')?.value) || null,
         openTime: new Date().toLocaleString(),
-        lotValue: lotValue
+        lotValue
     };
 
     activePositions.push(position);
@@ -328,20 +274,14 @@ async function placeOrder(symbol, type) {
     renderPositions();
     updateBalanceDisplay();
     playValidatedSound();
-
-    alert(`Ordre ${type} ${lots} lots sur ${symbol} exécuté à ${entryPrice.toFixed(5)} — Marge utilisée: ${requiredMargin.toFixed(2)} USD.`);
 }
 
 /* Calcul PnL */
 function calculatePnL(position) {
     const priceDiff = position.currentPrice - position.entryPrice;
-    let pnl;
-    if (position.type === 'BUY') {
-        pnl = priceDiff * position.lots * position.lotValue;
-    } else {
-        pnl = -priceDiff * position.lots * position.lotValue;
-    }
-    return pnl;
+    return position.type === 'BUY'
+        ? priceDiff * position.lots * position.lotValue
+        : -priceDiff * position.lots * position.lotValue;
 }
 
 /* Rendu positions */
@@ -378,107 +318,73 @@ function closePosition(positionId, isAutoClosure = false) {
     const index = activePositions.findIndex(p => p.id === positionId);
     if (index === -1) return;
 
-    const closedPosition = activePositions[index];
-    const pnl = calculatePnL(closedPosition);
+    const pos = activePositions[index];
+    const pnl = calculatePnL(pos);
 
-    const requiredMargin = closedPosition.lots * (closedPosition.lotValue || 100000) * 0.05;
-
+    const requiredMargin = pos.lots * pos.lotValue * 0.05;
     ACCOUNT_BALANCE += requiredMargin + pnl;
-    activePositions.splice(index, 1);
 
+    activePositions.splice(index, 1);
     renderPositions();
     updateBalanceDisplay();
     playClosedSound();
-
-    const closeType = isAutoClosure ? (pnl >= 0 ? 'TP' : 'SL') : 'Manuelle';
-    alert(`Position ${closedPosition.symbol} clôturée. PnL: ${pnl.toFixed(2)} USD. Clôture: ${closeType}.`);
 }
 
-/* Modifier TP/SL via prompt */
+/* Modifier TP/SL */
 function modifyPosition(positionId) {
     const pos = activePositions.find(p => p.id === positionId);
     if (!pos) return;
 
-    const newSL = prompt(`Modifier le Stop Loss pour ${pos.symbol} (actuel: ${pos.sl || 'N/A'}) :`);
-    const newTP = prompt(`Modifier le Take Profit pour ${pos.symbol} (actuel: ${pos.tp || 'N/A'}) :`);
+    const newSL = prompt(`Nouveau SL (actuel: ${pos.sl || 'N/A'}) :`);
+    const newTP = prompt(`Nouveau TP (actuel: ${pos.tp || 'N/A'}) :`);
 
     if (newSL !== null) pos.sl = parseFloat(newSL) || null;
     if (newTP !== null) pos.tp = parseFloat(newTP) || null;
 
     renderPositions();
-    alert('TP/SL mis à jour.');
 }
 
-/* Mise à jour affichage solde */
+/* Mise à jour solde */
 function updateBalanceDisplay() {
-    const el = document.getElementById('account-balance');
-    if (!el) return;
-    el.innerText = `${ACCOUNT_BALANCE.toLocaleString('fr-FR', { style: 'currency', currency: 'USD' })}`;
+    document.getElementById('account-balance').innerText =
+        ACCOUNT_BALANCE.toLocaleString('fr-FR', { style: 'currency', currency: 'USD' });
 }
 
-/* Sons (simulés) */
-function playSound(type) { console.log(`[Sound Effect]: ${type} played.`); }
-function playValidatedSound() { playSound('Order Validated'); }
-function playRefusedSound() { playSound('Order Refused'); }
-function playClosedSound() { playSound('Position Closed'); }
+/* Sons */
+function playSound(type) { console.log(`[Sound]: ${type}`); }
+function playValidatedSound() { playSound('validated'); }
+function playRefusedSound() { playSound('refused'); }
+function playClosedSound() { playSound('closed'); }
 
-/* ---------------------------
-   Mise à jour temps réel (boucle)
-   - utilisation d'un setInterval unique pour éviter empilement
-   - on met à jour chaque symbole actif via getQuote
-   --------------------------- */
-
+/* Boucle temps réel */
 let realtimeIntervalId = null;
+
 async function updateRealTimeDataOnce() {
-    try {
-        const uniqueSymbols = [...new Set(activePositions.map(p => p.symbol))];
-        if (uniqueSymbols.length === 0) return;
+    const uniqueSymbols = [...new Set(activePositions.map(p => p.symbol))];
+    if (uniqueSymbols.length === 0) return;
 
-        // Parallel fetch des cotations
-        const promises = uniqueSymbols.map(s => getQuote(s).then(price => ({ symbol: s, price })).catch(err => ({ symbol: s, price: null })));
-        const results = await Promise.all(promises);
+    const results = await Promise.all(uniqueSymbols.map(async s => {
+        const price = await getQuote(s);
+        return { symbol: s, price };
+    }));
 
-        results.forEach(res => {
-            if (res.price) {
-                activePositions = activePositions.map(pos => {
-                    if (pos.symbol === res.symbol) pos.currentPrice = res.price;
-                    return pos;
-                });
-            }
+    results.forEach(res => {
+        if (!res.price) return;
+        activePositions.forEach(p => {
+            if (p.symbol === res.symbol) p.currentPrice = res.price;
         });
+    });
 
-        renderPositions();
-
-        // Vérifier TP/SL
-        const toClose = [];
-        activePositions.forEach(pos => {
-            const price = pos.currentPrice;
-            let shouldClose = false;
-            if (pos.type === 'BUY') {
-                if (pos.sl && price <= pos.sl) shouldClose = true;
-                if (pos.tp && price >= pos.tp) shouldClose = true;
-            } else {
-                if (pos.sl && price >= pos.sl) shouldClose = true;
-                if (pos.tp && price <= pos.tp) shouldClose = true;
-            }
-            if (shouldClose) toClose.push(pos.id);
-        });
-
-        // Clôturer après vérification (ne modifie pas la collection durant l'itération)
-        toClose.forEach(id => closePosition(id, true));
-    } catch (err) {
-        console.error('updateRealTimeDataOnce erreur:', err);
-    }
+    renderPositions();
 }
 
 function startRealtimeLoop(intervalMs = 5000) {
     if (realtimeIntervalId) clearInterval(realtimeIntervalId);
     realtimeIntervalId = setInterval(updateRealTimeDataOnce, intervalMs);
-    // lancer une fois immédiatement
     updateRealTimeDataOnce();
 }
 
-/* Initialisation de l'application */
+/* Initialisation principale */
 function initApp() {
     initializeTradingView(CURRENT_SYMBOL);
     renderWatchlist();
@@ -490,18 +396,20 @@ function initApp() {
     startRealtimeLoop(5000);
 }
 
-/* Démarrage */
+/* Lancement */
 initApp();
 
-/* Export pour console/debug (optionnel) */
+/* Export console */
 window._tvApp = {
     getQuote,
     placeOrder,
     activePositions,
     ACCOUNT_BALANCE,
     startRealtimeLoop,
-    stopRealtimeLoop: () => { if (realtimeIntervalId) clearInterval(realtimeIntervalId); realtimeIntervalId = null; }
+    stopRealtimeLoop: () => { clearInterval(realtimeIntervalId); realtimeIntervalId = null; }
 };
+
+}); // ← FIN DOMContentLoaded
 </script>
 
 
