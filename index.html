@@ -3,187 +3,194 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Mini Broker — Web Trader Demo</title>
+<title>Mini Broker — Web Trader Demo Pro</title>
 
-<!-- TradingView widget script -->
 <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
 
 <style>
-  :root{
-    --bg:#0f1720;
-    --panel:#0b1220;
-    --muted:#9aa4b2;
-    --accent:#00c4a7;
-    --danger:#ff6b6b;
-    --glass: rgba(255,255,255,0.03);
-    --card-shadow: 0 6px 20px rgba(2,6,23,0.7);
-    --radius:14px;
-    font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
-  }
-  html,body{height:100%;margin:0;background:linear-gradient(180deg,#071025 0%, #071423 60%);color:#e6eef6}
-  .app {
-    display:grid;
-    grid-template-columns: 1fr 340px;
-    grid-template-rows: 1fr 300px;
-    gap:18px;
-    height:100vh;
-    padding:18px;
-  }
+/* CSS Styles */
+:root{
+  --bg:#0f1720;
+  --panel:#0b1220;
+  --muted:#9aa4b2;
+  --accent:#00c4a7;
+  --danger:#ff6b6b;
+  --glass: rgba(255,255,255,0.03);
+  --card-shadow: 0 6px 20px rgba(2,6,23,0.7);
+  --radius:14px;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+}
+html,body{height:100%;margin:0;background:linear-gradient(180deg,#071025 0%, #071423 60%);color:#e6eef6}
+/* Nouvelle grille: 1fr (Chart) | 340px (Watchlist & Orders) */
+.app {
+  display:grid;
+  grid-template-columns: 1fr 340px;
+  /* 1er Ligne: Chart et Watchlist */
+  /* 2eme Ligne: Bottom Left et Limit Orders / Stats */
+  grid-template-rows: 1fr 300px;
+  gap:18px;
+  height:100vh;
+  padding:18px;
+}
 
-  /* Large chart area */
-  .chart-card{
-    grid-column: 1 / 2;
-    grid-row: 1 / 2;
-    background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
-    border-radius:var(--radius);
-    padding:14px;
-    box-shadow: var(--card-shadow);
-    display:flex;
-    flex-direction:column;
-    min-width:0;
-  }
+/* Watchlist and Limit Orders container (right panel) */
+.right-panel {
+  grid-column: 2 / 3;
+  grid-row: 1 / 3; /* Occupe toute la hauteur droite */
+  display:flex;
+  flex-direction:column;
+  gap:18px;
+}
 
-  .chart-header{
-    display:flex;
-    align-items:center;
-    justify-content:space-between;
-    gap:12px;
-    margin-bottom:10px;
-  }
-  .symbol-info{
-    display:flex;
-    gap:12px;
-    align-items:center;
-  }
-  .symbol-badge{
-    background:var(--glass);
-    padding:8px 12px;
-    border-radius:10px;
-    font-weight:600;
-    color:var(--accent);
-  }
-  .control-row{
-    display:flex;
-    gap:10px;
-    align-items:center;
-  }
-  .btn{
-    padding:8px 12px;
-    border-radius:10px;
-    border:0;
-    cursor:pointer;
-    font-weight:700;
-    letter-spacing:0.4px;
-    box-shadow: 0 4px 12px rgba(2,6,23,0.5);
-  }
-  .btn-buy{ background:linear-gradient(90deg,#0ea5a3,#00c4a7); color:#022; }
-  .btn-sell{ background:linear-gradient(90deg,#ff6b6b,#ff8a8a); color:#fff; }
-  .btn-ghost{ background:transparent; color:var(--muted); border:1px solid rgba(255,255,255,0.03); }
+/* Large chart area */
+.chart-card{
+  grid-column: 1 / 2;
+  grid-row: 1 / 2;
+  background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+  border-radius:var(--radius);
+  padding:14px;
+  box-shadow: var(--card-shadow);
+  display:flex;
+  flex-direction:column;
+  min-width:0;
+}
 
-  /* TradingView container should expand */
-  #tv_chart_container{
-    flex:1 1 auto;
-    min-height:420px;
-    border-radius:10px;
-    overflow:hidden;
-  }
+.chart-header{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  margin-bottom:10px;
+}
+.symbol-info{
+  display:flex;
+  gap:12px;
+  align-items:center;
+}
+.symbol-badge{
+  background:var(--glass);
+  padding:8px 12px;
+  border-radius:10px;
+  font-weight:600;
+  color:var(--accent);
+}
+.control-row{
+  display:flex;
+  gap:10px;
+  align-items:center;
+}
+.btn{
+  padding:8px 12px;
+  border-radius:10px;
+  border:0;
+  cursor:pointer;
+  font-weight:700;
+  letter-spacing:0.4px;
+  box-shadow: 0 4px 12px rgba(2,6,23,0.5);
+}
+.btn-buy{ background:linear-gradient(90deg,#0ea5a3,#00c4a7); color:#022; }
+.btn-sell{ background:linear-gradient(90deg,#ff6b6b,#ff8a8a); color:#fff; }
+.btn-ghost{ background:transparent; color:var(--muted); border:1px solid rgba(255,255,255,0.03); }
 
-  /* Watchlist on right */
-  .watchlist{
-    grid-column: 2 / 3;
-    grid-row: 1 / 2;
-    background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
-    border-radius:var(--radius);
-    padding:12px;
-    box-shadow:var(--card-shadow);
-    display:flex;
-    flex-direction:column;
-  }
-  .watchlist h3{margin:0 0 8px 0;font-size:16px;color:var(--muted)}
-  .wl-item{
-    display:flex;
-    justify-content:space-between;
-    align-items:center;
-    padding:10px;
-    border-radius:10px;
-    cursor:pointer;
-    transition:all .12s;
-    background:transparent;
-  }
-  .wl-item:hover{ transform:translateY(-4px); background:rgba(255,255,255,0.015); }
-  .wl-symbol{ font-weight:700; }
-  .wl-price{ color:var(--muted); font-size:13px; }
-  .wl-change{ font-size:13px; font-weight:700; padding:6px 8px; border-radius:8px; }
-  .positive{ color:#0f5132; background:rgba(16,185,129,0.09) }
-  .negative{ color:#7c1d1d; background:rgba(255,99,99,0.06) }
+/* TradingView container should expand */
+#tv_chart_container{
+  flex:1 1 auto;
+  min-height:420px;
+  border-radius:10px;
+  overflow:hidden;
+}
 
-  /* Bottom area: tabs occupying width under chart (left) and history occupies right under watchlist (or full width on small screens) */
-  .bottom-left{
-    grid-column: 1 / 2;
-    grid-row: 2 / 3;
-    background:linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.00));
-    border-radius:var(--radius);
-    padding:12px;
-    box-shadow:var(--card-shadow);
-    display:flex;
-    flex-direction:column;
-    overflow:auto;
-  }
-  .tabs{
-    display:flex;
-    gap:10px;
-    margin-bottom:12px;
-  }
-  .tab{
-    padding:8px 12px;
-    border-radius:10px;
-    cursor:pointer;
-    background:transparent;
-    color:var(--muted);
-    font-weight:700;
-  }
-  .tab.active{ color:var(--accent); background:rgba(0,196,167,0.06); }
+/* Watchlist on top right */
+.watchlist, .limit-orders, .account-stats {
+  background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+  border-radius:var(--radius);
+  padding:12px;
+  box-shadow:var(--card-shadow);
+  display:flex;
+  flex-direction:column;
+}
 
-  .positions-table, .history-table{
-    width:100%;
-    border-collapse:collapse;
-    font-size:13px;
-    color:var(--muted);
-  }
-  .positions-table th, .positions-table td, .history-table th, .history-table td {
-    text-align:left;
-    padding:8px 10px;
-    border-bottom:1px dashed rgba(255,255,255,0.02);
-  }
-  .small-muted{ color:var(--muted); font-size:12px; }
+.watchlist { flex: 2 1 auto; min-height: 200px; }
+.limit-orders { flex: 1 1 auto; min-height: 150px; }
+.account-stats { flex: 0 0 auto; } /* Stats bottom right, fixed size */
 
-  /* Bottom-right: additional info (history summary) */
-  .bottom-right{
-    grid-column: 2 / 3;
-    grid-row: 2 / 3;
-    background:linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.00));
-    border-radius:var(--radius);
-    padding:12px;
-    box-shadow:var(--card-shadow);
-    display:flex;
-    flex-direction:column;
-    gap:10px;
-    overflow:auto;
-  }
+.watchlist h3, .limit-orders h3 { margin:0 0 8px 0;font-size:16px;color:var(--muted)}
+.wl-item{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  padding:10px;
+  border-radius:10px;
+  cursor:pointer;
+  transition:all .12s;
+  background:transparent;
+}
+.wl-item:hover{ transform:translateY(-4px); background:rgba(255,255,255,0.015); }
+.wl-symbol{ font-weight:700; }
+.wl-price{ color:var(--muted); font-size:13px; }
+.wl-change{ font-size:13px; font-weight:700; padding:6px 8px; border-radius:8px; }
+.positive{ color:#0f5132; background:rgba(16,185,129,0.09) }
+.negative{ color:#7c1d1d; background:rgba(255,99,99,0.06) }
 
-  /* Responsive */
-  @media (max-width:1100px){
-    .app{ grid-template-columns: 1fr; grid-template-rows: 1fr 380px 260px; }
-    .watchlist{ grid-column: 1 / -1; grid-row: 2 / 3; }
-    .bottom-left{ grid-row: 3 / 4; grid-column: 1 / -1; }
-    .bottom-right{ display:none; }
-  }
+/* Bottom area: tabs occupying width under chart (left) */
+.bottom-left{
+  grid-column: 1 / 2;
+  grid-row: 2 / 3;
+  background:linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.00));
+  border-radius:var(--radius);
+  padding:12px;
+  box-shadow:var(--card-shadow);
+  display:flex;
+  flex-direction:column;
+  overflow:auto;
+}
+.tabs{
+  display:flex;
+  gap:10px;
+  margin-bottom:12px;
+}
+.tab{
+  padding:8px 12px;
+  border-radius:10px;
+  cursor:pointer;
+  background:transparent;
+  color:var(--muted);
+  font-weight:700;
+}
+.tab.active{ color:var(--accent); background:rgba(0,196,167,0.06); }
+
+.positions-table, .history-table, .limit-orders-table{
+  width:100%;
+  border-collapse:collapse;
+  font-size:13px;
+  color:var(--muted);
+}
+.positions-table th, .positions-table td, .history-table th, .history-table td, .limit-orders-table th, .limit-orders-table td {
+  text-align:left;
+  padding:8px 10px;
+  border-bottom:1px dashed rgba(255,255,255,0.02);
+}
+.small-muted{ color:var(--muted); font-size:12px; }
+
+/* Bottom-right (now integrated into right-panel) */
+.account-stats{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+
+/* Responsive */
+@media (max-width:1100px){
+  /* Revert to single column layout on smaller screens */
+  .app{ grid-template-columns: 1fr; grid-template-rows: 1fr auto 300px; }
+  .right-panel{ grid-column: 1 / -1; grid-row: 2 / 3; }
+  .bottom-left{ grid-row: 3 / 4; grid-column: 1 / -1; }
+}
 </style>
 </head>
 <body>
 <div class="app">
 
-  <!-- Chart big card -->
   <div class="chart-card" id="chartCard">
     <div class="chart-header">
       <div class="symbol-info">
@@ -195,32 +202,61 @@
       </div>
 
       <div class="control-row">
-        <button class="btn btn-ghost" id="refreshPricesBtn" title="Forcer mise à jour">↺ Refresh</button>
         <button class="btn btn-buy" id="buyBtn">BUY</button>
         <button class="btn btn-sell" id="sellBtn">SELL</button>
       </div>
     </div>
 
-    <!-- TradingView container -->
     <div id="tv_chart_container"></div>
   </div>
 
-  <!-- Watchlist -->
-  <div class="watchlist">
-    <h3>Watchlist</h3>
-    <div id="wlList" style="display:flex;flex-direction:column;gap:6px;">
-      <!-- Items injected by JS -->
+  <div class="right-panel">
+
+    <div class="watchlist">
+      <h3>Watchlist</h3>
+      <div id="wlList" style="display:flex;flex-direction:column;gap:6px;">
+        </div>
+      <div style="margin-top:auto;padding-top:12px;font-size:13px;color:var(--muted)">
+        <div style="font-weight:700;margin-bottom:6px">Instructions</div>
+        <div>- Actualisation des prix : **toutes les 8 secondes** (pour respecter le quota API).</div>
+        <div>- Cliquez sur un symbole pour le charger dans le graphique.</div>
+      </div>
     </div>
 
-    <div style="margin-top:auto;padding-top:12px;font-size:13px;color:var(--muted)">
-      <div style="font-weight:700;margin-bottom:6px">Instructions</div>
-      <div>- Clique sur un symbole pour le charger dans le graphique.</div>
-      <div>- BUY / SELL ouvre une position simulée (1 unité par défaut).</div>
-      <div>- Le PNL se met à jour automatiquement via l'API.</div>
+    <div class="limit-orders">
+      <h3>Ordres Limites (Simulé)</h3>
+      <div id="limitOrdersPane">
+        <table class="limit-orders-table" id="limitOrdersTable">
+          <thead>
+            <tr><th>Symbole</th><th>Side</th><th>Price</th><th>Actions</th></tr>
+          </thead>
+          <tbody id="limitOrdersBody">
+            <tr><td colspan="4" style="text-align:center">Aucun ordre en attente</td></tr>
+          </tbody>
+        </table>
+      </div>
     </div>
+
+    <div class="account-stats">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <div style="font-size:14px;font-weight:800">Compte Démo</div>
+          <div class="small-muted">Balance simulée: <span id="simBalance">10000.00</span> USD</div>
+        </div>
+        <div style="text-align:right">
+          <div class="small-muted">PnL Total:</div>
+          <div id="totalPnl" style="font-weight:800;font-size:18px">0.00</div>
+        </div>
+      </div>
+
+      <div style="margin-top:8px">
+        <div style="font-weight:700">Détails position sélectionnée</div>
+        <div class="small-muted" id="posDetails">Aucune position ouverte</div>
+      </div>
+    </div>
+
   </div>
 
-  <!-- Bottom-left: tabs (positions / history) -->
   <div class="bottom-left">
     <div style="display:flex;justify-content:space-between;align-items:center">
       <div class="tabs">
@@ -236,8 +272,7 @@
           <tr><th>Symbole</th><th>Side</th><th>Entry</th><th>Price</th><th>PNL</th><th>Actions</th></tr>
         </thead>
         <tbody id="positionsBody">
-          <!-- fill -->
-        </tbody>
+          </tbody>
       </table>
     </div>
 
@@ -251,33 +286,13 @@
     </div>
   </div>
 
-  <!-- Bottom-right: stats / details -->
-  <div class="bottom-right">
-    <div style="display:flex;justify-content:space-between;align-items:center">
-      <div>
-        <div style="font-size:14px;font-weight:800">Compte Démo</div>
-        <div class="small-muted">Balance simulée: <span id="simBalance">10000.00</span> USD</div>
-      </div>
-      <div style="text-align:right">
-        <div class="small-muted">PnL Total:</div>
-        <div id="totalPnl" style="font-weight:800;font-size:18px">0.00</div>
-      </div>
-    </div>
-
-    <div style="margin-top:8px">
-      <div style="font-weight:700">Détails position sélectionnée</div>
-      <div class="small-muted" id="posDetails">Aucune position sélectionnée</div>
-    </div>
-
-  </div>
-
 </div>
 
 <script>
 /*
   Mini-broker demo
-  - API key (fourni par toi) :
-  - NOTE: tu as donné : 8906aa7f29ca470da317f72ae7efab51
+  - API key : 8906aa7f29ca470da317f72ae7efab51
+  - Twelve Data: 8 requests / minute max (1 request every 7.5 seconds)
 */
 const API_KEY = '8906aa7f29ca470da317f72ae7efab51';
 
@@ -289,7 +304,7 @@ const WATCHLIST = [
   {tv: 'OANDA:USDCHF', label: 'USD / CHF', api: 'USD/CHF'},
   {tv: 'OANDA:AUDUSD', label: 'AUD / USD', api: 'AUD/USD'},
 
-  {tv: 'INDEX:SPX', label: 'S&P 500', api: 'SPX'},        // Twelve Data may use different tickers for indices; fallback handled
+  {tv: 'INDEX:SPX', label: 'S&P 500', api: 'SPX'},
   {tv: 'INDEX:DJI', label: 'Dow Jones', api: 'DJI'},
   {tv: 'INDEX:NDX', label: 'NASDAQ 100', api: 'NDX'},
   {tv: 'INDEX:DAX', label: 'DAX', api: 'DAX'},
@@ -302,23 +317,28 @@ const WATCHLIST = [
 let currentSymbol = WATCHLIST[0];
 let positions = []; // open positions
 let history = [];   // closed positions
-let pollIntervals = {}; // per-symbol interval id
-let pollingEnabled = true;
 let simBalance = 10000.00;
 
-// UTIL: format number
+// Util: format number
 function formatPrice(x){
-  return Number(x).toFixed(5).replace(/\.?0+$/,'');
+  // Simplifié, ajuste le nombre de décimales en fonction de l'instrument
+  const isFX = currentSymbol.api.includes('/'); // Heuristic: / means FX
+  const decimals = isFX ? 5 : 2;
+  return Number(x).toFixed(decimals).replace(/\.?0+$/,'');
 }
 function formatMoney(x){
   return Number(x).toFixed(2);
 }
+
+// Escape id helper
+function escapeId(s){ return s.replace(/[^\w]/g,'_'); }
 
 // Build watchlist UI
 const wlList = document.getElementById('wlList');
 WATCHLIST.forEach(w=>{
   const item = document.createElement('div');
   item.className = 'wl-item';
+  item.setAttribute('data-api-symbol', w.api); // Store API symbol for easy lookup
   item.innerHTML = `
     <div>
       <div class="wl-symbol">${w.label}</div>
@@ -332,9 +352,6 @@ WATCHLIST.forEach(w=>{
   item.addEventListener('click', ()=> loadSymbol(w));
   wlList.appendChild(item);
 });
-
-// Escape id helper
-function escapeId(s){ return s.replace(/[^\w]/g,'_'); }
 
 // TradingView widget init
 let tvWidget = null;
@@ -355,7 +372,6 @@ function initTradingView(){
     hide_side_toolbar: false,
     allow_symbol_change: true,
     studies: ["MACD@tv-basicstudies"],
-    // overrides for a clean modern look
     overrides: {
       "paneProperties.background": "#071423",
       "paneProperties.vertGridProperties.color": "rgba(255,255,255,0.02)",
@@ -376,77 +392,116 @@ function loadSymbol(sym){
       try{ tvWidget.chart().setSymbol(sym.tv); }catch(e){ console.warn(e) }
     });
   }
-  // update price immediately
-  fetchPriceAndUpdate(sym);
+  // update price immediately if already fetched
+  const priceEl = document.getElementById('price_' + escapeId(sym.api));
+  if(priceEl && priceEl.innerText !== '—' && priceEl.innerText !== '…' && priceEl.innerText !== 'err'){
+    document.getElementById('currentPriceMini').innerText = 'Prix: ' + priceEl.innerText;
+  } else {
+     document.getElementById('currentPriceMini').innerText = 'Prix: —';
+  }
 }
 
-// Fetch price from Twelve Data price endpoint (uses "price" endpoint).
-// Endpoint attempted: https://api.twelvedata.com/price?symbol=EUR/USD&apikey=KEY
-async function fetchPrice(symbolApi){
-  // Build URL
-  const url = `https://api.twelvedata.com/price?symbol=${encodeURIComponent(symbolApi)}&apikey=${encodeURIComponent(API_KEY)}`;
+// Fetch price from Twelve Data for **multiple symbols** (uses "price" endpoint with comma-separated list).
+// Endpoint attempted: https://api.twelvedata.com/price?symbol=EUR/USD,USD/JPY&apikey=KEY
+async function fetchPrices(symbolApiList){
+  const symbols = Array.isArray(symbolApiList) ? symbolApiList.join(',') : symbolApiList;
+  if(!symbols) return {};
+
+  const url = `https://api.twelvedata.com/price?symbol=${encodeURIComponent(symbols)}&apikey=${encodeURIComponent(API_KEY)}`;
   try{
     const resp = await fetch(url);
     if(!resp.ok) throw new Error('HTTP ' + resp.status);
     const data = await resp.json();
-    if(data && data.price !== undefined){
-      return {ok:true, price: Number(data.price), raw: data};
-    } else {
-      // sometimes API returns code/message
-      return {ok:false, error: data};
+    
+    // twelve data returns single object for one symbol, array for multiple
+    const result = {};
+    if(Array.isArray(data)){
+      data.forEach(item => {
+        if(item.meta && item.price !== undefined){
+          result[item.meta.symbol] = Number(item.price);
+        }
+      });
+    } else if (data && data.price !== undefined) {
+      // Single symbol response
+       result[symbols] = Number(data.price);
     }
+    
+    return {ok:true, prices: result, raw: data};
   }catch(err){
-    console.error('fetchPrice error', err);
+    console.error('fetchPrices error', err);
     return {ok:false, error: err.message || err};
   }
 }
 
-// Fetch and update watchlist prices (one pass)
-async function refreshAllPrices(){
-  for(const w of WATCHLIST){
-    fetchPriceAndUpdate(w, true);
-  }
-}
-document.getElementById('refreshPricesBtn').addEventListener('click', ()=> refreshAllPrices());
+// Global update function: combines watchlist and position updates into a single API call
+async function refreshAllPricesAndPositions(){
+  // 1. Compile list of unique symbols
+  const watchlistSymbols = WATCHLIST.map(w => w.api);
+  const positionSymbols = positions.map(p => p.symbol.api);
+  const allSymbols = [...new Set([...watchlistSymbols, ...positionSymbols])];
 
-// Fetch price for a symbol and update UI; if updateWatch=false then don't update watchlist view
-async function fetchPriceAndUpdate(sym, silent=false){
-  const id = escapeId(sym.api);
-  const priceEl = document.getElementById('price_' + id);
-  const chgEl = document.getElementById('chg_' + id);
+  // 2. Show loading state on all watchlist items
+  WATCHLIST.forEach(w => {
+     const priceEl = document.getElementById('price_' + escapeId(w.api));
+     if(priceEl) priceEl.innerText = '…';
+  });
 
-  // show loading
-  if(priceEl) priceEl.innerText = '…';
+  // 3. Make the single API call
+  const res = await fetchPrices(allSymbols);
 
-  const res = await fetchPrice(sym.api);
   if(res.ok){
-    const p = res.price;
-    if(priceEl) priceEl.innerText = formatPrice(p);
-    if(!silent){
-      // update mini price display if current symbol
-      if(sym.api === currentSymbol.api){
-        document.getElementById('currentPriceMini').innerText = 'Prix: ' + formatPrice(p);
+    // 4. Update Watchlist UI
+    WATCHLIST.forEach(w => {
+      const id = escapeId(w.api);
+      const priceEl = document.getElementById('price_' + id);
+      const chgEl = document.getElementById('chg_' + id); // not updated with current API call
+      
+      const price = res.prices[w.api];
+      if(price !== undefined){
+        if(priceEl) priceEl.innerText = formatPrice(price);
+        if(w.api === currentSymbol.api){
+          document.getElementById('currentPriceMini').innerText = 'Prix: ' + formatPrice(price);
+        }
+      } else {
+         if(priceEl) priceEl.innerText = 'N/A';
       }
+      if(chgEl) chgEl.innerText = ''; // No change info available in 'price' endpoint
+    });
+
+    // 5. Update open Positions with new prices
+    let positionsUpdated = false;
+    positions.forEach(pos => {
+      const newPrice = res.prices[pos.symbol.api];
+      if(newPrice !== undefined && pos.current !== newPrice){
+        pos.current = newPrice;
+        positionsUpdated = true;
+      }
+    });
+
+    // 6. Re-render if prices changed (only positions for PnL)
+    if(positionsUpdated){
+      renderPositions();
+      renderTotals();
     }
-    // update change small simulated (we don't have prev close here) -> leave as muted
-    if(chgEl) chgEl.innerText = '';
-    return {ok:true, price:p};
   } else {
-    if(priceEl) priceEl.innerText = 'err';
-    if(chgEl) chgEl.innerText = '';
-    return {ok:false, error:res.error};
+     console.error("Erreur de rafraîchissement global des prix:", res.error);
+     WATCHLIST.forEach(w => {
+       const priceEl = document.getElementById('price_' + escapeId(w.api));
+       if(priceEl) priceEl.innerText = 'err';
+     });
   }
 }
 
 // Positions management
 function openPosition(sym, side){
-  // Get latest price first
-  fetchPrice(sym.api).then(res=>{
-    if(!res.ok){
-      alert('Erreur récupération prix : ' + JSON.stringify(res.error));
-      return;
-    }
-    const price = res.price;
+  // Check if price is already in Watchlist to avoid an extra API call
+  const priceEl = document.getElementById('price_' + escapeId(sym.api));
+  let latestPrice = null;
+  if(priceEl && priceEl.innerText && priceEl.innerText !== '—' && priceEl.innerText !== '…' && priceEl.innerText !== 'err'){
+    latestPrice = Number(priceEl.innerText);
+  }
+
+  const finalizePosition = (price) => {
     const pos = {
       id: 'pos_' + Math.random().toString(36).slice(2,9),
       symbol: sym,
@@ -457,27 +512,22 @@ function openPosition(sym, side){
       current: price
     };
     positions.push(pos);
-    startPollingForPosition(pos);
-    renderPositions();
-  });
-}
-
-// Start polling price for a given position (update current and PnL)
-function startPollingForPosition(pos){
-  const apiSym = pos.symbol.api;
-  if(pollIntervals[pos.id]) clearInterval(pollIntervals[pos.id]);
-
-  // Poll every 1s (you asked ~ chaque seconde)
-  pollIntervals[pos.id] = setInterval(async ()=>{
-    const res = await fetchPrice(apiSym);
-    if(res.ok){
-      pos.current = res.price;
-    } else {
-      // keep old price if error
-    }
     renderPositions();
     renderTotals();
-  }, 1000);
+  };
+
+  if(latestPrice){
+    finalizePosition(latestPrice);
+  } else {
+    // If price wasn't available, make a dedicated call (uses 1 quota)
+    fetchPrices(sym.api).then(res=>{
+      if(!res.ok || res.prices[sym.api] === undefined){
+        alert('Erreur récupération prix : ' + JSON.stringify(res.error));
+        return;
+      }
+      finalizePosition(res.prices[sym.api]);
+    });
+  }
 }
 
 // Close position
@@ -485,30 +535,34 @@ function closePosition(posId){
   const idx = positions.findIndex(p=>p.id===posId);
   if(idx === -1) return;
   const pos = positions[idx];
-  // stop polling
-  if(pollIntervals[pos.id]) { clearInterval(pollIntervals[pos.id]); delete pollIntervals[pos.id]; }
 
-  // Determine close price (try fetch now)
-  fetchPrice(pos.symbol.api).then(res=>{
-    const closePrice = (res.ok ? res.price : pos.current);
-    const pnl = computePnl(pos, closePrice);
-    // move to history
-    history.unshift({
-      symbol: pos.symbol,
-      side: pos.side,
-      entry: pos.entry,
-      close: closePrice,
-      pnl: pnl,
-      closedAt: Date.now()
-    });
-    // update balance simulation
-    simBalance += pnl;
-    // remove from open positions
-    positions.splice(idx,1);
-    renderPositions();
-    renderHistory();
-    renderTotals();
+  // Use the last known price to close (pos.current is updated by the global poller)
+  const closePrice = pos.current;
+
+  if(closePrice === pos.entry){
+     // Force an API refresh if the price hasn't moved yet (optional, to get a fresh exit price)
+     // To strictly avoid exceeding quota, we rely on the last known price.
+  }
+  
+  const pnl = computePnl(pos, closePrice);
+  
+  // move to history
+  history.unshift({
+    symbol: pos.symbol,
+    side: pos.side,
+    entry: pos.entry,
+    close: closePrice,
+    pnl: pnl,
+    closedAt: Date.now()
   });
+  // update balance simulation
+  simBalance += pnl;
+  // remove from open positions
+  positions.splice(idx,1);
+  
+  renderPositions();
+  renderHistory();
+  renderTotals();
 }
 
 function computePnl(pos, currentPrice){
@@ -543,7 +597,7 @@ function renderPositions(){
   const details = document.getElementById('posDetails');
   if(positions.length>0){
     const p = positions[0];
-    details.innerHTML = `${p.symbol.label} · ${p.side} · Entry ${formatPrice(p.entry)} · Current ${formatPrice(p.current)}`;
+    details.innerHTML = `${p.symbol.label} · **${p.side}** · Entry ${formatPrice(p.entry)} · Current ${formatPrice(p.current)}`;
   } else {
     details.innerText = 'Aucune position ouverte';
   }
@@ -598,26 +652,26 @@ document.getElementById('sellBtn').addEventListener('click', ()=> {
 
 // initial load: fill watchlist prices and load first symbol
 loadSymbol(currentSymbol);
-refreshAllPrices();
+refreshAllPricesAndPositions();
 renderPositions();
 renderHistory();
 renderTotals();
 
-// Try to poll watchlist prices every 3s (lightweight)
-setInterval(()=> refreshAllPrices(), 3000);
+// API quota safe polling: 8 seconds (less than 8 requests per minute)
+const API_POLLING_INTERVAL_MS = 8000;
+setInterval(()=> refreshAllPricesAndPositions(), API_POLLING_INTERVAL_MS);
 
 // Optional: expose closePosition to window for inline onclicks
 window.closePosition = closePosition;
 
-/* NOTES & fallback:
-  - Twelve Data symbol names for indices might differ by exchange/country; if price calls return errors, the UI will show 'err'.
-  - CORS may block direct browser requests to api.twelvedata.com depending on plan & CORS policy. If that happens, run a small backend proxy or use server-side fetch to supply prices.
-  - This demo uses size=1 for positions; you can extend to allow user input for lots, leverage, etc.
-*/
+// Limit Orders rendering (stub - no logic yet)
+function renderLimitOrders(){
+  // This is a placeholder for future functionality
+}
+renderLimitOrders();
 </script>
 </body>
 </html>
-
 
 
 
