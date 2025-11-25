@@ -249,6 +249,8 @@ const PIP_STEPS={
   xau:0.1
 };
 
+const PNL_BOOST_NON_XAU=4.5;
+
 let ws=null,wsConnected=false,reconnectDelay=1000,keepaliveTimer=null;
 let currentSymbol=WATCHLIST[0];
 let priceCache={},positions=[],history=[],orders=[];
@@ -256,7 +258,6 @@ let simBalance=50000.00;
 let availableBalance=50000.00;
 let tvWidget=null;
 let activeModalId=null;
-const NON_XAU_FLUCT_FACTOR=1.6;
 
 const audioOpen=document.getElementById('sound-open');
 const audioDenied=document.getElementById('sound-denied');
@@ -270,6 +271,8 @@ function escapeId(val){return String(val).replace(/[^\w]/g,'_');}
 function formatPrice(val){return val===undefined||val===null?'—':Number(val).toFixed(5).replace(/\.0+$|0+$/,'').replace(/\.$/,'');}
 function formatMoney(val){return val===undefined||val===null?'0.00':Number(val).toFixed(2);}
 function lotUnits(symbol){return symbol.includes('XAU')?100:BASE_LOT_SIZE;}
+function isQuoteUsd(symbol){return symbol.endsWith('USD');}
+function isBaseUsd(symbol){return symbol.startsWith('USD');}
 function pipStep(symbol){
   if(symbol.includes('JPY')) return PIP_STEPS.jpy;
   if(symbol.includes('XAU')) return PIP_STEPS.xau;
@@ -278,23 +281,34 @@ function pipStep(symbol){
 function pipValuePerLot(symbol, price){
   const step=pipStep(symbol);
   const units=lotUnits(symbol);
-  const baseValue= symbol.includes('XAU')
-    ? step * units
-    : symbol.endsWith('USD')
-      ? step * units
-      : (price>0 ? (step*units)/price : step*units);
-  return symbol.includes('XAU') ? baseValue : baseValue * NON_XAU_FLUCT_FACTOR;
+  let baseValue;
+  if(symbol.includes('XAU')){
+    baseValue=step * units;
+  } else if(isQuoteUsd(symbol)){
+    baseValue=step * units;
+  } else if(isBaseUsd(symbol)){
+    baseValue=units;
+  } else {
+    baseValue=price>0 ? (step*units)/price : step*units;
+  }
+  if(symbol.includes('XAU')) return baseValue;
+  return baseValue * PNL_BOOST_NON_XAU;
 }
 function describePip(symbol, price){
   const perLot=pipValuePerLot(symbol, price||priceCache[symbol]||1);
   return `1 lot ≈ ${formatMoney(perLot)} USD/par pip`;
 }
-function calculateMargin(symbol, lots, price){
+function marginRequirement(symbol, lots, price){
   const resolvedPrice=Number(price);
   const resolvedLots=Number(lots);
-  if(!resolvedPrice||!resolvedLots) return 0;
+  if(!resolvedLots) return 0;
   const units=lotUnits(symbol);
-  return (resolvedPrice * units * resolvedLots) / LEVERAGE;
+  const exposureUsd=isBaseUsd(symbol)
+    ? units
+    : isQuoteUsd(symbol)
+      ? (resolvedPrice? resolvedPrice*units : units)
+      : (resolvedPrice? resolvedPrice*units : units);
+  return (exposureUsd * resolvedLots) / LEVERAGE;
 }
 
 WATCHLIST.forEach(w=>{
@@ -419,13 +433,19 @@ function updatePriceUI(symbol){
 function refreshLotInfo(){
   const price=priceCache[currentSymbol.api];
   const lots=parseFloat(document.getElementById('lotInput').value)||1;
+  let lotValue;
   if(price!==undefined){
-    const lotValue=price*lotUnits(currentSymbol.api)*lots;
+    const exposure=isBaseUsd(currentSymbol.api)
+      ? lotUnits(currentSymbol.api) * lots
+      : isQuoteUsd(currentSymbol.api)
+        ? price*lotUnits(currentSymbol.api)*lots
+        : price*lotUnits(currentSymbol.api)*lots;
+    lotValue=exposure;
     const pipInfo=describePip(currentSymbol.api, price);
     document.getElementById('lotValueInfo').innerText=`${lots} lots = ${(lotValue/LEVERAGE).toFixed(2)} USD de marge · ${pipInfo} · levier 1:${LEVERAGE}`;
-  } else {
-    document.getElementById('lotValueInfo').innerText=`1 lot = ${lotUnits(currentSymbol.api)}u · marge 1:${LEVERAGE}`;
+    return;
   }
+  document.getElementById('lotValueInfo').innerText=`1 lot = ${lotUnits(currentSymbol.api)}u · marge 1:${LEVERAGE}`;
 }
 
 function onPriceUpdate(symbol){
@@ -488,7 +508,7 @@ async function openPosition(symObj,side,lots=1,forcedEntry=null, tp=null, sl=nul
     alert('Prix indisponible');
     return false;
   }
-  const required=calculateMargin(symObj.api,resolvedLots,price);
+  const required=marginRequirement(symObj.api,resolvedLots,price);
   if(required>availableBalance){
     audioDenied.play();
     alert('Solde insuffisant');
@@ -521,7 +541,7 @@ function closePosition(id, lotsToSell=null){
   if(sellLots<=0) return;
   const closePrice=priceCache[pos.symbol.api]??pos.current;
   const pnl=computePnl({...pos,size:sellLots,current:closePrice});
-  const released=calculateMargin(pos.symbol.api,sellLots,closePrice);
+  const released=marginRequirement(pos.symbol.api,sellLots,closePrice);
   availableBalance+=released;
   availableBalance+=pnl;
   history.unshift({symbol:pos.symbol,side:pos.side,entry:pos.entry,close:closePrice,pnl,lots:sellLots,closedAt:Date.now()});
@@ -537,7 +557,7 @@ function addLimitOrder(symbol,side,price,lots,tp,sl){
   if(!resolvedLots||!resolvedPrice){
     return alert('Prix et lots valides requis');
   }
-  const required=calculateMargin(symbol,resolvedLots,resolvedPrice);
+  const required=marginRequirement(symbol,resolvedLots,resolvedPrice);
   if(required>availableBalance){
     audioDenied.play();
     alert('Solde insuffisant pour cet ordre');
