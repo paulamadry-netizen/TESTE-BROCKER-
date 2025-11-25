@@ -244,7 +244,12 @@ const WATCHLIST=[
   {tv:'OANDA:GBPUSD',label:'GBP / USD',api:'OANDA:GBP_USD'},
   {tv:'OANDA:USDCHF',label:'USD / CHF',api:'OANDA:USD_CHF'},
   {tv:'OANDA:AUDUSD',label:'AUD / USD',api:'OANDA:AUD_USD'},
-  {tv:'OANDA:XAUUSD',label:'Gold / USD',api:'OANDA:XAU_USD'}
+  {tv:'OANDA:XAUUSD',label:'Gold / USD',api:'OANDA:XAU_USD'},
+  {tv:'INDEX:^DJI',label:'Dow Jones',api:'INDEX:^DJI'},
+  {tv:'INDEX:^GSPC',label:'S&P 500',api:'INDEX:^GSPC'},
+  {tv:'INDEX:^IXIC',label:'Nasdaq 100',api:'INDEX:^IXIC'},
+  {tv:'INDEX:^GDAXI',label:'DAX 40',api:'INDEX:^GDAXI'},
+  {tv:'INDEX:^N225',label:'Nikkei 225',api:'INDEX:^N225'}
 ];
 
 const PIP_STEPS={
@@ -731,9 +736,7 @@ function openPositionModal(id){
   document.getElementById('positionModal').style.display='flex';
 }
 
-document.getElementById('modalCancel').addEventListener('click',()=>{
-  document.getElementById('positionModal').style.display='none';
-});
+document.getElementById('modalCancel').addEventListener('click',()=>document.getElementById('positionModal').style.display='none');
 document.getElementById('modalSave').addEventListener('click',()=>{
   const pos=positions.find(p=>p.id===activeModalId);
   if(!pos) return;
@@ -758,7 +761,6 @@ startWebSocket();
 </script>
 </body>
 </html>
-
 
 
 
