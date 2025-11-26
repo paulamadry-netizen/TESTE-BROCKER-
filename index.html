@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Mini Broker — Web Trader (Finnhub + Twelve Data indices)</title>
+<title>Mini Broker — Web Trader (Finnhub + Alphavantage indices)</title>
 <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
 <style>
   :root{
@@ -234,12 +234,12 @@
 <script>
 const API_KEY='d4is89hr01queuakbspgd4is89hr01queuakbsq0';
 const WS_ENDPOINT='wss://ws.finnhub.io';
-const TWELVE_WS='wss://ws.twelvedata.com/v1/quotes/price';
-const TWELVE_KEY='fe1276c5129c4045a0eeecc9edeb6fb8';
 const KEEPALIVE_INTERVAL=25000;
 const RECONNECT_MAX=60000;
 const BASE_LOT_SIZE=100000;
 const LEVERAGE=20;
+const ALPHA_KEY='J3JNMW4LRAB5YETN';
+const ALPHA_POLL_INTERVAL=60000;
 const WATCHLIST=[
   {tv:'OANDA:EURUSD',label:'EUR / USD',api:'OANDA:EUR_USD'},
   {tv:'OANDA:USDJPY',label:'USD / JPY',api:'OANDA:USD_JPY'},
@@ -247,11 +247,11 @@ const WATCHLIST=[
   {tv:'OANDA:USDCHF',label:'USD / CHF',api:'OANDA:USD_CHF'},
   {tv:'OANDA:AUDUSD',label:'AUD / USD',api:'OANDA:AUD_USD'},
   {tv:'OANDA:XAUUSD',label:'Gold / USD',api:'OANDA:XAU_USD'},
-  {tv:'DJ30',label:'Dow Jones',api:'DJ30',twelve:'DJI'},
-  {tv:'USA S&P 500 Index',label:'S&P 500',api:'US500',twelve:'SPX'},
-  {tv:'NDX',label:'Nasdaq 100',api:'NDX',twelve:'NASDAQ'},
-  {tv:'DAX',label:'DAX 40',api:'DAX',twelve:'DAX'},
-  {tv:'Indice CAC40',label:'CAC 40',api:'CAC40',twelve:'FCHI'}
+  {tv:'DJ30',label:'Dow Jones',api:'DJ30',alpha:'DJI'},
+  {tv:'USA S&P 500 Index',label:'S&P 500',api:'US500',alpha:'SPX'},
+  {tv:'NDX',label:'Nasdaq 100',api:'NDX',alpha:'NASDAQ'},
+  {tv:'DAX',label:'DAX 40',api:'DAX',alpha:'DAX'},
+  {tv:'Indice CAC40',label:'CAC 40',api:'CAC40',alpha:'FCHI'}
 ];
 
 const PIP_STEPS={
@@ -261,7 +261,8 @@ const PIP_STEPS={
 };
 const PNL_BOOST_NON_XAU=4.5;
 
-let ws=null,twelveWs=null,wsConnected=false,reconnectDelay=1000,keepaliveTimer=null,twelveReconnect=1000;
+let ws=null,wsConnected=false,reconnectDelay=1000,keepaliveTimer=null;
+let alphaInterval=null;
 let currentSymbol=WATCHLIST[0];
 let priceCache={},positions=[],history=[],orders=[];
 let simBalance=50000.00;
@@ -277,13 +278,6 @@ const wlList=document.getElementById('wlList');
 const ordSymbol=document.getElementById('ordSymbol');
 const toastEl=document.getElementById('toast');
 let toastTimer=null;
-
-const twelveSymbolMap={};
-WATCHLIST.forEach(w=>{
-  if(w.twelve){
-    twelveSymbolMap[w.twelve]=w.api;
-  }
-});
 
 function showToast(message){
   if(toastTimer){clearTimeout(toastTimer);}
@@ -414,6 +408,11 @@ function startWebSocket(){
 async function fetchInitialPrices(){
   await Promise.all(WATCHLIST.map(async w=>{
     if(priceCache[w.api]!==undefined) return;
+    if(w.alpha){
+      const value=await fetchAlphaPrice(w.alpha);
+      if(value!==null){priceCache[w.api]=value;updatePriceUI(w.api);}
+      return;
+    }
     const value=await fetchPriceREST(w.api);
     if(value!==null){priceCache[w.api]=value;updatePriceUI(w.api);}
   }));
@@ -499,6 +498,32 @@ function fetchPriceREST(symbol){
     .then(res=>res.ok?res.json():null)
     .then(body=>body?.c?Number(body.c):null)
     .catch(()=>null);
+}
+
+async function fetchAlphaPrice(symbol){
+  try{
+    const res=await fetch(`https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${encodeURIComponent(symbol)}&apikey=${ALPHA_KEY}`);
+    if(!res.ok) return null;
+    const data=await res.json();
+    const price=Number(data['Global Quote']?.['05. price']);
+    return Number.isFinite(price)?price:null;
+  }catch{
+    return null;
+  }
+}
+
+function startAlphaPolling(){
+  if(alphaInterval) clearInterval(alphaInterval);
+  alphaInterval=setInterval(async()=>{
+    await Promise.all(WATCHLIST.filter(w=>w.alpha).map(async w=>{
+      const value=await fetchAlphaPrice(w.alpha);
+      if(value!==null){
+        priceCache[w.api]=value;
+        updatePriceUI(w.api);
+        onPriceUpdate(w.api);
+      }
+    }));
+  },ALPHA_POLL_INTERVAL);
 }
 
 function computePnl(pos){
@@ -760,73 +785,15 @@ document.getElementById('modalSave').addEventListener('click',()=>{
   audioValidate.play();
 });
 
-function handleTwelveMessage(raw){
-  try{
-    const msg=JSON.parse(raw);
-    if(msg.event==='subscription'){
-      return;
-    }
-    if(msg.event==='price'){
-      const symbolKey=msg.symbol;
-      const apiKey=twelveSymbolMap[symbolKey];
-      const price=msg.price;
-      if(apiKey&&price!==undefined){
-        priceCache[apiKey]=Number(price);
-        updatePriceUI(apiKey);
-        onPriceUpdate(apiKey);
-      }
-    }
-  }catch(e){
-    console.warn('Twelve parse error',e);
-  }
-}
-
-function startTwelveWS(){
-  try{
-    twelveWs=new WebSocket(TWELVE_WS);
-    twelveWs.addEventListener('open',()=>{
-      twelveReconnect=1000;
-      twelveWs.send(JSON.stringify({action:'authenticate',params:TWELVE_KEY}));
-      const subs=WATCHLIST.filter(w=>w.twelve).map(w=>w.twelve);
-      if(subs.length) twelveWs.send(JSON.stringify({action:'subscribe',params:subs.join(',')}));
-    });
-    twelveWs.addEventListener('message',ev=>handleTwelveMessage(ev.data));
-    twelveWs.addEventListener('close',()=>scheduleTwelveReconnect());
-    twelveWs.addEventListener('error',()=>{try{twelveWs.close();}catch(e){}scheduleTwelveReconnect();});
-  }catch(e){
-    scheduleTwelveReconnect();
-  }
-}
-
-function scheduleTwelveReconnect(){
-  if(twelveReconnect>RECONNECT_MAX) twelveReconnect=RECONNECT_MAX;
-  setTimeout(()=>{twelveReconnect=Math.min(RECONNECT_MAX,Math.floor(twelveReconnect*1.8));startTwelveWS();},twelveReconnect);
-}
-
-async function pollTwelveREST(){
-  await Promise.all(WATCHLIST.filter(w=>w.twelve).map(async w=>{
-    if(priceCache[w.api]!==undefined) return;
-    const res=await fetch(`https://api.twelvedata.com/price?symbol=${w.twelve}&apikey=${TWELVE_KEY}`);
-    const data=await res.json();
-    const price=data.price?Number(data.price):null;
-    if(price!==null){
-      priceCache[w.api]=price;
-      updatePriceUI(w.api);
-    }
-  }));
-}
-
 window.closePosition=closePosition;
 window.removeOrder=removeOrder;
 
 selectSymbol(WATCHLIST[0]);
 startWebSocket();
-startTwelveWS();
-pollTwelveREST();
+startAlphaPolling();
 </script>
 </body>
 </html>
-
 
 
 
