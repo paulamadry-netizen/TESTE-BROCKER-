@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Mini Broker — Web Trader (Finnhub + Alphavantage indices)</title>
+<title>Mini Broker — Web Trader (Finnhub + Yahoo Indices)</title>
 <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
 <style>
   :root{
@@ -238,8 +238,6 @@ const KEEPALIVE_INTERVAL=25000;
 const RECONNECT_MAX=60000;
 const BASE_LOT_SIZE=100000;
 const LEVERAGE=20;
-const ALPHA_KEY='J3JNMW4LRAB5YETN';
-const ALPHA_POLL_INTERVAL=60000;
 const WATCHLIST=[
   {tv:'OANDA:EURUSD',label:'EUR / USD',api:'OANDA:EUR_USD'},
   {tv:'OANDA:USDJPY',label:'USD / JPY',api:'OANDA:USD_JPY'},
@@ -247,22 +245,18 @@ const WATCHLIST=[
   {tv:'OANDA:USDCHF',label:'USD / CHF',api:'OANDA:USD_CHF'},
   {tv:'OANDA:AUDUSD',label:'AUD / USD',api:'OANDA:AUD_USD'},
   {tv:'OANDA:XAUUSD',label:'Gold / USD',api:'OANDA:XAU_USD'},
-  {tv:'DJ30',label:'Dow Jones',api:'DJ30',alpha:'DJI'},
-  {tv:'USA S&P 500 Index',label:'S&P 500',api:'US500',alpha:'SPX'},
-  {tv:'NDX',label:'Nasdaq 100',api:'NDX',alpha:'NASDAQ'},
-  {tv:'DAX',label:'DAX 40',api:'DAX',alpha:'DAX'},
-  {tv:'Indice CAC40',label:'CAC 40',api:'CAC40',alpha:'FCHI'}
+  {tv:'DJ30',label:'Dow Jones',api:'DJ30',indexKey:'DJI'},
+  {tv:'USA S&P 500 Index',label:'S&P 500',api:'US500',indexKey:'SPX'},
+  {tv:'NDX',label:'Nasdaq 100',api:'NDX',indexKey:'NASDAQ'},
+  {tv:'DAX',label:'DAX 40',api:'DAX',indexKey:'DAX'},
+  {tv:'Indice CAC40',label:'CAC 40',api:'CAC40',indexKey:'FCHI'}
 ];
 
-const PIP_STEPS={
-  default:0.0001,
-  jpy:0.01,
-  xau:0.1
-};
+const PIP_STEPS={default:0.0001,jpy:0.01,xau:0.1};
 const PNL_BOOST_NON_XAU=4.5;
 
 let ws=null,wsConnected=false,reconnectDelay=1000,keepaliveTimer=null;
-let alphaInterval=null;
+let indexPollInterval=null;
 let currentSymbol=WATCHLIST[0];
 let priceCache={},positions=[],history=[],orders=[];
 let simBalance=50000.00;
@@ -379,11 +373,7 @@ function buildWsUrl(){return `${WS_ENDPOINT}?token=${API_KEY}`;}
 function startKeepalive(){stopKeepalive();keepaliveTimer=setInterval(()=>{if(ws&&ws.readyState===WebSocket.OPEN){ws.send(JSON.stringify({type:'ping'}));}},KEEPALIVE_INTERVAL);}
 function stopKeepalive(){if(keepaliveTimer){clearInterval(keepaliveTimer);keepaliveTimer=null;}}
 
-function scheduleReconnect(){
-  stopKeepalive();
-  if(reconnectDelay>RECONNECT_MAX) reconnectDelay=RECONNECT_MAX;
-  setTimeout(()=>{reconnectDelay=Math.min(RECONNECT_MAX,Math.floor(reconnectDelay*1.8));startWebSocket();},reconnectDelay);
-}
+function scheduleReconnect(){stopKeepalive();if(reconnectDelay>RECONNECT_MAX) reconnectDelay=RECONNECT_MAX;setTimeout(()=>{reconnectDelay=Math.min(RECONNECT_MAX,Math.floor(reconnectDelay*1.8));startWebSocket();},reconnectDelay);}
 
 function startWebSocket(){
   try{
@@ -408,9 +398,8 @@ function startWebSocket(){
 async function fetchInitialPrices(){
   await Promise.all(WATCHLIST.map(async w=>{
     if(priceCache[w.api]!==undefined) return;
-    if(w.alpha){
-      const value=await fetchAlphaPrice(w.alpha);
-      if(value!==null){priceCache[w.api]=value;updatePriceUI(w.api);}
+    if(w.indexKey){
+      await fetchYahooIndex(w);
       return;
     }
     const value=await fetchPriceREST(w.api);
@@ -500,30 +489,29 @@ function fetchPriceREST(symbol){
     .catch(()=>null);
 }
 
-async function fetchAlphaPrice(symbol){
+async function fetchYahooIndex(watchEntry){
   try{
-    const res=await fetch(`https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${encodeURIComponent(symbol)}&apikey=${ALPHA_KEY}`);
+    const res=await fetch(`http://localhost:4000/quotes?symbols=${watchEntry.indexKey}`);
     if(!res.ok) return null;
     const data=await res.json();
-    const price=Number(data['Global Quote']?.['05. price']);
-    return Number.isFinite(price)?price:null;
-  }catch{
-    return null;
+    const payload=data.find(item=>item.symbol.startsWith('^'));
+    if(payload?.price!==undefined){
+      priceCache[watchEntry.api]=payload.price;
+      updatePriceUI(watchEntry.api);
+      onPriceUpdate(watchEntry.api);
+      return payload.price;
+    }
+  }catch(err){
+    console.warn('Yahoo proxy',err);
   }
+  return null;
 }
 
-function startAlphaPolling(){
-  if(alphaInterval) clearInterval(alphaInterval);
-  alphaInterval=setInterval(async()=>{
-    await Promise.all(WATCHLIST.filter(w=>w.alpha).map(async w=>{
-      const value=await fetchAlphaPrice(w.alpha);
-      if(value!==null){
-        priceCache[w.api]=value;
-        updatePriceUI(w.api);
-        onPriceUpdate(w.api);
-      }
-    }));
-  },ALPHA_POLL_INTERVAL);
+function startYahooPolling(){
+  if(indexPollInterval) clearInterval(indexPollInterval);
+  indexPollInterval=setInterval(async()=>{
+    await Promise.all(WATCHLIST.filter(w=>w.indexKey).map(async w=>fetchYahooIndex(w)));
+  },60000);
 }
 
 function computePnl(pos){
@@ -539,41 +527,20 @@ function computePnl(pos){
 async function openPosition(symObj,side,lots=1,forcedEntry=null, tp=null, sl=null){
   const resolvedLots=Number(lots);
   if(!resolvedLots||resolvedLots<=0){
-    audioReject.play();
-    alert('Le nombre de lots doit être supérieur à 0');
-    return false;
+    audioReject.play();alert('Le nombre de lots doit être supérieur à 0');return false;
   }
   let price=forcedEntry!==null?Number(forcedEntry):Number(priceCache[symObj.api]);
   if(!price||Number.isNaN(price)){
     const fetched=await fetchPriceREST(symObj.api);
     price=fetched!==null?Number(fetched):null;
   }
-  if(!price||Number.isNaN(price)){
-    audioReject.play();
-    alert('Prix indisponible');
-    return false;
-  }
+  if(!price||Number.isNaN(price)){audioReject.play();alert('Prix indisponible');return false;}
   const required=marginRequirement(symObj.api,resolvedLots,price);
-  if(required>availableBalance){
-    audioReject.play();
-    alert('Solde insuffisant');
-    return false;
-  }
+  if(required>availableBalance){audioReject.play();alert('Solde insuffisant');return false;}
   availableBalance-=required;
-  const pos={
-    id:'pos_'+Math.random().toString(36).slice(2,9),
-    symbol:symObj,
-    side,
-    entry:price,
-    size:resolvedLots,
-    current:price,
-    tp:tp?Number(tp):null,
-    sl:sl?Number(sl):null
-  };
+  const pos={id:'pos_'+Math.random().toString(36).slice(2,9),symbol:symObj,side,entry:price,size:resolvedLots,current:price,tp:tp?Number(tp):null,sl:sl?Number(sl):null};
   positions.unshift(pos);
-  renderPositions();
-  renderTotals();
-  audioOpen.play();
+  renderPositions();renderTotals();audioOpen.play();
   return true;
 }
 
@@ -591,36 +558,18 @@ function closePosition(id, lotsToSell=null){
   history.unshift({symbol:pos.symbol,side:pos.side,entry:pos.entry,close:closePrice,pnl,lots:sellLots,closedAt:Date.now()});
   if(sellLots<pos.size) pos.size-=sellLots;
   else positions.splice(idx,1);
-  renderPositions();renderHistory();renderTotals();
-  audioClose.play();
+  renderPositions();renderHistory();renderTotals();audioClose.play();
 }
 
 function addLimitOrder(symbol,side,price,lots,tp,sl){
   const resolvedLots=Number(lots);
   const resolvedPrice=Number(price);
-  if(!resolvedLots||!resolvedPrice){
-    audioReject.play();
-    return alert('Prix et lots valides requis');
-  }
+  if(!resolvedLots||!resolvedPrice){audioReject.play();return alert('Prix et lots valides requis');}
   const required=marginRequirement(symbol,resolvedLots,resolvedPrice);
-  if(required>availableBalance){
-    audioReject.play();
-    alert('Solde insuffisant pour cet ordre');
-    return;
-  }
+  if(required>availableBalance){audioReject.play();alert('Solde insuffisant pour cet ordre');return;}
   availableBalance-=required;
-  orders.push({
-    id:'ord_'+Math.random().toString(36).slice(2,9),
-    symbol,
-    side,
-    price:resolvedPrice,
-    size:resolvedLots,
-    tp:tp?Number(tp):null,
-    sl:sl?Number(sl):null,
-    margin:required
-  });
-  renderOrders();renderTotals();
-  audioOpen.play();
+  orders.push({id:'ord_'+Math.random().toString(36).slice(2,9),symbol,side,price:resolvedPrice,size:resolvedLots,tp:tp?Number(tp):null,sl:sl?Number(sl):null,margin:required});
+  renderOrders();renderTotals();audioOpen.play();
 }
 
 function removeOrder(id){
@@ -790,7 +739,7 @@ window.removeOrder=removeOrder;
 
 selectSymbol(WATCHLIST[0]);
 startWebSocket();
-startAlphaPolling();
+startYahooPolling();
 </script>
 </body>
 </html>
