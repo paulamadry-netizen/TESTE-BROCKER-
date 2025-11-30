@@ -232,8 +232,8 @@
 <div id="toast" class="toast" aria-live="polite"></div>
 
 <script>
-const API_KEY='d4is89hr01queuakbspgd4is89hr01queuakbsq0';
-const WS_ENDPOINT='wss://ws.finnhub.io';
+const API_KEY='';
+const WS_ENDPOINT='ws-proxy-477220862918.europe-west1.run.app';
 const KEEPALIVE_INTERVAL=25000;
 const RECONNECT_MAX=60000;
 const BASE_LOT_SIZE=100000;
@@ -369,7 +369,7 @@ function setWsStatus(connected){
   else {el.className='status disconnected';el.innerText='WS: Disconnected';}
 }
 
-function buildWsUrl(){return `${WS_ENDPOINT}?token=${API_KEY}`;}
+function buildWsUrl(){return WS_ENDPOINT;}
 function startKeepalive(){stopKeepalive();keepaliveTimer=setInterval(()=>{if(ws&&ws.readyState===WebSocket.OPEN){ws.send(JSON.stringify({type:'ping'}));}},KEEPALIVE_INTERVAL);}
 function stopKeepalive(){if(keepaliveTimer){clearInterval(keepaliveTimer);keepaliveTimer=null;}}
 
