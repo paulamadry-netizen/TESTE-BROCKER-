@@ -272,13 +272,6 @@ const WATCHLIST = [
 const PIP_STEPS = {default: 0.0001, jpy: 0.01, xau: 0.1, index: 1};
 const PNL_BOOST_NON_XAU = 4.5;
 
-// Multiplicateurs pour convertir prix ETF → valeur indice réel
-const INDEX_MULTIPLIERS = {
-  "INDEXSP:.INX": 10,      // SPY ~590 → S&P 500 ~5900
-  "INDEXDJX:.DJI": 100,    // DIA ~448 → Dow ~44800
-  "INDEXNASDAQ:.NDX": 40   // QQQ ~520 → Nasdaq ~20800
-};
-
 // ============================================================================
 // ÉTAT GLOBAL
 // ============================================================================
@@ -1313,7 +1306,6 @@ debugLog(`Starting balance: ${simBalance} USD`);
 </script>
 </body>
 </html>
-
 
 
 
