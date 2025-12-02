@@ -294,6 +294,77 @@ let activeModalId = null;
 let debugMode = false;
 let messageCount = 0;
 
+// Système d'interpolation pour lisser les indices
+let priceInterpolation = {};
+let interpolationTimers = {};
+
+// ============================================================================
+// INTERPOLATION DES PRIX (pour lisser les indices)
+// ============================================================================
+function startPriceInterpolation(symbol, oldPrice, newPrice) {
+  // Ne lisser que les indices
+  const symbolObj = WATCHLIST.find(w => w.api === symbol);
+  if (!symbolObj || symbolObj.type !== 'index') return;
+  
+  // Annuler l'interpolation précédente si elle existe
+  if (interpolationTimers[symbol]) {
+    clearInterval(interpolationTimers[symbol]);
+    delete interpolationTimers[symbol];
+  }
+  
+  if (oldPrice === undefined || oldPrice === newPrice) return;
+  
+  const startPrice = oldPrice;
+  const endPrice = newPrice;
+  const duration = 10000; // 10 secondes
+  const steps = 100; // 100 étapes
+  const stepDuration = duration / steps;
+  let currentStep = 0;
+  
+  priceInterpolation[symbol] = {
+    start: startPrice,
+    end: endPrice,
+    current: startPrice,
+    startTime: Date.now()
+  };
+  
+  debugLog(`Starting interpolation for ${symbol}: ${startPrice} → ${endPrice}`);
+  
+  interpolationTimers[symbol] = setInterval(() => {
+    currentStep++;
+    
+    if (currentStep >= steps) {
+      clearInterval(interpolationTimers[symbol]);
+      delete interpolationTimers[symbol];
+      delete priceInterpolation[symbol];
+      return;
+    }
+    
+    // Interpolation linéaire
+    const progress = currentStep / steps;
+    const interpolatedPrice = startPrice + (endPrice - startPrice) * progress;
+    
+    priceInterpolation[symbol].current = interpolatedPrice;
+    
+    // Mettre à jour l'UI avec le prix interpolé
+    updatePriceUI(symbol, priceCache[symbol], interpolatedPrice);
+    
+    // Mettre à jour les positions avec le prix interpolé
+    let updated = false;
+    positions.forEach(pos => {
+      if (pos.symbol.api === symbol) {
+        pos.current = interpolatedPrice;
+        updated = true;
+      }
+    });
+    
+    if (updated) {
+      renderPositions();
+      renderTotals();
+    }
+  }, stepDuration);
+}
+
 // ============================================================================
 // DEBUG & LOGGING
 // ============================================================================
@@ -563,12 +634,22 @@ function handleWsMessage(msg) {
       if (!sym || price === undefined) return;
       
       const oldPrice = priceCache[sym];
-      priceCache[sym] = Number(price);
+      const newPrice = Number(price);
+      
+      priceCache[sym] = newPrice;
       lastPriceUpdate[sym] = Date.now();
       
       debugLog(`Price update: ${sym} = ${price} (was ${oldPrice})`);
       
-      updatePriceUI(sym, oldPrice);
+      // Démarrer l'interpolation pour les indices
+      const symbolObj = WATCHLIST.find(w => w.api === sym);
+      if (symbolObj && symbolObj.type === 'index' && oldPrice !== undefined) {
+        startPriceInterpolation(sym, oldPrice, newPrice);
+      } else {
+        // Pour le FOREX, mise à jour immédiate
+        updatePriceUI(sym, oldPrice);
+      }
+      
       onPriceUpdate(sym);
     });
     return;
@@ -580,12 +661,22 @@ function handleWsMessage(msg) {
     
     if (sym && price !== undefined) {
       const oldPrice = priceCache[sym];
-      priceCache[sym] = Number(price);
+      const newPrice = Number(price);
+      
+      priceCache[sym] = newPrice;
       lastPriceUpdate[sym] = Date.now();
       
       debugLog(`Price update: ${sym} = ${price}`);
       
-      updatePriceUI(sym, oldPrice);
+      // Démarrer l'interpolation pour les indices
+      const symbolObj = WATCHLIST.find(w => w.api === sym);
+      if (symbolObj && symbolObj.type === 'index' && oldPrice !== undefined) {
+        startPriceInterpolation(sym, oldPrice, newPrice);
+      } else {
+        // Pour le FOREX, mise à jour immédiate
+        updatePriceUI(sym, oldPrice);
+      }
+      
       onPriceUpdate(sym);
     }
   }
@@ -594,9 +685,9 @@ function handleWsMessage(msg) {
 // ============================================================================
 // UI UPDATES
 // ============================================================================
-function updatePriceUI(symbol, oldPrice) {
+function updatePriceUI(symbol, oldPrice, interpolatedPrice = null) {
   const el = document.getElementById('price_' + escapeId(symbol));
-  const price = priceCache[symbol];
+  const price = interpolatedPrice !== null ? interpolatedPrice : priceCache[symbol];
   
   if (el) {
     const symbolObj = WATCHLIST.find(w => w.api === symbol);
@@ -720,7 +811,13 @@ function checkOrdersForSymbol(symbol) {
 // PNL & CALCULATIONS
 // ============================================================================
 function computePnl(pos) {
-  const current = pos.current !== undefined ? pos.current : priceCache[pos.symbol.api];
+  let current = pos.current !== undefined ? pos.current : priceCache[pos.symbol.api];
+  
+  // Utiliser le prix interpolé si disponible pour les indices
+  if (priceInterpolation[pos.symbol.api]) {
+    current = priceInterpolation[pos.symbol.api].current;
+  }
+  
   if (current === undefined) return 0;
   
   const step = pipStep(pos.symbol.api);
