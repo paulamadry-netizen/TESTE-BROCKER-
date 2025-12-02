@@ -401,11 +401,15 @@ function lotUnits(symbol) {
 }
 
 function isQuoteUsd(symbol) {
-  return symbol.endsWith('USD');
+  // Accepte format API (OANDA:USD_JPY) et format TV (OANDA:USDJPY)
+  return symbol.endsWith('USD') || symbol.endsWith('_USD');
 }
 
 function isBaseUsd(symbol) {
-  return symbol.startsWith('USD');
+  // Accepte format API (OANDA:USD_JPY) et format TV (OANDA:USDJPY)
+  // USD/JPY = OANDA:USD_JPY ou OANDA:USDJPY
+  const cleanSymbol = symbol.replace('OANDA:', '');
+  return cleanSymbol.startsWith('USD_') || (cleanSymbol.startsWith('USD') && !cleanSymbol.endsWith('USD'));
 }
 
 function pipStep(symbol) {
@@ -453,17 +457,32 @@ function marginRequirement(symbol, lots, price) {
   if (!resolvedLots) return 0;
   
   const units = lotUnits(symbol);
+  const isBase = isBaseUsd(symbol);
   
-  if (isBaseUsd(symbol)) {
+  // Debug logging
+  console.log(`🔍 marginRequirement called:`, {
+    symbol,
+    lots: resolvedLots,
+    price,
+    units,
+    isBaseUsd: isBase,
+    leverage: LEVERAGE
+  });
+  
+  if (isBase) {
     // USD/JPY, USD/CHF: la base est USD
     // 1 lot = 100 000 USD, donc pas besoin du prix JPY
-    return (units * resolvedLots) / LEVERAGE;
+    const margin = (units * resolvedLots) / LEVERAGE;
+    console.log(`✅ USD base pair: ${units} × ${resolvedLots} ÷ ${LEVERAGE} = ${margin}`);
+    return margin;
   }
   
   // Pour les autres: EUR/USD, GBP/USD, XAU/USD
   const resolvedPrice = Number(price) || 1;
   const exposure = resolvedPrice * units * resolvedLots;
-  return exposure / LEVERAGE;
+  const margin = exposure / LEVERAGE;
+  console.log(`💱 Quote USD pair: ${resolvedPrice} × ${units} × ${resolvedLots} ÷ ${LEVERAGE} = ${margin}`);
+  return margin;
 }
 
 // ============================================================================
@@ -680,6 +699,14 @@ function refreshLotInfo() {
   const price = priceCache[currentSymbol.api];
   const lots = parseFloat(document.getElementById('lotInput').value) || 1;
   
+  console.log(`🔄 refreshLotInfo:`, {
+    symbol: currentSymbol.api,
+    lots,
+    price,
+    isBaseUsd: isBaseUsd(currentSymbol.api),
+    isQuoteUsd: isQuoteUsd(currentSymbol.api)
+  });
+  
   let margin, exposure;
   
   if (isBaseUsd(currentSymbol.api)) {
@@ -687,10 +714,12 @@ function refreshLotInfo() {
     // 1 lot = 100 000 USD (pas besoin du prix JPY pour la marge)
     exposure = lotUnits(currentSymbol.api) * lots;
     margin = exposure / LEVERAGE;
+    console.log(`✅ USD base: exposure=${exposure}, margin=${margin}`);
   } else if (price !== undefined) {
     // EUR/USD, GBP/USD, XAU/USD: quote = USD
     exposure = price * lotUnits(currentSymbol.api) * lots;
     margin = exposure / LEVERAGE;
+    console.log(`💱 Quote USD: exposure=${exposure}, margin=${margin}`);
   } else {
     // Prix pas encore disponible
     document.getElementById('lotValueInfo').innerText = 
@@ -1294,7 +1323,6 @@ debugLog('Audio system: Enabled for all trade actions');
 </script>
 </body>
 </html>
-
 
 
 
