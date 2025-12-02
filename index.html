@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Mini Broker — Web Trader (Finnhub + Yahoo Indices)</title>
+<title>Mini Broker — Prop Firm Edition</title>
 <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
 <style>
   :root{
@@ -25,7 +25,8 @@
   .symbol-info{display:flex;gap:12px;align-items:center}
   .symbol-badge{background:var(--glass);padding:10px 14px;border-radius:12px;font-weight:600;color:var(--accent)}
   .control-row{display:flex;gap:10px;align-items:center}
-  .btn{padding:10px 14px;border-radius:12px;border:0;cursor:pointer;font-weight:700;letter-spacing:0.4px}
+  .btn{padding:10px 14px;border-radius:12px;border:0;cursor:pointer;font-weight:700;letter-spacing:0.4px;transition:all .2s}
+  .btn:hover{transform:translateY(-2px);box-shadow:0 4px 12px rgba(0,196,167,0.3)}
   .btn-buy{background:linear-gradient(90deg,#0ea5a3,#00c4a7);color:#022}
   .btn-sell{background:linear-gradient(90deg,#ff6b6b,#ff8a8a);color:#111}
   .btn-ghost{background:transparent;color:var(--muted);border:1px solid rgba(255,255,255,0.2)}
@@ -34,45 +35,56 @@
   .watchlist h3{margin:0 0 10px 0;font-size:16px;color:var(--muted)}
   .wl-item{display:flex;justify-content:space-between;align-items:center;padding:12px;border-radius:14px;cursor:pointer;transition:transform .15s ease,background .15s ease;background:rgba(255,255,255,0.01)}
   .wl-item:hover{transform:translateY(-4px);background:rgba(255,255,255,0.12)}
+  .wl-item.updating{animation:pulse 1s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.6}}
   .wl-symbol{font-weight:700}
   .wl-details{text-align:right}
+  .wl-price{font-weight:600;font-size:14px}
+  .wl-change{font-size:11px;margin-top:2px}
+  .wl-change.positive{color:#10b981}
+  .wl-change.negative{color:#ef4444}
   .orders-card{margin-top:12px;background:rgba(255,255,255,0.01);padding:16px;border-radius:14px;display:flex;flex-direction:column;gap:12px;border:1px solid rgba(255,255,255,0.06)}
   .orders-card h4{margin:0;color:var(--muted);font-size:15px}
   .orders-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
   .order-input{width:100%;padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,0.2);background:transparent;color:inherit;font-size:13px}
   .order-grid-actions{display:flex;gap:10px}
   .order-grid-actions .btn{flex:1}
-  .orders-list{display:flex;flex-direction:column;gap:8px}
+  .orders-list{display:flex;flex-direction:column;gap:8px;max-height:200px;overflow-y:auto}
   .order-line{display:grid;grid-template-columns:1.5fr repeat(5,1fr) auto;gap:8px;padding:10px;border-radius:12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);align-items:center;font-size:13px}
   .order-line strong{font-weight:600}
   .order-line small{color:var(--muted)}
   .order-actions button{padding:4px 8px;border-radius:8px;border:1px solid rgba(255,255,255,0.2);background:transparent;color:var(--muted);cursor:pointer}
-  .orders-head{display:grid;grid-template-columns:1.5fr repeat(5,1fr) auto;gap:8px;font-size:11px;text-transform:uppercase;letter-spacing:0.1em;color:var(--muted);}
+  .orders-head{display:grid;grid-template-columns:1.5fr repeat(5,1fr) auto;gap:8px;font-size:11px;text-transform:uppercase;letter-spacing:0.1em;color:var(--muted);margin-bottom:4px}
   .small-muted{color:var(--muted);font-size:12px}
   .bottom-left{grid-column:1/2;grid-row:2/3;background:linear-gradient(180deg,rgba(255,255,255,0.01),rgba(255,255,255,0));border-radius:var(--radius);padding:16px;box-shadow:var(--card-shadow);display:flex;flex-direction:column;overflow:auto}
   .tabs{display:flex;gap:10px;margin-bottom:12px}
-  .tab{padding:8px 12px;border-radius:10px;cursor:pointer;background:transparent;color:var(--muted);font-weight:700}
+  .tab{padding:8px 12px;border-radius:10px;cursor:pointer;background:transparent;color:var(--muted);font-weight:700;transition:all .2s}
   .tab.active{color:var(--accent);background:rgba(0,196,167,0.08)}
   .positions-table,.history-table{width:100%;border-collapse:collapse;font-size:13px;color:var(--muted)}
-  .positions-table th,.positions-table td,.history-table th,.history-table td{padding:10px;border-bottom:1px dashed rgba(255,255,255,0.02)}
-  .positive{color:#0f5132;background:rgba(16,185,129,0.12);border-radius:6px;padding:6px;font-weight:700}
-  .negative{color:#7c1d1d;background:rgba(255,99,99,0.12);border-radius:6px;padding:6px;font-weight:700}
+  .positions-table th,.positions-table td,.history-table th,.history-table td{padding:10px;border-bottom:1px dashed rgba(255,255,255,0.02);text-align:left}
+  .positive{color:#10b981;background:rgba(16,185,129,0.12);border-radius:6px;padding:6px;font-weight:700;display:inline-block}
+  .negative{color:#ef4444;background:rgba(239,68,68,0.12);border-radius:6px;padding:6px;font-weight:700;display:inline-block}
   .bottom-right{grid-column:2/3;grid-row:2/3;background:linear-gradient(180deg,rgba(255,255,255,0.01),rgba(255,255,255,0));border-radius:var(--radius);padding:16px;box-shadow:var(--card-shadow);display:flex;flex-direction:column;gap:10px;overflow:auto}
-  .status{padding:6px 10px;border-radius:8px;font-weight:700}
-  .status.connected{background:rgba(0,196,167,0.08);color:var(--accent)}
-  .status.disconnected{background:rgba(255,99,99,0.06);color:#ff8a8a}
+  .status{padding:6px 10px;border-radius:8px;font-weight:700;font-size:12px}
+  .status.connected{background:rgba(16,185,129,0.12);color:#10b981}
+  .status.connecting{background:rgba(251,191,36,0.12);color:#fbbf24}
+  .status.disconnected{background:rgba(239,68,68,0.12);color:#ef4444}
   .lot-grid{display:flex;gap:10px;align-items:center;margin-top:4px}
   .lot-grid input{width:90px;padding:7px;border-radius:8px;border:1px solid rgba(255,255,255,0.2);background:transparent;color:inherit}
   .lot-info{font-size:13px;color:var(--muted);margin-top:6px}
-  .modal{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;z-index:100}
-  .modal-content{background:#0b1220;border-radius:14px;padding:20px;width:360px;box-shadow:0 10px 30px rgba(0,0,0,0.6)}
-  .modal-header{font-weight:700;margin-bottom:10px}
-  .modal-row{display:flex;flex-direction:column;margin-bottom:10px}
-  .modal-row label{font-size:12px;margin-bottom:4px;color:var(--muted)}
-  .modal-row input{padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.2);background:transparent;color:inherit}
-  .modal-actions{display:flex;gap:10px;justify-content:flex-end}
-  .toast{position:fixed;bottom:20px;right:20px;background:rgba(0,0,0,0.8);color:#fff;padding:12px 18px;border-radius:12px;font-weight:600;opacity:0;transform:translateY(12px);transition:opacity .25s ease,transform .25s ease;pointer-events:none;z-index:200}
-  .toast.visible{opacity:1;transform:translateY(0);}
+  .modal{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.75);display:flex;align-items:center;justify-content:center;z-index:100;backdrop-filter:blur(4px)}
+  .modal-content{background:#0b1220;border-radius:14px;padding:24px;width:400px;box-shadow:0 20px 60px rgba(0,0,0,0.8);border:1px solid rgba(255,255,255,0.1)}
+  .modal-header{font-weight:700;margin-bottom:16px;font-size:18px;color:var(--accent)}
+  .modal-row{display:flex;flex-direction:column;margin-bottom:12px}
+  .modal-row label{font-size:12px;margin-bottom:6px;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em}
+  .modal-row input,.modal-row div:not(.modal-header){padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.05);color:inherit}
+  .modal-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:20px}
+  .toast{position:fixed;bottom:20px;right:20px;background:rgba(15,23,42,0.95);color:#fff;padding:14px 20px;border-radius:12px;font-weight:600;opacity:0;transform:translateY(20px);transition:opacity .3s ease,transform .3s ease;pointer-events:none;z-index:200;border:1px solid rgba(0,196,167,0.3);box-shadow:0 10px 30px rgba(0,0,0,0.5)}
+  .toast.visible{opacity:1;transform:translateY(0);pointer-events:auto}
+  .toast.error{border-color:rgba(239,68,68,0.3)}
+  .toast.success{border-color:rgba(16,185,129,0.3)}
+  .debug-panel{position:fixed;bottom:10px;left:10px;background:rgba(0,0,0,0.9);color:#0f0;font-family:monospace;font-size:10px;padding:10px;border-radius:8px;max-width:400px;max-height:200px;overflow-y:auto;z-index:1000;display:none}
+  .debug-panel.active{display:block}
   @media (max-width:1100px){.app{grid-template-columns:1fr;grid-template-rows:auto auto auto}.watchlist{grid-column:1/-1;grid-row:2/3}.bottom-left{grid-row:3/4}.bottom-right{display:none}}
 </style>
 </head>
@@ -89,8 +101,9 @@
         </div>
       </div>
       <div class="control-row">
-        <div id="wsStatus" class="status disconnected">WS: Disconnected</div>
-        <button class="btn btn-ghost" id="refreshPricesBtn" title="Forcer mise à jour">↺ Refresh</button>
+        <div id="wsStatus" class="status disconnected">⚫ Disconnected</div>
+        <button class="btn btn-ghost" id="debugToggle" title="Toggle Debug">🐛</button>
+        <button class="btn btn-ghost" id="refreshPricesBtn" title="Forcer mise à jour">↺</button>
         <button class="btn btn-buy" id="buyBtn">BUY</button>
         <button class="btn btn-sell" id="sellBtn">SELL</button>
       </div>
@@ -104,32 +117,31 @@
   </div>
 
   <div class="card watchlist">
-    <h3>Watchlist</h3>
+    <h3>📊 Watchlist</h3>
     <div id="wlList" style="display:flex;flex-direction:column;gap:8px;max-height:360px;overflow:auto;"></div>
     <div class="orders-card">
-      <h4>Ordres Limites</h4>
+      <h4>⏱️ Ordres Limites</h4>
       <div class="orders-grid">
         <select id="ordSymbol" class="order-input"></select>
         <select id="ordSide" class="order-input">
           <option value="BUY">BUY</option>
           <option value="SELL">SELL</option>
         </select>
-        <input id="ordPrice" class="order-input" placeholder="Prix cible" />
-        <input id="ordSize" class="order-input" placeholder="Lots" value="1" />
-        <input id="ordTp" class="order-input" placeholder="TP (price)" />
-        <input id="ordSl" class="order-input" placeholder="SL (price)" />
+        <input id="ordPrice" class="order-input" placeholder="Prix cible" type="number" step="0.00001"/>
+        <input id="ordSize" class="order-input" placeholder="Lots" value="1" type="number" step="0.01"/>
+        <input id="ordTp" class="order-input" placeholder="TP (price)" type="number" step="0.00001"/>
+        <input id="ordSl" class="order-input" placeholder="SL (price)" type="number" step="0.00001"/>
       </div>
       <div class="order-grid-actions">
-        <button class="btn btn-buy" id="addOrderBtn">Ajouter l'ordre</button>
+        <button class="btn btn-buy" id="addOrderBtn">➕ Ajouter l'ordre</button>
       </div>
       <div class="orders-head">
         <span>Symbole</span>
         <span>Side</span>
-        <span>Prix cible</span>
+        <span>Prix</span>
         <span>Lots</span>
         <span>TP</span>
         <span>SL</span>
-        <span>Marge</span>
         <span></span>
       </div>
       <div class="orders-list" id="ordersBody"></div>
@@ -139,10 +151,10 @@
   <div class="card bottom-left">
     <div style="display:flex;justify-content:space-between;align-items:center">
       <div class="tabs">
-        <div class="tab active" id="tabPositions">Positions</div>
-        <div class="tab" id="tabHistory">Historique</div>
+        <div class="tab active" id="tabPositions">📈 Positions</div>
+        <div class="tab" id="tabHistory">📜 Historique</div>
       </div>
-      <div class="small-muted">Simulé · Finnhub WS · Effet 1:20</div>
+      <div class="small-muted">Simulé · Proxy WS · Effet 1:20</div>
     </div>
     <div id="positionsPane">
       <table class="positions-table">
@@ -169,6 +181,7 @@
             <th>Entry</th>
             <th>Close</th>
             <th>PNL</th>
+            <th>Date</th>
           </tr>
         </thead>
         <tbody id="historyBody"></tbody>
@@ -179,17 +192,18 @@
   <div class="card bottom-right">
     <div style="display:flex;justify-content:space-between;align-items:center">
       <div>
-        <div style="font-size:14px;font-weight:800">Compte Démo</div>
-        <div class="small-muted">Balance simulée: <span id="simBalance">50000.00</span> USD</div>
-        <div class="small-muted">Solde disponible: <span id="availableBalance">50000.00</span> USD</div>
+        <div style="font-size:14px;font-weight:800">💰 Compte Démo</div>
+        <div class="small-muted">Balance: <span id="simBalance">50000.00</span> USD</div>
+        <div class="small-muted">Disponible: <span id="availableBalance">50000.00</span> USD</div>
+        <div class="small-muted">Marge utilisée: <span id="usedMargin">0.00</span> USD</div>
       </div>
       <div style="text-align:right">
         <div class="small-muted">PnL Total:</div>
-        <div id="totalPnl" style="font-weight:800;font-size:18px">0.00</div>
+        <div id="totalPnl" style="font-weight:800;font-size:20px">0.00</div>
       </div>
     </div>
-    <div style="margin-top:8px">
-      <div style="font-weight:700">Détails position sélectionnée</div>
+    <div style="margin-top:12px;padding:12px;background:rgba(255,255,255,0.02);border-radius:10px">
+      <div style="font-weight:700;margin-bottom:8px">📍 Position sélectionnée</div>
       <div class="small-muted" id="posDetails">Aucune position sélectionnée</div>
     </div>
   </div>
@@ -197,61 +211,56 @@
 
 <div class="modal" id="positionModal" style="display:none">
   <div class="modal-content">
-    <div class="modal-header">Modifier position</div>
+    <div class="modal-header">⚙️ Modifier position</div>
     <div class="modal-row">
       <label>Symbol</label>
-      <div id="modalSymbol"></div>
+      <div id="modalSymbol" style="background:transparent;border:none;font-weight:700"></div>
     </div>
     <div class="modal-row">
       <label>Lots disponibles</label>
-      <div id="modalLots"></div>
+      <div id="modalLots" style="background:transparent;border:none;font-weight:700"></div>
     </div>
     <div class="modal-row">
       <label>Take Profit (price)</label>
-      <input type="number" id="modalTp" step="0.0001" />
+      <input type="number" id="modalTp" step="0.00001" placeholder="Laisser vide pour aucun"/>
     </div>
     <div class="modal-row">
       <label>Stop Loss (price)</label>
-      <input type="number" id="modalSl" step="0.0001" />
+      <input type="number" id="modalSl" step="0.00001" placeholder="Laisser vide pour aucun"/>
     </div>
     <div class="modal-row">
-      <label>Lots à vendre</label>
-      <input type="number" id="modalSellLots" min="0" step="0.01" value="0" />
+      <label>Lots à clôturer</label>
+      <input type="number" id="modalSellLots" min="0" step="0.01" value="0" placeholder="0 = garder ouvert"/>
     </div>
     <div class="modal-actions">
       <button class="btn btn-ghost" id="modalCancel">Annuler</button>
-      <button class="btn btn-buy" id="modalSave">Sauvegarder</button>
+      <button class="btn btn-buy" id="modalSave">💾 Sauvegarder</button>
     </div>
   </div>
 </div>
 
 <div id="toast" class="toast" aria-live="polite"></div>
+<div id="debugPanel" class="debug-panel"></div>
 
 <script>
 // ============================================================================
 // CONFIGURATION
 // ============================================================================
-const WS_ENDPOINT = 'wss://finnhub-proxy-477220862918.europe-west1.run.app';
-const YAHOO_PROXY_URL = 'https://your-yahoo-proxy.run.app/quotes'; // CHANGEZ CETTE URL !
-const FINNHUB_API_KEY = 'd4is89hr01queuakbspgd4is89hr01queuakbsq0'; // AJOUTEZ VOTRE CLÉ ICI !
-const KEEPALIVE_INTERVAL = 25000;
+const WS_PROXY_URL = 'wss://finnhub-proxy-477220862918.europe-west1.run.app';
+const KEEPALIVE_INTERVAL = 20000; // 20 secondes
 const RECONNECT_BASE_DELAY = 2000;
-const RECONNECT_MAX = 60000;
+const RECONNECT_MAX_DELAY = 30000;
 const BASE_LOT_SIZE = 100000;
 const LEVERAGE = 20;
 
+// Watchlist avec symboles Finnhub corrects
 const WATCHLIST = [
   {tv:'OANDA:EURUSD', label:'EUR / USD', api:'OANDA:EUR_USD'},
   {tv:'OANDA:USDJPY', label:'USD / JPY', api:'OANDA:USD_JPY'},
   {tv:'OANDA:GBPUSD', label:'GBP / USD', api:'OANDA:GBP_USD'},
   {tv:'OANDA:USDCHF', label:'USD / CHF', api:'OANDA:USD_CHF'},
   {tv:'OANDA:AUDUSD', label:'AUD / USD', api:'OANDA:AUD_USD'},
-  {tv:'OANDA:XAUUSD', label:'Gold / USD', api:'OANDA:XAU_USD'},
-  {tv:'DJ30', label:'Dow Jones', api:'DJ30', indexKey:'DJI'},
-  {tv:'USA S&P 500 Index', label:'S&P 500', api:'US500', indexKey:'SPX'},
-  {tv:'NDX', label:'Nasdaq 100', api:'NDX', indexKey:'NASDAQ'},
-  {tv:'DAX', label:'DAX 40', api:'DAX', indexKey:'DAX'},
-  {tv:'Indice CAC40', label:'CAC 40', api:'CAC40', indexKey:'FCHI'}
+  {tv:'OANDA:XAUUSD', label:'Gold / USD', api:'OANDA:XAU_USD'}
 ];
 
 const PIP_STEPS = {default: 0.0001, jpy: 0.01, xau: 0.1};
@@ -264,10 +273,11 @@ let ws = null;
 let wsConnected = false;
 let reconnectDelay = RECONNECT_BASE_DELAY;
 let reconnectAttempts = 0;
+let reconnectTimer = null;
 let keepaliveTimer = null;
-let indexPollInterval = null;
 let currentSymbol = WATCHLIST[0];
 let priceCache = {};
+let lastPriceUpdate = {};
 let positions = [];
 let history = [];
 let orders = [];
@@ -275,26 +285,39 @@ let simBalance = 50000.00;
 let availableBalance = 50000.00;
 let tvWidget = null;
 let activeModalId = null;
+let debugMode = false;
+let messageCount = 0;
+
+// ============================================================================
+// DEBUG & LOGGING
+// ============================================================================
+const debugPanel = document.getElementById('debugPanel');
+const debugLog = (msg) => {
+  if (!debugMode) return;
+  const timestamp = new Date().toLocaleTimeString();
+  debugPanel.innerHTML += `[${timestamp}] ${msg}\n`;
+  debugPanel.scrollTop = debugPanel.scrollHeight;
+  console.log(`[DEBUG] ${msg}`);
+};
+
+document.getElementById('debugToggle').addEventListener('click', () => {
+  debugMode = !debugMode;
+  debugPanel.classList.toggle('active');
+  debugPanel.innerHTML = debugMode ? '=== DEBUG MODE ACTIVATED ===\n' : '';
+});
 
 // ============================================================================
 // UTILITAIRES
 // ============================================================================
-const wlList = document.getElementById('wlList');
-const ordSymbol = document.getElementById('ordSymbol');
 const toastEl = document.getElementById('toast');
 let toastTimer = null;
 
-function showToast(message, duration = 2200) {
+function showToast(message, type = 'info', duration = 2500) {
   if (toastTimer) clearTimeout(toastTimer);
   toastEl.textContent = message;
-  toastEl.classList.add('visible');
+  toastEl.className = `toast visible ${type}`;
   toastTimer = setTimeout(() => toastEl.classList.remove('visible'), duration);
-}
-
-function playSound(type) {
-  // Sons désactivés car les URLs retournent 403
-  // Vous pouvez ajouter vos propres fichiers audio ici
-  console.log(`Sound: ${type}`);
+  debugLog(`Toast: ${message}`);
 }
 
 function escapeId(val) {
@@ -309,6 +332,10 @@ function formatPrice(val) {
 function formatMoney(val) {
   if (val === undefined || val === null) return '0.00';
   return Number(val).toFixed(2);
+}
+
+function formatDateTime(timestamp) {
+  return new Date(timestamp).toLocaleString('fr-FR');
 }
 
 function lotUnits(symbol) {
@@ -350,7 +377,7 @@ function pipValuePerLot(symbol, price) {
 
 function describePip(symbol, price) {
   const perLot = pipValuePerLot(symbol, price || priceCache[symbol] || 1);
-  return `1 lot ≈ ${formatMoney(perLot)} USD/par pip`;
+  return `1 lot ≈ ${formatMoney(perLot)} USD/pip`;
 }
 
 function marginRequirement(symbol, lots, price) {
@@ -368,90 +395,21 @@ function marginRequirement(symbol, lots, price) {
 }
 
 // ============================================================================
-// WATCHLIST UI
-// ============================================================================
-WATCHLIST.forEach(w => {
-  const item = document.createElement('div');
-  item.className = 'wl-item';
-  item.innerHTML = `
-    <div>
-      <div class="wl-symbol">${w.label}</div>
-      <div class="small-muted" style="margin-top:4px">${w.tv}</div>
-    </div>
-    <div class="wl-details">
-      <div class="wl-price" id="price_${escapeId(w.api)}">—</div>
-    </div>
-  `;
-  item.addEventListener('click', () => selectSymbol(w));
-  wlList.appendChild(item);
-  
-  const opt = document.createElement('option');
-  opt.value = w.api;
-  opt.text = w.label;
-  ordSymbol.appendChild(opt);
-});
-
-// ============================================================================
-// TRADINGVIEW
-// ============================================================================
-function initTradingView() {
-  try {
-    if (tvWidget && typeof tvWidget.remove === 'function') {
-      tvWidget.remove();
-      tvWidget = null;
-      document.getElementById('tv_chart_container').innerHTML = '';
-    }
-  } catch (e) {
-    console.warn('TradingView cleanup error:', e);
-  }
-  
-  if (typeof TradingView === 'undefined') {
-    console.warn('TradingView library not loaded');
-    return;
-  }
-  
-  try {
-    tvWidget = new TradingView.widget({
-      container_id: 'tv_chart_container',
-      autosize: true,
-      symbol: currentSymbol.tv,
-      interval: '15',
-      timezone: 'Etc/UTC',
-      theme: 'dark',
-      locale: 'fr',
-      disabled_features: ['use_localstorage_for_settings']
-    });
-  } catch (e) {
-    console.error('TradingView init failed:', e);
-  }
-}
-
-function selectSymbol(sym) {
-  currentSymbol = sym;
-  document.getElementById('currentSymbolBadge').innerText = sym.tv;
-  document.getElementById('currentSymbolTitle').innerText = sym.label;
-  
-  const price = priceCache[sym.api];
-  document.getElementById('currentPriceMini').innerText = 
-    price !== undefined ? 'Prix: ' + formatPrice(price) : 'Prix: —';
-  
-  refreshLotInfo();
-  initTradingView();
-}
-
-// ============================================================================
 // WEBSOCKET
 // ============================================================================
-function setWsStatus(connected) {
+function setWsStatus(status) {
   const el = document.getElementById('wsStatus');
-  wsConnected = !!connected;
+  wsConnected = status === 'connected';
   
-  if (wsConnected) {
+  if (status === 'connected') {
     el.className = 'status connected';
-    el.innerText = 'WS: Connected';
+    el.innerHTML = '🟢 Connected';
+  } else if (status === 'connecting') {
+    el.className = 'status connecting';
+    el.innerHTML = '🟡 Connecting...';
   } else {
     el.className = 'status disconnected';
-    el.innerText = 'WS: Disconnected';
+    el.innerHTML = '⚫ Disconnected';
   }
 }
 
@@ -461,8 +419,9 @@ function startKeepalive() {
     if (ws && ws.readyState === WebSocket.OPEN) {
       try {
         ws.send(JSON.stringify({type: 'ping'}));
+        debugLog('Sent keepalive ping');
       } catch (e) {
-        console.warn('Keepalive send error:', e);
+        debugLog(`Keepalive error: ${e.message}`);
       }
     }
   }, KEEPALIVE_INTERVAL);
@@ -477,72 +436,81 @@ function stopKeepalive() {
 
 function scheduleReconnect() {
   stopKeepalive();
+  if (reconnectTimer) clearTimeout(reconnectTimer);
   
   reconnectAttempts++;
   reconnectDelay = Math.min(
-    RECONNECT_MAX, 
+    RECONNECT_MAX_DELAY,
     RECONNECT_BASE_DELAY * Math.pow(1.5, reconnectAttempts)
   );
   
-  console.log(`Reconnecting in ${reconnectDelay}ms (attempt ${reconnectAttempts})...`);
+  debugLog(`Scheduling reconnect #${reconnectAttempts} in ${reconnectDelay}ms`);
   
-  setTimeout(() => {
+  reconnectTimer = setTimeout(() => {
     startWebSocket();
   }, reconnectDelay);
 }
 
 function startWebSocket() {
-  if (ws && ws.readyState === WebSocket.OPEN) {
-    console.log('WebSocket already connected');
+  if (ws && (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN)) {
+    debugLog('WebSocket already connecting/connected');
     return;
   }
   
   try {
-    console.log('Connecting to WebSocket:', WS_ENDPOINT);
-    ws = new WebSocket(WS_ENDPOINT);
+    debugLog(`Connecting to: ${WS_PROXY_URL}`);
+    setWsStatus('connecting');
+    
+    ws = new WebSocket(WS_PROXY_URL);
     
     ws.addEventListener('open', () => {
-      console.log('WebSocket connected');
-      setWsStatus(true);
+      debugLog('✅ WebSocket OPEN');
+      setWsStatus('connected');
       reconnectAttempts = 0;
       reconnectDelay = RECONNECT_BASE_DELAY;
+      messageCount = 0;
       
       // Subscribe to all symbols
       WATCHLIST.forEach(w => {
         try {
-          ws.send(JSON.stringify({type: 'subscribe', symbol: w.api}));
-          console.log('Subscribed to:', w.api);
+          const msg = JSON.stringify({type: 'subscribe', symbol: w.api});
+          ws.send(msg);
+          debugLog(`Subscribed to: ${w.api}`);
         } catch (e) {
-          console.warn('Subscribe error for', w.api, e);
+          debugLog(`Subscribe error for ${w.api}: ${e.message}`);
         }
       });
       
       startKeepalive();
-      fetchInitialPrices();
+      showToast('✅ Connecté au proxy', 'success');
     });
     
     ws.addEventListener('message', ev => {
+      messageCount++;
       try {
         const msg = JSON.parse(ev.data);
+        debugLog(`MSG #${messageCount}: ${JSON.stringify(msg).substring(0, 100)}`);
         handleWsMessage(msg);
       } catch (e) {
-        console.warn('WS message parse error:', e, ev.data);
+        debugLog(`Parse error: ${e.message}`);
       }
     });
     
     ws.addEventListener('close', event => {
-      console.log('WebSocket closed:', event.code, event.reason);
-      setWsStatus(false);
+      debugLog(`❌ WebSocket CLOSE: code=${event.code}, reason="${event.reason}"`);
+      setWsStatus('disconnected');
+      showToast('❌ Déconnecté', 'error');
       scheduleReconnect();
     });
     
     ws.addEventListener('error', error => {
-      console.error('WebSocket error:', error);
-      setWsStatus(false);
+      debugLog(`⚠️ WebSocket ERROR: ${error}`);
+      setWsStatus('disconnected');
     });
     
   } catch (e) {
-    console.error('WebSocket creation error:', e);
+    debugLog(`❌ WebSocket creation failed: ${e.message}`);
+    setWsStatus('disconnected');
     scheduleReconnect();
   }
 }
@@ -556,12 +524,16 @@ function handleWsMessage(msg) {
     return;
   }
   
-  // Ignore ping responses
-  if (msg.type === 'ping' || msg.type === 'pong') return;
+  // Ignore ping/pong
+  if (msg.type === 'ping' || msg.type === 'pong') {
+    debugLog('Received ping/pong');
+    return;
+  }
   
   // Handle errors
   if (msg.type === 'error') {
-    console.warn('WS error message:', msg);
+    debugLog(`Server error: ${JSON.stringify(msg)}`);
+    showToast(`Erreur serveur: ${msg.message || 'Unknown'}`, 'error');
     return;
   }
   
@@ -573,8 +545,13 @@ function handleWsMessage(msg) {
       
       if (!sym || price === undefined) return;
       
+      const oldPrice = priceCache[sym];
       priceCache[sym] = Number(price);
-      updatePriceUI(sym);
+      lastPriceUpdate[sym] = Date.now();
+      
+      debugLog(`Price update: ${sym} = ${price} (was ${oldPrice})`);
+      
+      updatePriceUI(sym, oldPrice);
       onPriceUpdate(sym);
     });
     return;
@@ -586,109 +563,35 @@ function handleWsMessage(msg) {
     const price = msg.data.p || msg.data.price || msg.data.c;
     
     if (sym && price !== undefined) {
+      const oldPrice = priceCache[sym];
       priceCache[sym] = Number(price);
-      updatePriceUI(sym);
+      lastPriceUpdate[sym] = Date.now();
+      
+      debugLog(`Price update: ${sym} = ${price}`);
+      
+      updatePriceUI(sym, oldPrice);
       onPriceUpdate(sym);
     }
   }
 }
 
 // ============================================================================
-// PRICE FETCHING
+// UI UPDATES
 // ============================================================================
-async function fetchInitialPrices() {
-  console.log('Fetching initial prices...');
-  
-  await Promise.all(WATCHLIST.map(async w => {
-    // Skip if already have price
-    if (priceCache[w.api] !== undefined) return;
-    
-    // Handle indices via Yahoo proxy
-    if (w.indexKey) {
-      await fetchYahooIndex(w);
-      return;
-    }
-    
-    // Handle regular symbols via Finnhub REST
-    const value = await fetchPriceREST(w.api);
-    if (value !== null) {
-      priceCache[w.api] = value;
-      updatePriceUI(w.api);
-    }
-  }));
-  
-  refreshLotInfo();
-}
-
-async function fetchPriceREST(symbol) {
-  if (!FINNHUB_API_KEY || FINNHUB_API_KEY === 'YOUR_FINNHUB_API_KEY_HERE') {
-    console.warn('Finnhub API key not configured');
-    return null;
-  }
-  
-  try {
-    const url = `https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(symbol)}&token=${FINNHUB_API_KEY}`;
-    const res = await fetch(url);
-    
-    if (!res.ok) {
-      console.warn(`Finnhub REST error for ${symbol}:`, res.status);
-      return null;
-    }
-    
-    const body = await res.json();
-    return body?.c ? Number(body.c) : null;
-  } catch (err) {
-    console.warn(`Finnhub REST fetch error for ${symbol}:`, err);
-    return null;
-  }
-}
-
-async function fetchYahooIndex(watchEntry) {
-  if (!YAHOO_PROXY_URL || YAHOO_PROXY_URL === 'https://your-yahoo-proxy.run.app/quotes') {
-    console.warn('Yahoo proxy URL not configured');
-    return null;
-  }
-  
-  try {
-    const url = `${YAHOO_PROXY_URL}?symbols=${watchEntry.indexKey}`;
-    const res = await fetch(url);
-    
-    if (!res.ok) {
-      console.warn(`Yahoo proxy error for ${watchEntry.indexKey}:`, res.status);
-      return null;
-    }
-    
-    const data = await res.json();
-    const payload = data.find(item => item.symbol.startsWith('^'));
-    
-    if (payload?.price !== undefined) {
-      priceCache[watchEntry.api] = payload.price;
-      updatePriceUI(watchEntry.api);
-      onPriceUpdate(watchEntry.api);
-      return payload.price;
-    }
-  } catch (err) {
-    console.warn('Yahoo proxy fetch error:', err);
-  }
-  
-  return null;
-}
-
-function startYahooPolling() {
-  if (indexPollInterval) clearInterval(indexPollInterval);
-  
-  indexPollInterval = setInterval(async () => {
-    await Promise.all(
-      WATCHLIST.filter(w => w.indexKey).map(w => fetchYahooIndex(w))
-    );
-  }, 60000);
-}
-
-function updatePriceUI(symbol) {
+function updatePriceUI(symbol, oldPrice) {
   const el = document.getElementById('price_' + escapeId(symbol));
   const price = priceCache[symbol];
   
-  if (el) el.innerText = formatPrice(price);
+  if (el) {
+    el.innerText = formatPrice(price);
+    
+    // Show price change
+    const parentItem = el.closest('.wl-item');
+    if (parentItem && oldPrice !== undefined && oldPrice !== price) {
+      parentItem.classList.add('updating');
+      setTimeout(() => parentItem.classList.remove('updating'), 500);
+    }
+  }
   
   if (symbol === currentSymbol.api) {
     document.getElementById('currentPriceMini').innerText = 'Prix: ' + formatPrice(price);
@@ -704,10 +607,11 @@ function refreshLotInfo() {
       ? lotUnits(currentSymbol.api) * lots
       : price * lotUnits(currentSymbol.api) * lots;
     
+    const margin = exposure / LEVERAGE;
     const pipInfo = describePip(currentSymbol.api, price);
     
     document.getElementById('lotValueInfo').innerText = 
-      `${lots} lots = ${(exposure / LEVERAGE).toFixed(2)} USD de marge · ${pipInfo} · levier 1:${LEVERAGE}`;
+      `${lots} lots = ${formatMoney(margin)} USD de marge · ${pipInfo} · levier 1:${LEVERAGE}`;
     return;
   }
   
@@ -715,9 +619,6 @@ function refreshLotInfo() {
     `1 lot = ${lotUnits(currentSymbol.api)}u · marge 1:${LEVERAGE}`;
 }
 
-// ============================================================================
-// PRICE UPDATES
-// ============================================================================
 function onPriceUpdate(symbol) {
   let updated = false;
   
@@ -745,15 +646,26 @@ function checkPositionTargets(symbol) {
     if (pos.symbol.api !== symbol) return;
     
     if (pos.side === 'BUY') {
-      if (pos.tp !== null && price >= pos.tp) toClose.push(pos.id);
-      if (pos.sl !== null && price <= pos.sl) toClose.push(pos.id);
+      if (pos.tp !== null && price >= pos.tp) {
+        toClose.push({id: pos.id, reason: 'TP hit'});
+      }
+      if (pos.sl !== null && price <= pos.sl) {
+        toClose.push({id: pos.id, reason: 'SL hit'});
+      }
     } else {
-      if (pos.tp !== null && price <= pos.tp) toClose.push(pos.id);
-      if (pos.sl !== null && price >= pos.sl) toClose.push(pos.id);
+      if (pos.tp !== null && price <= pos.tp) {
+        toClose.push({id: pos.id, reason: 'TP hit'});
+      }
+      if (pos.sl !== null && price >= pos.sl) {
+        toClose.push({id: pos.id, reason: 'SL hit'});
+      }
     }
   });
   
-  [...new Set(toClose)].forEach(id => closePosition(id));
+  toClose.forEach(({id, reason}) => {
+    debugLog(`Closing position ${id}: ${reason}`);
+    closePosition(id);
+  });
 }
 
 function checkOrdersForSymbol(symbol) {
@@ -770,13 +682,14 @@ function checkOrdersForSymbol(symbol) {
     const symObj = WATCHLIST.find(w => w.api === m.symbol) || 
                    {label: m.symbol, tv: m.symbol, api: m.symbol};
     
+    debugLog(`Executing limit order: ${m.side} ${m.symbol} @ ${m.price}`);
     await openPosition(symObj, m.side, m.size, m.price, m.tp, m.sl);
     removeOrder(m.id);
   });
 }
 
 // ============================================================================
-// PNL CALCULATION
+// PNL & CALCULATIONS
 // ============================================================================
 function computePnl(pos) {
   const current = pos.current !== undefined ? pos.current : priceCache[pos.symbol.api];
@@ -790,6 +703,13 @@ function computePnl(pos) {
   return pos.side === 'BUY' ? pnlPerLot : -pnlPerLot;
 }
 
+function getTotalMarginUsed() {
+  return positions.reduce((sum, pos) => {
+    const price = pos.current || priceCache[pos.symbol.api] || pos.entry;
+    return sum + marginRequirement(pos.symbol.api, pos.size, price);
+  }, 0) + orders.reduce((sum, ord) => sum + ord.margin, 0);
+}
+
 // ============================================================================
 // POSITIONS
 // ============================================================================
@@ -797,50 +717,43 @@ async function openPosition(symObj, side, lots = 1, forcedEntry = null, tp = nul
   const resolvedLots = Number(lots);
   
   if (!resolvedLots || resolvedLots <= 0) {
-    playSound('reject');
-    alert('Le nombre de lots doit être supérieur à 0');
+    showToast('❌ Lots invalide', 'error');
     return false;
   }
   
   let price = forcedEntry !== null ? Number(forcedEntry) : Number(priceCache[symObj.api]);
   
   if (!price || Number.isNaN(price)) {
-    const fetched = await fetchPriceREST(symObj.api);
-    price = fetched !== null ? Number(fetched) : null;
-  }
-  
-  if (!price || Number.isNaN(price)) {
-    playSound('reject');
-    alert('Prix indisponible');
+    showToast('❌ Prix indisponible', 'error');
     return false;
   }
   
   const required = marginRequirement(symObj.api, resolvedLots, price);
   
   if (required > availableBalance) {
-    playSound('reject');
-    alert('Solde insuffisant');
+    showToast('❌ Solde insuffisant', 'error');
     return false;
   }
   
   availableBalance -= required;
   
   const pos = {
-    id: 'pos_' + Math.random().toString(36).slice(2, 9),
+    id: 'pos_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
     symbol: symObj,
     side,
     entry: price,
     size: resolvedLots,
     current: price,
     tp: tp ? Number(tp) : null,
-    sl: sl ? Number(sl) : null
+    sl: sl ? Number(sl) : null,
+    openedAt: Date.now()
   };
   
   positions.unshift(pos);
   renderPositions();
   renderTotals();
-  playSound('open');
-  showToast(`Position ${side} ouverte: ${symObj.label}`);
+  showToast(`✅ Position ${side} ouverte: ${symObj.label}`, 'success');
+  debugLog(`Opened position: ${JSON.stringify(pos)}`);
   
   return true;
 }
@@ -880,8 +793,8 @@ function closePosition(id, lotsToSell = null) {
   renderPositions();
   renderHistory();
   renderTotals();
-  playSound('close');
-  showToast(`Position fermée: ${formatMoney(pnl)} USD`);
+  showToast(`✅ Position fermée: ${formatMoney(pnl)} USD`, pnl >= 0 ? 'success' : 'error');
+  debugLog(`Closed position ${id}: PNL = ${pnl}`);
 }
 
 // ============================================================================
@@ -892,35 +805,35 @@ function addLimitOrder(symbol, side, price, lots, tp, sl) {
   const resolvedPrice = Number(price);
   
   if (!resolvedLots || !resolvedPrice) {
-    playSound('reject');
-    return alert('Prix et lots valides requis');
+    showToast('❌ Prix et lots requis', 'error');
+    return;
   }
   
   const required = marginRequirement(symbol, resolvedLots, resolvedPrice);
   
   if (required > availableBalance) {
-    playSound('reject');
-    alert('Solde insuffisant pour cet ordre');
+    showToast('❌ Solde insuffisant', 'error');
     return;
   }
   
   availableBalance -= required;
   
   orders.push({
-    id: 'ord_' + Math.random().toString(36).slice(2, 9),
+    id: 'ord_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
     symbol,
     side,
     price: resolvedPrice,
     size: resolvedLots,
     tp: tp ? Number(tp) : null,
     sl: sl ? Number(sl) : null,
-    margin: required
+    margin: required,
+    createdAt: Date.now()
   });
   
   renderOrders();
   renderTotals();
-  playSound('open');
-  showToast('Ordre limite ajouté');
+  showToast('✅ Ordre limite ajouté', 'success');
+  debugLog(`Added limit order: ${side} ${symbol} @ ${resolvedPrice}`);
 }
 
 function removeOrder(id) {
@@ -930,7 +843,8 @@ function removeOrder(id) {
   orders = orders.filter(o => o.id !== id);
   renderOrders();
   renderTotals();
-  showToast('Ordre annulé');
+  showToast('✅ Ordre annulé', 'info');
+  debugLog(`Removed order: ${id}`);
 }
 
 // ============================================================================
@@ -939,6 +853,11 @@ function removeOrder(id) {
 function renderPositions() {
   const tbody = document.getElementById('positionsBody');
   tbody.innerHTML = '';
+  
+  if (positions.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:20px">Aucune position ouverte</td></tr>';
+    return;
+  }
   
   positions.forEach(pos => {
     const current = pos.current !== undefined ? pos.current : priceCache[pos.symbol.api];
@@ -952,14 +871,14 @@ function renderPositions() {
         <strong>${pos.symbol.label}</strong>
         <div class="small-muted">${pos.symbol.tv}</div>
       </td>
-      <td>${pos.side}</td>
+      <td><strong>${pos.side}</strong></td>
       <td>${formatPrice(pos.entry)}</td>
       <td>${formatPrice(current)}</td>
       <td>${pos.size}</td>
       <td><span class="${cls}">${formatMoney(pnl)}</span></td>
       <td>
-        <button class="btn btn-ghost" data-id="${pos.id}">Modifier</button>
-        <button class="btn btn-ghost" data-close="${pos.id}">Vendre Tout</button>
+        <button class="btn btn-ghost" data-id="${pos.id}" style="padding:6px 10px;font-size:11px">⚙️</button>
+        <button class="btn btn-ghost" data-close="${pos.id}" style="padding:6px 10px;font-size:11px">❌</button>
       </td>
     `;
     tbody.appendChild(tr);
@@ -976,8 +895,16 @@ function renderPositions() {
   const details = document.getElementById('posDetails');
   if (positions.length > 0) {
     const p = positions[0];
-    details.innerText = 
-      `${p.symbol.label} · ${p.side} · Entry ${formatPrice(p.entry)} · Current ${formatPrice(p.current)} · ${p.size} lots`;
+    const pnl = computePnl(p);
+    details.innerHTML = `
+      <strong>${p.symbol.label}</strong> · ${p.side} · 
+      Entry: ${formatPrice(p.entry)} · 
+      Current: ${formatPrice(p.current)} · 
+      ${p.size} lots<br>
+      PNL: <span class="${pnl >= 0 ? 'positive' : 'negative'}">${formatMoney(pnl)}</span>
+      ${p.tp ? `· TP: ${formatPrice(p.tp)}` : ''}
+      ${p.sl ? `· SL: ${formatPrice(p.sl)}` : ''}
+    `;
   } else {
     details.innerText = 'Aucune position sélectionnée';
   }
@@ -987,15 +914,21 @@ function renderHistory() {
   const tbody = document.getElementById('historyBody');
   tbody.innerHTML = '';
   
-  history.forEach(h => {
+  if (history.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:20px">Aucun historique</td></tr>';
+    return;
+  }
+  
+  history.slice(0, 50).forEach(h => {
     const cls = h.pnl >= 0 ? 'positive' : 'negative';
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td>${h.symbol.label}</td>
-      <td>${h.side}</td>
+      <td><strong>${h.side}</strong></td>
       <td>${formatPrice(h.entry)}</td>
       <td>${formatPrice(h.close)}</td>
       <td><span class="${cls}">${formatMoney(h.pnl)}</span></td>
+      <td class="small-muted">${formatDateTime(h.closedAt)}</td>
     `;
     tbody.appendChild(tr);
   });
@@ -1005,18 +938,25 @@ function renderOrders() {
   const container = document.getElementById('ordersBody');
   container.innerHTML = '';
   
+  if (orders.length === 0) {
+    container.innerHTML = '<div style="text-align:center;color:var(--muted);padding:10px">Aucun ordre en attente</div>';
+    return;
+  }
+  
   orders.forEach(o => {
     const line = document.createElement('div');
     line.className = 'order-line';
     line.innerHTML = `
-      <div><strong>${o.symbol}</strong><small>${o.side}</small></div>
+      <div>
+        <strong>${o.symbol}</strong>
+        <small>${o.side}</small>
+      </div>
       <div>${formatPrice(o.price)}</div>
       <div>${o.size}</div>
       <div>${o.tp ? formatPrice(o.tp) : '—'}</div>
       <div>${o.sl ? formatPrice(o.sl) : '—'}</div>
-      <div>${formatMoney(o.margin)}</div>
       <div class="order-actions">
-        <button data-id="${o.id}">Annuler</button>
+        <button data-id="${o.id}" style="padding:4px 8px">❌</button>
       </div>
     `;
     container.appendChild(line);
@@ -1029,9 +969,13 @@ function renderOrders() {
 
 function renderTotals() {
   const total = positions.reduce((sum, p) => sum + computePnl(p), 0);
+  const usedMargin = getTotalMarginUsed();
+  
   document.getElementById('totalPnl').innerText = formatMoney(total);
+  document.getElementById('totalPnl').className = total >= 0 ? 'positive' : 'negative';
   document.getElementById('simBalance').innerText = formatMoney(simBalance);
   document.getElementById('availableBalance').innerText = formatMoney(availableBalance);
+  document.getElementById('usedMargin').innerText = formatMoney(usedMargin);
 }
 
 function renderAll() {
@@ -1039,6 +983,79 @@ function renderAll() {
   renderHistory();
   renderOrders();
   renderTotals();
+}
+
+// ============================================================================
+// WATCHLIST INIT
+// ============================================================================
+const wlList = document.getElementById('wlList');
+const ordSymbol = document.getElementById('ordSymbol');
+
+WATCHLIST.forEach(w => {
+  const item = document.createElement('div');
+  item.className = 'wl-item';
+  item.innerHTML = `
+    <div>
+      <div class="wl-symbol">${w.label}</div>
+      <div class="small-muted" style="margin-top:4px">${w.tv}</div>
+    </div>
+    <div class="wl-details">
+      <div class="wl-price" id="price_${escapeId(w.api)}">—</div>
+      <div class="wl-change small-muted" id="change_${escapeId(w.api)}"></div>
+    </div>
+  `;
+  item.addEventListener('click', () => selectSymbol(w));
+  wlList.appendChild(item);
+  
+  const opt = document.createElement('option');
+  opt.value = w.api;
+  opt.text = w.label;
+  ordSymbol.appendChild(opt);
+});
+
+// ============================================================================
+// TRADINGVIEW
+// ============================================================================
+function initTradingView() {
+  try {
+    if (tvWidget && typeof tvWidget.remove === 'function') {
+      tvWidget.remove();
+      tvWidget = null;
+    }
+  } catch (e) {
+    console.warn('TradingView cleanup:', e);
+  }
+  
+  if (typeof TradingView === 'undefined') return;
+  
+  try {
+    tvWidget = new TradingView.widget({
+      container_id: 'tv_chart_container',
+      autosize: true,
+      symbol: currentSymbol.tv,
+      interval: '15',
+      timezone: 'Etc/UTC',
+      theme: 'dark',
+      locale: 'fr',
+      disabled_features: ['use_localstorage_for_settings']
+    });
+  } catch (e) {
+    console.error('TradingView init:', e);
+  }
+}
+
+function selectSymbol(sym) {
+  currentSymbol = sym;
+  document.getElementById('currentSymbolBadge').innerText = sym.tv;
+  document.getElementById('currentSymbolTitle').innerText = sym.label;
+  
+  const price = priceCache[sym.api];
+  document.getElementById('currentPriceMini').innerText = 
+    price !== undefined ? 'Prix: ' + formatPrice(price) : 'Prix: —';
+  
+  refreshLotInfo();
+  initTradingView();
+  debugLog(`Selected symbol: ${sym.label}`);
 }
 
 // ============================================================================
@@ -1071,8 +1088,8 @@ document.getElementById('addOrderBtn').addEventListener('click', () => {
   const sl = document.getElementById('ordSl').value;
   
   if (!symbol || !price) {
-    playSound('reject');
-    return alert('Symbole et prix requis');
+    showToast('❌ Symbole et prix requis', 'error');
+    return;
   }
   
   addLimitOrder(symbol, side, price, size, tp, sl);
@@ -1083,14 +1100,11 @@ document.getElementById('refreshPricesBtn').addEventListener('click', () => {
     WATCHLIST.forEach(w => {
       try {
         ws.send(JSON.stringify({type: 'subscribe', symbol: w.api}));
-      } catch (e) {
-        console.warn('Refresh subscribe error:', e);
-      }
+      } catch (e) {}
     });
-    showToast('Mise à jour demandée');
+    showToast('🔄 Rafraîchissement...', 'info');
   } else {
-    showToast('WebSocket non connecté');
-    renderAll();
+    showToast('❌ WebSocket non connecté', 'error');
   }
 });
 
@@ -1138,40 +1152,30 @@ document.getElementById('modalSave').addEventListener('click', () => {
   document.getElementById('positionModal').style.display = 'none';
   renderPositions();
   renderTotals();
-  showToast('TP/SL enregistré');
-  playSound('validate');
+  showToast('✅ TP/SL enregistrés', 'success');
 });
 
-// Global functions for inline handlers
+// Global functions
 window.closePosition = closePosition;
 window.removeOrder = removeOrder;
 
 // ============================================================================
 // INITIALIZATION
 // ============================================================================
-console.log('Initializing Mini Broker...');
-
-// Check configuration
-if (!FINNHUB_API_KEY || FINNHUB_API_KEY === 'YOUR_FINNHUB_API_KEY_HERE') {
-  console.warn('⚠️ FINNHUB_API_KEY not configured! Please add your API key.');
-  showToast('Configuration requise: voir console', 5000);
-}
-
-if (!YAHOO_PROXY_URL || YAHOO_PROXY_URL === 'https://your-yahoo-proxy.run.app/quotes') {
-  console.warn('⚠️ YAHOO_PROXY_URL not configured! Index prices will not work.');
-}
+console.log('🚀 Mini Broker - Prop Firm Edition');
+console.log('📡 Proxy:', WS_PROXY_URL);
 
 renderAll();
 selectSymbol(WATCHLIST[0]);
 initTradingView();
 startWebSocket();
-startYahooPolling();
 
-console.log('Mini Broker initialized');
+debugLog('=== BROKER INITIALIZED ===');
+debugLog(`Watchlist: ${WATCHLIST.length} symbols`);
+debugLog(`Starting balance: ${simBalance} USD`);
 </script>
 </body>
 </html>
-
 
 
 
