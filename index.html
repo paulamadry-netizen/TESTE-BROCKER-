@@ -253,17 +253,25 @@ const RECONNECT_MAX_DELAY = 30000;
 const BASE_LOT_SIZE = 100000;
 const LEVERAGE = 20;
 
-// Watchlist avec symboles Finnhub corrects
+// Watchlist avec symboles Finnhub corrects + INDICES BOURSIERS
 const WATCHLIST = [
-  {tv:'OANDA:EURUSD', label:'EUR / USD', api:'OANDA:EUR_USD'},
-  {tv:'OANDA:USDJPY', label:'USD / JPY', api:'OANDA:USD_JPY'},
-  {tv:'OANDA:GBPUSD', label:'GBP / USD', api:'OANDA:GBP_USD'},
-  {tv:'OANDA:USDCHF', label:'USD / CHF', api:'OANDA:USD_CHF'},
-  {tv:'OANDA:AUDUSD', label:'AUD / USD', api:'OANDA:AUD_USD'},
-  {tv:'OANDA:XAUUSD', label:'Gold / USD', api:'OANDA:XAU_USD'}
+  // FOREX
+  {tv:'OANDA:EURUSD', label:'EUR / USD', api:'OANDA:EUR_USD', type:'forex'},
+  {tv:'OANDA:USDJPY', label:'USD / JPY', api:'OANDA:USD_JPY', type:'forex'},
+  {tv:'OANDA:GBPUSD', label:'GBP / USD', api:'OANDA:GBP_USD', type:'forex'},
+  {tv:'OANDA:USDCHF', label:'USD / CHF', api:'OANDA:USD_CHF', type:'forex'},
+  {tv:'OANDA:AUDUSD', label:'AUD / USD', api:'OANDA:AUD_USD', type:'forex'},
+  {tv:'OANDA:XAUUSD', label:'Gold / USD', api:'OANDA:XAU_USD', type:'metal'},
+  
+  // INDICES BOURSIERS
+  {tv:'DJ:DJI', label:'Dow Jones', api:'INDEXDJX:.DJI', type:'index'},
+  {tv:'NASDAQ:NDX', label:'Nasdaq 100', api:'INDEXNASDAQ:.NDX', type:'index'},
+  {tv:'SP:SPX', label:'S&P 500', api:'INDEXSP:.INX', type:'index'},
+  {tv:'INDEX:PX1', label:'CAC 40', api:'INDEXEURO:PX1', type:'index'},
+  {tv:'XETR:DAX', label:'DAX', api:'INDEXDB:DAX', type:'index'}
 ];
 
-const PIP_STEPS = {default: 0.0001, jpy: 0.01, xau: 0.1};
+const PIP_STEPS = {default: 0.0001, jpy: 0.01, xau: 0.1, index: 1};
 const PNL_BOOST_NON_XAU = 4.5;
 
 // ============================================================================
@@ -326,7 +334,12 @@ function escapeId(val) {
 
 function formatPrice(val) {
   if (val === undefined || val === null) return '—';
-  return Number(val).toFixed(5).replace(/\.?0+$/, '');
+  const num = Number(val);
+  // Pour les indices, on affiche avec 2 décimales
+  if (currentSymbol && currentSymbol.type === 'index') {
+    return num.toFixed(2);
+  }
+  return num.toFixed(5).replace(/\.?0+$/, '');
 }
 
 function formatMoney(val) {
@@ -339,7 +352,11 @@ function formatDateTime(timestamp) {
 }
 
 function lotUnits(symbol) {
-  return symbol.includes('XAU') ? 100 : BASE_LOT_SIZE;
+  // Pour les indices, 1 lot = 1 unité d'indice
+  const symbolObj = WATCHLIST.find(w => w.api === symbol);
+  if (symbolObj && symbolObj.type === 'index') return 1;
+  if (symbol.includes('XAU')) return 100;
+  return BASE_LOT_SIZE;
 }
 
 function isQuoteUsd(symbol) {
@@ -350,7 +367,13 @@ function isBaseUsd(symbol) {
   return symbol.startsWith('USD');
 }
 
+function isIndex(symbol) {
+  const symbolObj = WATCHLIST.find(w => w.api === symbol);
+  return symbolObj && symbolObj.type === 'index';
+}
+
 function pipStep(symbol) {
+  if (isIndex(symbol)) return PIP_STEPS.index;
   if (symbol.includes('JPY')) return PIP_STEPS.jpy;
   if (symbol.includes('XAU')) return PIP_STEPS.xau;
   return PIP_STEPS.default;
@@ -360,6 +383,11 @@ function pipValuePerLot(symbol, price) {
   const step = pipStep(symbol);
   const units = lotUnits(symbol);
   let baseValue;
+  
+  // Pour les indices: 1 point = 1 USD par lot
+  if (isIndex(symbol)) {
+    return step * units; // 1 point = 1 USD
+  }
   
   if (symbol.includes('XAU')) {
     baseValue = step * units;
@@ -377,12 +405,22 @@ function pipValuePerLot(symbol, price) {
 
 function describePip(symbol, price) {
   const perLot = pipValuePerLot(symbol, price || priceCache[symbol] || 1);
+  if (isIndex(symbol)) {
+    return `1 lot ≈ ${formatMoney(perLot)} USD/point`;
+  }
   return `1 lot ≈ ${formatMoney(perLot)} USD/pip`;
 }
 
 function marginRequirement(symbol, lots, price) {
   const resolvedLots = Number(lots);
   if (!resolvedLots) return 0;
+  
+  // Pour les indices: marge basée sur la valeur de l'indice
+  if (isIndex(symbol)) {
+    const resolvedPrice = Number(price) || 0;
+    const exposure = resolvedPrice * resolvedLots;
+    return exposure / LEVERAGE;
+  }
   
   if (isBaseUsd(symbol)) {
     return (lotUnits(symbol) * resolvedLots) / LEVERAGE;
@@ -583,7 +621,13 @@ function updatePriceUI(symbol, oldPrice) {
   const price = priceCache[symbol];
   
   if (el) {
-    el.innerText = formatPrice(price);
+    // Format différent pour les indices
+    const symbolObj = WATCHLIST.find(w => w.api === symbol);
+    if (symbolObj && symbolObj.type === 'index') {
+      el.innerText = Number(price).toFixed(2);
+    } else {
+      el.innerText = formatPrice(price);
+    }
     
     // Show price change
     const parentItem = el.closest('.wl-item');
@@ -594,7 +638,9 @@ function updatePriceUI(symbol, oldPrice) {
   }
   
   if (symbol === currentSymbol.api) {
-    document.getElementById('currentPriceMini').innerText = 'Prix: ' + formatPrice(price);
+    const displayPrice = currentSymbol.type === 'index' ? 
+      Number(price).toFixed(2) : formatPrice(price);
+    document.getElementById('currentPriceMini').innerText = 'Prix: ' + displayPrice;
   }
 }
 
@@ -603,9 +649,15 @@ function refreshLotInfo() {
   const lots = parseFloat(document.getElementById('lotInput').value) || 1;
   
   if (price !== undefined) {
-    const exposure = isBaseUsd(currentSymbol.api)
-      ? lotUnits(currentSymbol.api) * lots
-      : price * lotUnits(currentSymbol.api) * lots;
+    let exposure;
+    
+    if (isIndex(currentSymbol.api)) {
+      exposure = price * lots;
+    } else if (isBaseUsd(currentSymbol.api)) {
+      exposure = lotUnits(currentSymbol.api) * lots;
+    } else {
+      exposure = price * lotUnits(currentSymbol.api) * lots;
+    }
     
     const margin = exposure / LEVERAGE;
     const pipInfo = describePip(currentSymbol.api, price);
@@ -680,7 +732,7 @@ function checkOrdersForSymbol(symbol) {
   
   matches.forEach(async m => {
     const symObj = WATCHLIST.find(w => w.api === m.symbol) || 
-                   {label: m.symbol, tv: m.symbol, api: m.symbol};
+                   {label: m.symbol, tv: m.symbol, api: m.symbol, type:'forex'};
     
     debugLog(`Executing limit order: ${m.side} ${m.symbol} @ ${m.price}`);
     await openPosition(symObj, m.side, m.size, m.price, m.tp, m.sl);
@@ -1050,8 +1102,13 @@ function selectSymbol(sym) {
   document.getElementById('currentSymbolTitle').innerText = sym.label;
   
   const price = priceCache[sym.api];
-  document.getElementById('currentPriceMini').innerText = 
-    price !== undefined ? 'Prix: ' + formatPrice(price) : 'Prix: —';
+  if (price !== undefined) {
+    const displayPrice = sym.type === 'index' ? 
+      Number(price).toFixed(2) : formatPrice(price);
+    document.getElementById('currentPriceMini').innerText = 'Prix: ' + displayPrice;
+  } else {
+    document.getElementById('currentPriceMini').innerText = 'Prix: —';
+  }
   
   refreshLotInfo();
   initTradingView();
@@ -1162,7 +1219,7 @@ window.removeOrder = removeOrder;
 // ============================================================================
 // INITIALIZATION
 // ============================================================================
-console.log('🚀 Mini Broker - Prop Firm Edition');
+console.log('🚀 Mini Broker - Prop Firm Edition + Indices Boursiers');
 console.log('📡 Proxy:', WS_PROXY_URL);
 
 renderAll();
@@ -1171,7 +1228,7 @@ initTradingView();
 startWebSocket();
 
 debugLog('=== BROKER INITIALIZED ===');
-debugLog(`Watchlist: ${WATCHLIST.length} symbols`);
+debugLog(`Watchlist: ${WATCHLIST.length} symbols (${WATCHLIST.filter(w => w.type === 'index').length} indices)`);
 debugLog(`Starting balance: ${simBalance} USD`);
 </script>
 </body>
