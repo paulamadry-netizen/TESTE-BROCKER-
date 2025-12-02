@@ -264,7 +264,65 @@ const WATCHLIST = [
 ];
 
 const PIP_STEPS = {default: 0.0001, jpy: 0.01, xau: 0.1};
-const PNL_BOOST_NON_XAU = 4.5;
+
+// ============================================================================
+// SYSTÈME AUDIO - EFFETS SONORES
+// ============================================================================
+const AudioSystem = {
+  context: null,
+  
+  init() {
+    try {
+      this.context = new (window.AudioContext || window.webkitAudioContext)();
+      console.log('🔊 Audio system initialized');
+    } catch (e) {
+      console.warn('Audio not available:', e);
+    }
+  },
+  
+  playTone(frequency, duration, type = 'sine', volume = 0.3) {
+    if (!this.context) return;
+    
+    const oscillator = this.context.createOscillator();
+    const gainNode = this.context.createGain();
+    
+    oscillator.connect(gainNode);
+    gainNode.connect(this.context.destination);
+    
+    oscillator.frequency.value = frequency;
+    oscillator.type = type;
+    gainNode.gain.value = volume;
+    
+    oscillator.start(this.context.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.01, this.context.currentTime + duration);
+    oscillator.stop(this.context.currentTime + duration);
+  },
+  
+  // Son de succès: montée harmonieuse (position ouverte)
+  playSuccess() {
+    this.playTone(523.25, 0.1, 'sine', 0.25); // C5
+    setTimeout(() => this.playTone(659.25, 0.15, 'sine', 0.2), 80); // E5
+  },
+  
+  // Son d'erreur: descente dissonante (trade refusé)
+  playError() {
+    this.playTone(300, 0.15, 'square', 0.2);
+    setTimeout(() => this.playTone(200, 0.2, 'square', 0.15), 100);
+  },
+  
+  // Son de clôture: ton neutre (sortie de position)
+  playClose() {
+    this.playTone(440, 0.12, 'sine', 0.2); // A4
+  },
+  
+  // Son d'ordre: bip court (ordre créé/annulé)
+  playOrder() {
+    this.playTone(880, 0.08, 'sine', 0.18); // A5
+  }
+};
+
+// Initialiser le système audio
+AudioSystem.init();
 
 // ============================================================================
 // ÉTAT GLOBAL
@@ -356,23 +414,28 @@ function pipStep(symbol) {
   return PIP_STEPS.default;
 }
 
+// CORRECTION: Calcul PNL sans boost artificiel
 function pipValuePerLot(symbol, price) {
   const step = pipStep(symbol);
   const units = lotUnits(symbol);
   let baseValue;
   
   if (symbol.includes('XAU')) {
+    // Gold: 1 pip = 0.1, 100 oz
     baseValue = step * units;
   } else if (isQuoteUsd(symbol)) {
+    // EUR/USD, GBP/USD, etc: quote en USD
     baseValue = step * units;
   } else if (isBaseUsd(symbol)) {
-    baseValue = units;
+    // USD/JPY, USD/CHF: base en USD
+    baseValue = (step * units) / (price || 1);
   } else {
+    // Autres paires
     baseValue = price > 0 ? (step * units) / price : step * units;
   }
   
-  if (symbol.includes('XAU')) return baseValue;
-  return baseValue * PNL_BOOST_NON_XAU;
+  // PAS DE BOOST ARTIFICIEL - Valeur réelle seulement
+  return baseValue;
 }
 
 function describePip(symbol, price) {
@@ -384,13 +447,16 @@ function marginRequirement(symbol, lots, price) {
   const resolvedLots = Number(lots);
   if (!resolvedLots) return 0;
   
+  const units = lotUnits(symbol);
+  const resolvedPrice = Number(price) || 0;
+  
   if (isBaseUsd(symbol)) {
-    return (lotUnits(symbol) * resolvedLots) / LEVERAGE;
+    // USD/JPY, USD/CHF: la base est USD
+    return (units * resolvedLots) / LEVERAGE;
   }
   
-  const resolvedPrice = Number(price) || 0;
-  const units = lotUnits(symbol);
-  const exposure = resolvedPrice ? resolvedPrice * units * resolvedLots : units * resolvedLots;
+  // Pour les autres: EUR/USD, GBP/USD, XAU/USD
+  const exposure = resolvedPrice * units * resolvedLots;
   return exposure / LEVERAGE;
 }
 
@@ -458,12 +524,14 @@ function startWebSocket() {
   }
   
   try {
+    console.log(`🔌 Connecting to WebSocket: ${WS_PROXY_URL}`);
     debugLog(`Connecting to: ${WS_PROXY_URL}`);
     setWsStatus('connecting');
     
     ws = new WebSocket(WS_PROXY_URL);
     
     ws.addEventListener('open', () => {
+      console.log('✅ WebSocket OPEN');
       debugLog('✅ WebSocket OPEN');
       setWsStatus('connected');
       reconnectAttempts = 0;
@@ -475,6 +543,7 @@ function startWebSocket() {
         try {
           const msg = JSON.stringify({type: 'subscribe', symbol: w.api});
           ws.send(msg);
+          console.log(`Subscribed to: ${w.api}`);
           debugLog(`Subscribed to: ${w.api}`);
         } catch (e) {
           debugLog(`Subscribe error for ${w.api}: ${e.message}`);
@@ -497,6 +566,7 @@ function startWebSocket() {
     });
     
     ws.addEventListener('close', event => {
+      console.log(`❌ WebSocket CLOSE: code=${event.code}, reason="${event.reason}"`);
       debugLog(`❌ WebSocket CLOSE: code=${event.code}, reason="${event.reason}"`);
       setWsStatus('disconnected');
       showToast('❌ Déconnecté', 'error');
@@ -504,11 +574,13 @@ function startWebSocket() {
     });
     
     ws.addEventListener('error', error => {
+      console.error('⚠️ WebSocket ERROR:', error);
       debugLog(`⚠️ WebSocket ERROR: ${error}`);
       setWsStatus('disconnected');
     });
     
   } catch (e) {
+    console.error('❌ WebSocket creation failed:', e);
     debugLog(`❌ WebSocket creation failed: ${e.message}`);
     setWsStatus('disconnected');
     scheduleReconnect();
@@ -696,7 +768,8 @@ function computePnl(pos) {
   if (current === undefined) return 0;
   
   const step = pipStep(pos.symbol.api);
-  const pipDiff = (current - pos.entry) / step;
+  const priceDiff = current - pos.entry;
+  const pipDiff = priceDiff / step;
   const pipValue = pipValuePerLot(pos.symbol.api, current);
   const pnlPerLot = pipDiff * pipValue * pos.size;
   
@@ -718,6 +791,7 @@ async function openPosition(symObj, side, lots = 1, forcedEntry = null, tp = nul
   
   if (!resolvedLots || resolvedLots <= 0) {
     showToast('❌ Lots invalide', 'error');
+    AudioSystem.playError();
     return false;
   }
   
@@ -725,6 +799,7 @@ async function openPosition(symObj, side, lots = 1, forcedEntry = null, tp = nul
   
   if (!price || Number.isNaN(price)) {
     showToast('❌ Prix indisponible', 'error');
+    AudioSystem.playError();
     return false;
   }
   
@@ -732,6 +807,7 @@ async function openPosition(symObj, side, lots = 1, forcedEntry = null, tp = nul
   
   if (required > availableBalance) {
     showToast('❌ Solde insuffisant', 'error');
+    AudioSystem.playError();
     return false;
   }
   
@@ -753,6 +829,7 @@ async function openPosition(symObj, side, lots = 1, forcedEntry = null, tp = nul
   renderPositions();
   renderTotals();
   showToast(`✅ Position ${side} ouverte: ${symObj.label}`, 'success');
+  AudioSystem.playSuccess();
   debugLog(`Opened position: ${JSON.stringify(pos)}`);
   
   return true;
@@ -794,6 +871,7 @@ function closePosition(id, lotsToSell = null) {
   renderHistory();
   renderTotals();
   showToast(`✅ Position fermée: ${formatMoney(pnl)} USD`, pnl >= 0 ? 'success' : 'error');
+  AudioSystem.playClose();
   debugLog(`Closed position ${id}: PNL = ${pnl}`);
 }
 
@@ -806,6 +884,7 @@ function addLimitOrder(symbol, side, price, lots, tp, sl) {
   
   if (!resolvedLots || !resolvedPrice) {
     showToast('❌ Prix et lots requis', 'error');
+    AudioSystem.playError();
     return;
   }
   
@@ -813,6 +892,7 @@ function addLimitOrder(symbol, side, price, lots, tp, sl) {
   
   if (required > availableBalance) {
     showToast('❌ Solde insuffisant', 'error');
+    AudioSystem.playError();
     return;
   }
   
@@ -833,6 +913,7 @@ function addLimitOrder(symbol, side, price, lots, tp, sl) {
   renderOrders();
   renderTotals();
   showToast('✅ Ordre limite ajouté', 'success');
+  AudioSystem.playOrder();
   debugLog(`Added limit order: ${side} ${symbol} @ ${resolvedPrice}`);
 }
 
@@ -844,6 +925,7 @@ function removeOrder(id) {
   renderOrders();
   renderTotals();
   showToast('✅ Ordre annulé', 'info');
+  AudioSystem.playOrder();
   debugLog(`Removed order: ${id}`);
 }
 
@@ -1026,9 +1108,13 @@ function initTradingView() {
     console.warn('TradingView cleanup:', e);
   }
   
-  if (typeof TradingView === 'undefined') return;
+  if (typeof TradingView === 'undefined') {
+    console.error('TradingView not loaded');
+    return;
+  }
   
   try {
+    console.log(`Initializing TradingView for ${currentSymbol.tv}`);
     tvWidget = new TradingView.widget({
       container_id: 'tv_chart_container',
       autosize: true,
@@ -1039,8 +1125,9 @@ function initTradingView() {
       locale: 'fr',
       disabled_features: ['use_localstorage_for_settings']
     });
+    console.log('TradingView initialized successfully');
   } catch (e) {
-    console.error('TradingView init:', e);
+    console.error('TradingView init error:', e);
   }
 }
 
@@ -1089,6 +1176,7 @@ document.getElementById('addOrderBtn').addEventListener('click', () => {
   
   if (!symbol || !price) {
     showToast('❌ Symbole et prix requis', 'error');
+    AudioSystem.playError();
     return;
   }
   
@@ -1105,6 +1193,7 @@ document.getElementById('refreshPricesBtn').addEventListener('click', () => {
     showToast('🔄 Rafraîchissement...', 'info');
   } else {
     showToast('❌ WebSocket non connecté', 'error');
+    AudioSystem.playError();
   }
 });
 
@@ -1153,6 +1242,7 @@ document.getElementById('modalSave').addEventListener('click', () => {
   renderPositions();
   renderTotals();
   showToast('✅ TP/SL enregistrés', 'success');
+  AudioSystem.playOrder();
 });
 
 // Global functions
@@ -1164,15 +1254,30 @@ window.removeOrder = removeOrder;
 // ============================================================================
 console.log('🚀 Mini Broker - Prop Firm Edition');
 console.log('📡 Proxy:', WS_PROXY_URL);
+console.log('💰 Balance:', simBalance, 'USD');
+console.log('⚖️ Leverage:', LEVERAGE + ':1');
+console.log('🔊 Audio system:', AudioSystem.context ? 'Enabled ✓' : 'Disabled ✗');
+console.log('📊 TradingView:', typeof TradingView !== 'undefined' ? 'Loaded ✓' : 'NOT LOADED ✗');
 
 renderAll();
 selectSymbol(WATCHLIST[0]);
-initTradingView();
+
+// Initialize TradingView after DOM is ready
+setTimeout(() => {
+  console.log('Initializing TradingView chart...');
+  initTradingView();
+}, 500);
+
+// Start WebSocket
+console.log('Starting WebSocket connection...');
 startWebSocket();
 
 debugLog('=== BROKER INITIALIZED ===');
 debugLog(`Watchlist: ${WATCHLIST.length} symbols`);
 debugLog(`Starting balance: ${simBalance} USD`);
+debugLog(`Leverage: ${LEVERAGE}:1`);
+debugLog('PNL calculation: CORRECTED (no artificial boost)');
+debugLog('Audio system: Enabled for all trade actions');
 </script>
 </body>
 </html>
