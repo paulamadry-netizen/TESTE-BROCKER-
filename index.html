@@ -418,24 +418,29 @@ function pipStep(symbol) {
 function pipValuePerLot(symbol, price) {
   const step = pipStep(symbol);
   const units = lotUnits(symbol);
-  let baseValue;
   
   if (symbol.includes('XAU')) {
     // Gold: 1 pip = 0.1, 100 oz
-    baseValue = step * units;
-  } else if (isQuoteUsd(symbol)) {
-    // EUR/USD, GBP/USD, etc: quote en USD
-    baseValue = step * units;
-  } else if (isBaseUsd(symbol)) {
+    return step * units;
+  } 
+  
+  if (isQuoteUsd(symbol)) {
+    // EUR/USD, GBP/USD, AUD/USD: quote en USD
+    // 1 pip de mouvement = step * units en USD
+    return step * units;
+  } 
+  
+  if (isBaseUsd(symbol)) {
     // USD/JPY, USD/CHF: base en USD
-    baseValue = (step * units) / (price || 1);
-  } else {
-    // Autres paires
-    baseValue = price > 0 ? (step * units) / price : step * units;
+    // 1 pip de mouvement = (step * units) / price
+    // Pour USD/JPY: si prix = 150, 1 pip (0.01) = (0.01 * 100000) / 150
+    const resolvedPrice = Number(price) || 1;
+    return (step * units) / resolvedPrice;
   }
   
-  // PAS DE BOOST ARTIFICIEL - Valeur réelle seulement
-  return baseValue;
+  // Autres paires (rares)
+  const resolvedPrice = Number(price) || 1;
+  return (step * units) / resolvedPrice;
 }
 
 function describePip(symbol, price) {
@@ -448,14 +453,15 @@ function marginRequirement(symbol, lots, price) {
   if (!resolvedLots) return 0;
   
   const units = lotUnits(symbol);
-  const resolvedPrice = Number(price) || 0;
   
   if (isBaseUsd(symbol)) {
     // USD/JPY, USD/CHF: la base est USD
+    // 1 lot = 100 000 USD, donc pas besoin du prix JPY
     return (units * resolvedLots) / LEVERAGE;
   }
   
   // Pour les autres: EUR/USD, GBP/USD, XAU/USD
+  const resolvedPrice = Number(price) || 1;
   const exposure = resolvedPrice * units * resolvedLots;
   return exposure / LEVERAGE;
 }
@@ -674,21 +680,28 @@ function refreshLotInfo() {
   const price = priceCache[currentSymbol.api];
   const lots = parseFloat(document.getElementById('lotInput').value) || 1;
   
-  if (price !== undefined) {
-    const exposure = isBaseUsd(currentSymbol.api)
-      ? lotUnits(currentSymbol.api) * lots
-      : price * lotUnits(currentSymbol.api) * lots;
-    
-    const margin = exposure / LEVERAGE;
-    const pipInfo = describePip(currentSymbol.api, price);
-    
+  let margin, exposure;
+  
+  if (isBaseUsd(currentSymbol.api)) {
+    // USD/JPY, USD/CHF: base = USD
+    // 1 lot = 100 000 USD (pas besoin du prix JPY pour la marge)
+    exposure = lotUnits(currentSymbol.api) * lots;
+    margin = exposure / LEVERAGE;
+  } else if (price !== undefined) {
+    // EUR/USD, GBP/USD, XAU/USD: quote = USD
+    exposure = price * lotUnits(currentSymbol.api) * lots;
+    margin = exposure / LEVERAGE;
+  } else {
+    // Prix pas encore disponible
     document.getElementById('lotValueInfo').innerText = 
-      `${lots} lots = ${formatMoney(margin)} USD de marge · ${pipInfo} · levier 1:${LEVERAGE}`;
+      `1 lot = ${lotUnits(currentSymbol.api)} unités · marge 1:${LEVERAGE}`;
     return;
   }
   
+  const pipInfo = describePip(currentSymbol.api, price);
+  
   document.getElementById('lotValueInfo').innerText = 
-    `1 lot = ${lotUnits(currentSymbol.api)}u · marge 1:${LEVERAGE}`;
+    `${lots} lot${lots > 1 ? 's' : ''} = ${formatMoney(margin)} USD marge · ${pipInfo} · levier 1:${LEVERAGE}`;
 }
 
 function onPriceUpdate(symbol) {
