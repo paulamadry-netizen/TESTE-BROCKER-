@@ -253,7 +253,7 @@ const RECONNECT_MAX_DELAY = 30000;
 const BASE_LOT_SIZE = 100000;
 const LEVERAGE = 20;
 
-// Watchlist - FOREX + 3 Indices US
+// Watchlist - FOREX + 3 Futures Indices US (trade 23h/24)
 const WATCHLIST = [
   // FOREX
   {tv:'OANDA:EURUSD', label:'EUR / USD', api:'OANDA:EUR_USD', type:'forex'},
@@ -263,10 +263,10 @@ const WATCHLIST = [
   {tv:'OANDA:AUDUSD', label:'AUD / USD', api:'OANDA:AUD_USD', type:'forex'},
   {tv:'OANDA:XAUUSD', label:'Gold / USD', api:'OANDA:XAU_USD', type:'metal'},
   
-  // INDICES US (vraies valeurs × multiplicateur)
-  {tv:'TVC:SPX', label:'S&P 500', api:'INDEXSP:.INX', type:'index'},
-  {tv:'TVC:DJI', label:'Dow Jones', api:'INDEXDJX:.DJI', type:'index'},
-  {tv:'NASDAQ:NDX', label:'Nasdaq 100', api:'INDEXNASDAQ:.NDX', type:'index'}
+  // FUTURES Indices US (cotation 23h/24 - 5j/7)
+  {tv:'CME_MINI:ES1!', label:'S&P 500 Future', api:'INDEXSP:.INX', type:'index'},
+  {tv:'CBOT_MINI:YM1!', label:'Dow Jones Future', api:'INDEXDJX:.DJI', type:'index'},
+  {tv:'CME_MINI:NQ1!', label:'Nasdaq 100 Future', api:'INDEXNASDAQ:.NDX', type:'index'}
 ];
 
 const PIP_STEPS = {default: 0.0001, jpy: 0.01, xau: 0.1, index: 1};
@@ -1306,7 +1306,6 @@ debugLog(`Starting balance: ${simBalance} USD`);
 </script>
 </body>
 </html>
-
 
 
 
