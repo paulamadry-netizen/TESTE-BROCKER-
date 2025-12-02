@@ -12,88 +12,66 @@
     --muted:#9aa4b2;
     --accent:#00c4a7;
     --danger:#ff6b6b;
-    --success:#10b981;
-    --warning:#fbbf24;
     --glass:rgba(255,255,255,0.03);
     --card-shadow:0 8px 28px rgba(2,6,23,0.7);
     --radius:16px;
     font-family:Inter,system-ui,Roboto,sans-serif;
   }
-  html,body{height:100%;margin:0;background:linear-gradient(180deg,#071025,#071423);color:#e6eef6;overflow:hidden}
-  .app{display:grid;grid-template-columns:1fr 400px;grid-template-rows:auto 1fr;gap:18px;height:100vh;padding:18px;box-sizing:border-box}
-  .card{background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01));border-radius:var(--radius);padding:18px;box-shadow:var(--card-shadow);display:flex;flex-direction:column;box-sizing:border-box}
-  
-  /* CHART AREA - SPANS BOTH ROWS */
-  .chart-card{grid-column:1/2;grid-row:1/3;min-width:0;display:flex;flex-direction:column;overflow:hidden}
-  .chart-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:10px;flex-shrink:0}
+  html,body{height:100%;margin:0;background:linear-gradient(180deg,#071025,#071423);color:#e6eef6}
+  .app{display:grid;grid-template-columns:1fr 380px;grid-template-rows:1fr 320px;gap:18px;height:100vh;padding:18px}
+  .card{background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01));border-radius:var(--radius);padding:18px;box-shadow:var(--card-shadow);display:flex;flex-direction:column}
+  .chart-card{grid-column:1/2;grid-row:1/2;min-width:0}
+  .chart-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
   .symbol-info{display:flex;gap:12px;align-items:center}
   .symbol-badge{background:var(--glass);padding:10px 14px;border-radius:12px;font-weight:600;color:var(--accent)}
-  .control-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .control-row{display:flex;gap:10px;align-items:center}
   .btn{padding:10px 14px;border-radius:12px;border:0;cursor:pointer;font-weight:700;letter-spacing:0.4px;transition:all .2s}
   .btn:hover{transform:translateY(-2px);box-shadow:0 4px 12px rgba(0,196,167,0.3)}
   .btn-buy{background:linear-gradient(90deg,#0ea5a3,#00c4a7);color:#022}
   .btn-sell{background:linear-gradient(90deg,#ff6b6b,#ff8a8a);color:#111}
   .btn-ghost{background:transparent;color:var(--muted);border:1px solid rgba(255,255,255,0.2)}
-  .lot-grid{display:flex;gap:10px;align-items:center;margin-top:4px;flex-shrink:0}
-  .lot-grid input{width:90px;padding:7px;border-radius:8px;border:1px solid rgba(255,255,255,0.2);background:transparent;color:inherit}
-  .lot-info{font-size:13px;color:var(--muted);margin-top:6px;flex-shrink:0}
-  
-  /* CHART CONTAINER - TAKES ALL REMAINING SPACE */
-  #tv_chart_container{
-    flex:1 1 auto;
-    min-height:0;
-    width:100%;
-    border-radius:16px;
-    overflow:hidden;
-    margin-top:10px;
-  }
-  
-  /* WATCHLIST - TOP RIGHT */
-  .watchlist{grid-column:2/3;grid-row:1/2;background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01));border-radius:var(--radius);padding:16px;box-shadow:var(--card-shadow);display:flex;flex-direction:column;max-height:50vh;overflow:hidden}
-  .watchlist h3{margin:0 0 10px 0;font-size:16px;color:var(--muted);flex-shrink:0}
-  .wl-list{display:flex;flex-direction:column;gap:8px;overflow-y:auto;flex:1;padding-right:4px}
-  .wl-list::-webkit-scrollbar{width:6px}
-  .wl-list::-webkit-scrollbar-track{background:rgba(255,255,255,0.02);border-radius:10px}
-  .wl-list::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.1);border-radius:10px}
-  .wl-item{display:flex;justify-content:space-between;align-items:center;padding:12px;border-radius:14px;cursor:pointer;transition:transform .15s ease,background .15s ease;background:rgba(255,255,255,0.01);border:1px solid transparent}
-  .wl-item:hover{transform:translateY(-2px);background:rgba(255,255,255,0.12)}
-  .wl-item.active{background:rgba(0,196,167,0.1);border-color:rgba(0,196,167,0.3)}
+  #tv_chart_container{flex:1;min-height:420px;border-radius:16px;overflow:hidden;margin-top:12px}
+  .watchlist{grid-column:2/3;grid-row:1/2;background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01));border-radius:var(--radius);padding:16px;box-shadow:var(--card-shadow);display:flex;flex-direction:column}
+  .watchlist h3{margin:0 0 10px 0;font-size:16px;color:var(--muted)}
+  .wl-item{display:flex;justify-content:space-between;align-items:center;padding:12px;border-radius:14px;cursor:pointer;transition:transform .15s ease,background .15s ease;background:rgba(255,255,255,0.01)}
+  .wl-item:hover{transform:translateY(-4px);background:rgba(255,255,255,0.12)}
   .wl-item.updating{animation:pulse 1s infinite}
   @keyframes pulse{0%,100%{opacity:1}50%{opacity:.6}}
   .wl-symbol{font-weight:700}
   .wl-details{text-align:right}
-  .wl-price{font-weight:600;font-size:14px;font-family:monospace}
+  .wl-price{font-weight:600;font-size:14px}
   .wl-change{font-size:11px;margin-top:2px}
   .wl-change.positive{color:#10b981}
   .wl-change.negative{color:#ef4444}
-  
-  /* ORDERS SECTION */
-  .orders-card{margin-top:12px;background:rgba(255,255,255,0.01);padding:16px;border-radius:14px;display:flex;flex-direction:column;gap:12px;border:1px solid rgba(255,255,255,0.06);flex-shrink:0}
+  .orders-card{margin-top:12px;background:rgba(255,255,255,0.01);padding:16px;border-radius:14px;display:flex;flex-direction:column;gap:12px;border:1px solid rgba(255,255,255,0.06)}
   .orders-card h4{margin:0;color:var(--muted);font-size:15px}
   .orders-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
   .order-input{width:100%;padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,0.2);background:transparent;color:inherit;font-size:13px}
   .order-grid-actions{display:flex;gap:10px}
   .order-grid-actions .btn{flex:1}
-  .orders-list{display:flex;flex-direction:column;gap:8px;max-height:150px;overflow-y:auto}
+  .orders-list{display:flex;flex-direction:column;gap:8px;max-height:200px;overflow-y:auto}
   .order-line{display:grid;grid-template-columns:1.5fr repeat(5,1fr) auto;gap:8px;padding:10px;border-radius:12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);align-items:center;font-size:13px}
   .order-line strong{font-weight:600}
   .order-line small{color:var(--muted)}
-  .order-actions button{padding:4px 8px;border-radius:8px;border:1px solid rgba(255,255,255,0.2);background:transparent;color:var(--muted);cursor:pointer;transition:all .2s}
-  .order-actions button:hover{background:var(--danger);color:#fff;border-color:var(--danger)}
+  .order-actions button{padding:4px 8px;border-radius:8px;border:1px solid rgba(255,255,255,0.2);background:transparent;color:var(--muted);cursor:pointer}
   .orders-head{display:grid;grid-template-columns:1.5fr repeat(5,1fr) auto;gap:8px;font-size:11px;text-transform:uppercase;letter-spacing:0.1em;color:var(--muted);margin-bottom:4px}
-  
-  /* BOTTOM RIGHT - ACCOUNT INFO */
-  .bottom-right{grid-column:2/3;grid-row:2/3;background:linear-gradient(180deg,rgba(255,255,255,0.01),rgba(255,255,255,0));border-radius:var(--radius);padding:16px;box-shadow:var(--card-shadow);display:flex;flex-direction:column;gap:10px;overflow:auto}
-  
   .small-muted{color:var(--muted);font-size:12px}
+  .bottom-left{grid-column:1/2;grid-row:2/3;background:linear-gradient(180deg,rgba(255,255,255,0.01),rgba(255,255,255,0));border-radius:var(--radius);padding:16px;box-shadow:var(--card-shadow);display:flex;flex-direction:column;overflow:auto}
+  .tabs{display:flex;gap:10px;margin-bottom:12px}
+  .tab{padding:8px 12px;border-radius:10px;cursor:pointer;background:transparent;color:var(--muted);font-weight:700;transition:all .2s}
+  .tab.active{color:var(--accent);background:rgba(0,196,167,0.08)}
+  .positions-table,.history-table{width:100%;border-collapse:collapse;font-size:13px;color:var(--muted)}
+  .positions-table th,.positions-table td,.history-table th,.history-table td{padding:10px;border-bottom:1px dashed rgba(255,255,255,0.02);text-align:left}
+  .positive{color:#10b981;background:rgba(16,185,129,0.12);border-radius:6px;padding:6px;font-weight:700;display:inline-block}
+  .negative{color:#ef4444;background:rgba(239,68,68,0.12);border-radius:6px;padding:6px;font-weight:700;display:inline-block}
+  .bottom-right{grid-column:2/3;grid-row:2/3;background:linear-gradient(180deg,rgba(255,255,255,0.01),rgba(255,255,255,0));border-radius:var(--radius);padding:16px;box-shadow:var(--card-shadow);display:flex;flex-direction:column;gap:10px;overflow:auto}
   .status{padding:6px 10px;border-radius:8px;font-weight:700;font-size:12px}
   .status.connected{background:rgba(16,185,129,0.12);color:#10b981}
   .status.connecting{background:rgba(251,191,36,0.12);color:#fbbf24}
   .status.disconnected{background:rgba(239,68,68,0.12);color:#ef4444}
-  .positive{color:#10b981;background:rgba(16,185,129,0.12);border-radius:6px;padding:6px;font-weight:700;display:inline-block}
-  .negative{color:#ef4444;background:rgba(239,68,68,0.12);border-radius:6px;padding:6px;font-weight:700;display:inline-block}
-  
-  /* MODAL */
+  .lot-grid{display:flex;gap:10px;align-items:center;margin-top:4px}
+  .lot-grid input{width:90px;padding:7px;border-radius:8px;border:1px solid rgba(255,255,255,0.2);background:transparent;color:inherit}
+  .lot-info{font-size:13px;color:var(--muted);margin-top:6px}
   .modal{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.75);display:flex;align-items:center;justify-content:center;z-index:100;backdrop-filter:blur(4px)}
   .modal-content{background:#0b1220;border-radius:14px;padding:24px;width:400px;box-shadow:0 20px 60px rgba(0,0,0,0.8);border:1px solid rgba(255,255,255,0.1)}
   .modal-header{font-weight:700;margin-bottom:16px;font-size:18px;color:var(--accent)}
@@ -101,18 +79,13 @@
   .modal-row label{font-size:12px;margin-bottom:6px;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em}
   .modal-row input,.modal-row div:not(.modal-header){padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.05);color:inherit}
   .modal-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:20px}
-  
-  /* TOAST */
   .toast{position:fixed;bottom:20px;right:20px;background:rgba(15,23,42,0.95);color:#fff;padding:14px 20px;border-radius:12px;font-weight:600;opacity:0;transform:translateY(20px);transition:opacity .3s ease,transform .3s ease;pointer-events:none;z-index:200;border:1px solid rgba(0,196,167,0.3);box-shadow:0 10px 30px rgba(0,0,0,0.5)}
   .toast.visible{opacity:1;transform:translateY(0);pointer-events:auto}
   .toast.error{border-color:rgba(239,68,68,0.3)}
   .toast.success{border-color:rgba(16,185,129,0.3)}
-  
-  /* DEBUG */
   .debug-panel{position:fixed;bottom:10px;left:10px;background:rgba(0,0,0,0.9);color:#0f0;font-family:monospace;font-size:10px;padding:10px;border-radius:8px;max-width:400px;max-height:200px;overflow-y:auto;z-index:1000;display:none}
   .debug-panel.active{display:block}
-  
-  @media (max-width:1100px){.app{grid-template-columns:1fr;grid-template-rows:auto auto auto}.chart-card{grid-row:1/2}.watchlist{grid-column:1/-1;grid-row:2/3}.bottom-right{grid-column:1/-1;grid-row:3/4}}
+  @media (max-width:1100px){.app{grid-template-columns:1fr;grid-template-rows:auto auto auto}.watchlist{grid-column:1/-1;grid-row:2/3}.bottom-left{grid-row:3/4}.bottom-right{display:none}}
 </style>
 </head>
 <body>
@@ -145,7 +118,7 @@
 
   <div class="card watchlist">
     <h3>📊 Watchlist</h3>
-    <div class="wl-list" id="wlList"></div>
+    <div id="wlList" style="display:flex;flex-direction:column;gap:8px;max-height:360px;overflow:auto;"></div>
     <div class="orders-card">
       <h4>⏱️ Ordres Limites</h4>
       <div class="orders-grid">
@@ -175,6 +148,47 @@
     </div>
   </div>
 
+  <div class="card bottom-left">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <div class="tabs">
+        <div class="tab active" id="tabPositions">📈 Positions</div>
+        <div class="tab" id="tabHistory">📜 Historique</div>
+      </div>
+      <div class="small-muted">Simulé · Proxy WS · Effet 1:20</div>
+    </div>
+    <div id="positionsPane">
+      <table class="positions-table">
+        <thead>
+          <tr>
+            <th>Symbole</th>
+            <th>Side</th>
+            <th>Entry</th>
+            <th>Actuel</th>
+            <th>Lots</th>
+            <th>PNL</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="positionsBody"></tbody>
+      </table>
+    </div>
+    <div id="historyPane" style="display:none">
+      <table class="history-table">
+        <thead>
+          <tr>
+            <th>Symbole</th>
+            <th>Side</th>
+            <th>Entry</th>
+            <th>Close</th>
+            <th>PNL</th>
+            <th>Date</th>
+          </tr>
+        </thead>
+        <tbody id="historyBody"></tbody>
+      </table>
+    </div>
+  </div>
+
   <div class="card bottom-right">
     <div style="display:flex;justify-content:space-between;align-items:center">
       <div>
@@ -191,19 +205,6 @@
     <div style="margin-top:12px;padding:12px;background:rgba(255,255,255,0.02);border-radius:10px">
       <div style="font-weight:700;margin-bottom:8px">📍 Position sélectionnée</div>
       <div class="small-muted" id="posDetails">Aucune position sélectionnée</div>
-    </div>
-    <div style="margin-top:12px;padding:12px;background:rgba(255,255,255,0.02);border-radius:10px">
-      <div style="font-weight:700;margin-bottom:8px">📊 Positions & Historique</div>
-      <div style="display:flex;gap:20px;font-size:12px">
-        <div>
-          <div class="small-muted">Positions ouvertes:</div>
-          <div style="font-weight:700;font-size:16px" id="openPositions">0</div>
-        </div>
-        <div>
-          <div class="small-muted">Trades total:</div>
-          <div style="font-weight:700;font-size:16px" id="totalTrades">0</div>
-        </div>
-      </div>
     </div>
   </div>
 </div>
@@ -246,12 +247,13 @@
 // CONFIGURATION
 // ============================================================================
 const WS_PROXY_URL = 'wss://finnhub-proxy-477220862918.europe-west1.run.app';
-const KEEPALIVE_INTERVAL = 20000;
+const KEEPALIVE_INTERVAL = 20000; // 20 secondes
 const RECONNECT_BASE_DELAY = 2000;
 const RECONNECT_MAX_DELAY = 30000;
 const BASE_LOT_SIZE = 100000;
 const LEVERAGE = 20;
 
+// Watchlist avec symboles Finnhub corrects
 const WATCHLIST = [
   {tv:'OANDA:EURUSD', label:'EUR / USD', api:'OANDA:EUR_USD'},
   {tv:'OANDA:USDJPY', label:'USD / JPY', api:'OANDA:USD_JPY'},
@@ -262,60 +264,7 @@ const WATCHLIST = [
 ];
 
 const PIP_STEPS = {default: 0.0001, jpy: 0.01, xau: 0.1};
-
-// ============================================================================
-// SYSTÈME AUDIO
-// ============================================================================
-const AudioSystem = {
-  context: null,
-  
-  init() {
-    try {
-      this.context = new (window.AudioContext || window.webkitAudioContext)();
-      console.log('🔊 Audio system initialized');
-    } catch (e) {
-      console.warn('Audio not available:', e);
-    }
-  },
-  
-  playTone(frequency, duration, type = 'sine', volume = 0.3) {
-    if (!this.context) return;
-    
-    const oscillator = this.context.createOscillator();
-    const gainNode = this.context.createGain();
-    
-    oscillator.connect(gainNode);
-    gainNode.connect(this.context.destination);
-    
-    oscillator.frequency.value = frequency;
-    oscillator.type = type;
-    gainNode.gain.value = volume;
-    
-    oscillator.start(this.context.currentTime);
-    gainNode.gain.exponentialRampToValueAtTime(0.01, this.context.currentTime + duration);
-    oscillator.stop(this.context.currentTime + duration);
-  },
-  
-  playSuccess() {
-    this.playTone(523.25, 0.1, 'sine', 0.25);
-    setTimeout(() => this.playTone(659.25, 0.15, 'sine', 0.2), 80);
-  },
-  
-  playError() {
-    this.playTone(300, 0.15, 'square', 0.2);
-    setTimeout(() => this.playTone(200, 0.2, 'square', 0.15), 100);
-  },
-  
-  playClose() {
-    this.playTone(440, 0.12, 'sine', 0.2);
-  },
-  
-  playOrder() {
-    this.playTone(880, 0.08, 'sine', 0.18);
-  }
-};
-
-AudioSystem.init();
+const PNL_BOOST_NON_XAU = 4.5;
 
 // ============================================================================
 // ÉTAT GLOBAL
@@ -394,12 +343,11 @@ function lotUnits(symbol) {
 }
 
 function isQuoteUsd(symbol) {
-  return symbol.endsWith('USD') || symbol.endsWith('_USD');
+  return symbol.endsWith('USD');
 }
 
 function isBaseUsd(symbol) {
-  const cleanSymbol = symbol.replace('OANDA:', '');
-  return cleanSymbol.startsWith('USD_') || (cleanSymbol.startsWith('USD') && !cleanSymbol.endsWith('USD'));
+  return symbol.startsWith('USD');
 }
 
 function pipStep(symbol) {
@@ -411,22 +359,20 @@ function pipStep(symbol) {
 function pipValuePerLot(symbol, price) {
   const step = pipStep(symbol);
   const units = lotUnits(symbol);
+  let baseValue;
   
   if (symbol.includes('XAU')) {
-    return step * units;
-  } 
-  
-  if (isQuoteUsd(symbol)) {
-    return step * units;
-  } 
-  
-  if (isBaseUsd(symbol)) {
-    const resolvedPrice = Number(price) || 1;
-    return (step * units) / resolvedPrice;
+    baseValue = step * units;
+  } else if (isQuoteUsd(symbol)) {
+    baseValue = step * units;
+  } else if (isBaseUsd(symbol)) {
+    baseValue = units;
+  } else {
+    baseValue = price > 0 ? (step * units) / price : step * units;
   }
   
-  const resolvedPrice = Number(price) || 1;
-  return (step * units) / resolvedPrice;
+  if (symbol.includes('XAU')) return baseValue;
+  return baseValue * PNL_BOOST_NON_XAU;
 }
 
 function describePip(symbol, price) {
@@ -438,22 +384,14 @@ function marginRequirement(symbol, lots, price) {
   const resolvedLots = Number(lots);
   if (!resolvedLots) return 0;
   
-  const units = lotUnits(symbol);
-  const isBase = isBaseUsd(symbol);
-  
-  console.log(`🔍 marginRequirement:`, {symbol, lots: resolvedLots, price, isBaseUsd: isBase});
-  
-  if (isBase) {
-    const margin = (units * resolvedLots) / LEVERAGE;
-    console.log(`✅ USD base: ${units} × ${resolvedLots} ÷ ${LEVERAGE} = ${margin}`);
-    return margin;
+  if (isBaseUsd(symbol)) {
+    return (lotUnits(symbol) * resolvedLots) / LEVERAGE;
   }
   
-  const resolvedPrice = Number(price) || 1;
-  const exposure = resolvedPrice * units * resolvedLots;
-  const margin = exposure / LEVERAGE;
-  console.log(`💱 Quote USD: ${resolvedPrice} × ${units} × ${resolvedLots} ÷ ${LEVERAGE} = ${margin}`);
-  return margin;
+  const resolvedPrice = Number(price) || 0;
+  const units = lotUnits(symbol);
+  const exposure = resolvedPrice ? resolvedPrice * units * resolvedLots : units * resolvedLots;
+  return exposure / LEVERAGE;
 }
 
 // ============================================================================
@@ -520,25 +458,23 @@ function startWebSocket() {
   }
   
   try {
-    console.log(`🔌 Connecting to WebSocket: ${WS_PROXY_URL}`);
     debugLog(`Connecting to: ${WS_PROXY_URL}`);
     setWsStatus('connecting');
     
     ws = new WebSocket(WS_PROXY_URL);
     
     ws.addEventListener('open', () => {
-      console.log('✅ WebSocket OPEN');
       debugLog('✅ WebSocket OPEN');
       setWsStatus('connected');
       reconnectAttempts = 0;
       reconnectDelay = RECONNECT_BASE_DELAY;
       messageCount = 0;
       
+      // Subscribe to all symbols
       WATCHLIST.forEach(w => {
         try {
           const msg = JSON.stringify({type: 'subscribe', symbol: w.api});
           ws.send(msg);
-          console.log(`Subscribed to: ${w.api}`);
           debugLog(`Subscribed to: ${w.api}`);
         } catch (e) {
           debugLog(`Subscribe error for ${w.api}: ${e.message}`);
@@ -561,21 +497,18 @@ function startWebSocket() {
     });
     
     ws.addEventListener('close', event => {
-      console.log(`❌ WebSocket CLOSE: code=${event.code}`);
-      debugLog(`❌ WebSocket CLOSE: code=${event.code}`);
+      debugLog(`❌ WebSocket CLOSE: code=${event.code}, reason="${event.reason}"`);
       setWsStatus('disconnected');
       showToast('❌ Déconnecté', 'error');
       scheduleReconnect();
     });
     
     ws.addEventListener('error', error => {
-      console.error('⚠️ WebSocket ERROR:', error);
       debugLog(`⚠️ WebSocket ERROR: ${error}`);
       setWsStatus('disconnected');
     });
     
   } catch (e) {
-    console.error('❌ WebSocket creation failed:', e);
     debugLog(`❌ WebSocket creation failed: ${e.message}`);
     setWsStatus('disconnected');
     scheduleReconnect();
@@ -585,22 +518,26 @@ function startWebSocket() {
 function handleWsMessage(msg) {
   if (!msg) return;
   
+  // Handle array of messages
   if (Array.isArray(msg)) {
     msg.forEach(m => handleWsMessage(m));
     return;
   }
   
+  // Ignore ping/pong
   if (msg.type === 'ping' || msg.type === 'pong') {
     debugLog('Received ping/pong');
     return;
   }
   
+  // Handle errors
   if (msg.type === 'error') {
     debugLog(`Server error: ${JSON.stringify(msg)}`);
     showToast(`Erreur serveur: ${msg.message || 'Unknown'}`, 'error');
     return;
   }
   
+  // Handle trade data
   if (msg.type === 'trade' && Array.isArray(msg.data)) {
     msg.data.forEach(d => {
       const sym = d.s || d.sym || d.symbol;
@@ -612,7 +549,7 @@ function handleWsMessage(msg) {
       priceCache[sym] = Number(price);
       lastPriceUpdate[sym] = Date.now();
       
-      debugLog(`Price update: ${sym} = ${price}`);
+      debugLog(`Price update: ${sym} = ${price} (was ${oldPrice})`);
       
       updatePriceUI(sym, oldPrice);
       onPriceUpdate(sym);
@@ -620,6 +557,7 @@ function handleWsMessage(msg) {
     return;
   }
   
+  // Handle single data object
   if (msg.data && typeof msg.data === 'object') {
     const sym = msg.data.s || msg.data.symbol;
     const price = msg.data.p || msg.data.price || msg.data.c;
@@ -647,6 +585,7 @@ function updatePriceUI(symbol, oldPrice) {
   if (el) {
     el.innerText = formatPrice(price);
     
+    // Show price change
     const parentItem = el.closest('.wl-item');
     if (parentItem && oldPrice !== undefined && oldPrice !== price) {
       parentItem.classList.add('updating');
@@ -663,33 +602,21 @@ function refreshLotInfo() {
   const price = priceCache[currentSymbol.api];
   const lots = parseFloat(document.getElementById('lotInput').value) || 1;
   
-  console.log(`🔄 refreshLotInfo:`, {
-    symbol: currentSymbol.api,
-    lots,
-    price,
-    isBaseUsd: isBaseUsd(currentSymbol.api)
-  });
-  
-  let margin, exposure;
-  
-  if (isBaseUsd(currentSymbol.api)) {
-    exposure = lotUnits(currentSymbol.api) * lots;
-    margin = exposure / LEVERAGE;
-    console.log(`✅ USD base: exposure=${exposure}, margin=${margin}`);
-  } else if (price !== undefined) {
-    exposure = price * lotUnits(currentSymbol.api) * lots;
-    margin = exposure / LEVERAGE;
-    console.log(`💱 Quote USD: exposure=${exposure}, margin=${margin}`);
-  } else {
+  if (price !== undefined) {
+    const exposure = isBaseUsd(currentSymbol.api)
+      ? lotUnits(currentSymbol.api) * lots
+      : price * lotUnits(currentSymbol.api) * lots;
+    
+    const margin = exposure / LEVERAGE;
+    const pipInfo = describePip(currentSymbol.api, price);
+    
     document.getElementById('lotValueInfo').innerText = 
-      `1 lot = ${lotUnits(currentSymbol.api)} unités · marge 1:${LEVERAGE}`;
+      `${lots} lots = ${formatMoney(margin)} USD de marge · ${pipInfo} · levier 1:${LEVERAGE}`;
     return;
   }
   
-  const pipInfo = describePip(currentSymbol.api, price);
-  
   document.getElementById('lotValueInfo').innerText = 
-    `${lots} lots = ${formatMoney(margin)} USD de marge · ${pipInfo} · levier 1:${LEVERAGE}`;
+    `1 lot = ${lotUnits(currentSymbol.api)}u · marge 1:${LEVERAGE}`;
 }
 
 function onPriceUpdate(symbol) {
@@ -705,7 +632,7 @@ function onPriceUpdate(symbol) {
   checkPositionTargets(symbol);
   checkOrdersForSymbol(symbol);
   
-  if (updated) updateStats();
+  if (updated) renderPositions();
   renderTotals();
 }
 
@@ -769,8 +696,7 @@ function computePnl(pos) {
   if (current === undefined) return 0;
   
   const step = pipStep(pos.symbol.api);
-  const priceDiff = current - pos.entry;
-  const pipDiff = priceDiff / step;
+  const pipDiff = (current - pos.entry) / step;
   const pipValue = pipValuePerLot(pos.symbol.api, current);
   const pnlPerLot = pipDiff * pipValue * pos.size;
   
@@ -784,28 +710,6 @@ function getTotalMarginUsed() {
   }, 0) + orders.reduce((sum, ord) => sum + ord.margin, 0);
 }
 
-function updateStats() {
-  document.getElementById('openPositions').textContent = positions.length;
-  document.getElementById('totalTrades').textContent = history.length;
-  
-  if (positions.length > 0) {
-    const p = positions[0];
-    const pnl = computePnl(p);
-    const pnlClass = pnl >= 0 ? 'positive' : 'negative';
-    document.getElementById('posDetails').innerHTML = `
-      <strong>${p.symbol.label}</strong> · ${p.side} · 
-      Entry: ${formatPrice(p.entry)} · 
-      Current: ${formatPrice(p.current)} · 
-      ${p.size} lots<br>
-      PNL: <span class="${pnlClass}">${formatMoney(pnl)}</span>
-      ${p.tp ? `· TP: ${formatPrice(p.tp)}` : ''}
-      ${p.sl ? `· SL: ${formatPrice(p.sl)}` : ''}
-    `;
-  } else {
-    document.getElementById('posDetails').innerText = 'Aucune position sélectionnée';
-  }
-}
-
 // ============================================================================
 // POSITIONS
 // ============================================================================
@@ -814,7 +718,6 @@ async function openPosition(symObj, side, lots = 1, forcedEntry = null, tp = nul
   
   if (!resolvedLots || resolvedLots <= 0) {
     showToast('❌ Lots invalide', 'error');
-    AudioSystem.playError();
     return false;
   }
   
@@ -822,7 +725,6 @@ async function openPosition(symObj, side, lots = 1, forcedEntry = null, tp = nul
   
   if (!price || Number.isNaN(price)) {
     showToast('❌ Prix indisponible', 'error');
-    AudioSystem.playError();
     return false;
   }
   
@@ -830,7 +732,6 @@ async function openPosition(symObj, side, lots = 1, forcedEntry = null, tp = nul
   
   if (required > availableBalance) {
     showToast('❌ Solde insuffisant', 'error');
-    AudioSystem.playError();
     return false;
   }
   
@@ -849,10 +750,9 @@ async function openPosition(symObj, side, lots = 1, forcedEntry = null, tp = nul
   };
   
   positions.unshift(pos);
-  updateStats();
+  renderPositions();
   renderTotals();
   showToast(`✅ Position ${side} ouverte: ${symObj.label}`, 'success');
-  AudioSystem.playSuccess();
   debugLog(`Opened position: ${JSON.stringify(pos)}`);
   
   return true;
@@ -890,10 +790,10 @@ function closePosition(id, lotsToSell = null) {
     positions.splice(idx, 1);
   }
   
-  updateStats();
+  renderPositions();
+  renderHistory();
   renderTotals();
   showToast(`✅ Position fermée: ${formatMoney(pnl)} USD`, pnl >= 0 ? 'success' : 'error');
-  AudioSystem.playClose();
   debugLog(`Closed position ${id}: PNL = ${pnl}`);
 }
 
@@ -906,7 +806,6 @@ function addLimitOrder(symbol, side, price, lots, tp, sl) {
   
   if (!resolvedLots || !resolvedPrice) {
     showToast('❌ Prix et lots requis', 'error');
-    AudioSystem.playError();
     return;
   }
   
@@ -914,7 +813,6 @@ function addLimitOrder(symbol, side, price, lots, tp, sl) {
   
   if (required > availableBalance) {
     showToast('❌ Solde insuffisant', 'error');
-    AudioSystem.playError();
     return;
   }
   
@@ -935,7 +833,6 @@ function addLimitOrder(symbol, side, price, lots, tp, sl) {
   renderOrders();
   renderTotals();
   showToast('✅ Ordre limite ajouté', 'success');
-  AudioSystem.playOrder();
   debugLog(`Added limit order: ${side} ${symbol} @ ${resolvedPrice}`);
 }
 
@@ -947,13 +844,96 @@ function removeOrder(id) {
   renderOrders();
   renderTotals();
   showToast('✅ Ordre annulé', 'info');
-  AudioSystem.playOrder();
   debugLog(`Removed order: ${id}`);
 }
 
 // ============================================================================
 // RENDERING
 // ============================================================================
+function renderPositions() {
+  const tbody = document.getElementById('positionsBody');
+  tbody.innerHTML = '';
+  
+  if (positions.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:20px">Aucune position ouverte</td></tr>';
+    return;
+  }
+  
+  positions.forEach(pos => {
+    const current = pos.current !== undefined ? pos.current : priceCache[pos.symbol.api];
+    pos.current = current;
+    const pnl = computePnl(pos);
+    const cls = pnl >= 0 ? 'positive' : 'negative';
+    
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>
+        <strong>${pos.symbol.label}</strong>
+        <div class="small-muted">${pos.symbol.tv}</div>
+      </td>
+      <td><strong>${pos.side}</strong></td>
+      <td>${formatPrice(pos.entry)}</td>
+      <td>${formatPrice(current)}</td>
+      <td>${pos.size}</td>
+      <td><span class="${cls}">${formatMoney(pnl)}</span></td>
+      <td>
+        <button class="btn btn-ghost" data-id="${pos.id}" style="padding:6px 10px;font-size:11px">⚙️</button>
+        <button class="btn btn-ghost" data-close="${pos.id}" style="padding:6px 10px;font-size:11px">❌</button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+  
+  tbody.querySelectorAll('button[data-id]').forEach(btn => 
+    btn.onclick = () => openPositionModal(btn.dataset.id)
+  );
+  
+  tbody.querySelectorAll('button[data-close]').forEach(btn => 
+    btn.addEventListener('click', () => closePosition(btn.dataset.close))
+  );
+  
+  const details = document.getElementById('posDetails');
+  if (positions.length > 0) {
+    const p = positions[0];
+    const pnl = computePnl(p);
+    details.innerHTML = `
+      <strong>${p.symbol.label}</strong> · ${p.side} · 
+      Entry: ${formatPrice(p.entry)} · 
+      Current: ${formatPrice(p.current)} · 
+      ${p.size} lots<br>
+      PNL: <span class="${pnl >= 0 ? 'positive' : 'negative'}">${formatMoney(pnl)}</span>
+      ${p.tp ? `· TP: ${formatPrice(p.tp)}` : ''}
+      ${p.sl ? `· SL: ${formatPrice(p.sl)}` : ''}
+    `;
+  } else {
+    details.innerText = 'Aucune position sélectionnée';
+  }
+}
+
+function renderHistory() {
+  const tbody = document.getElementById('historyBody');
+  tbody.innerHTML = '';
+  
+  if (history.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:20px">Aucun historique</td></tr>';
+    return;
+  }
+  
+  history.slice(0, 50).forEach(h => {
+    const cls = h.pnl >= 0 ? 'positive' : 'negative';
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${h.symbol.label}</td>
+      <td><strong>${h.side}</strong></td>
+      <td>${formatPrice(h.entry)}</td>
+      <td>${formatPrice(h.close)}</td>
+      <td><span class="${cls}">${formatMoney(h.pnl)}</span></td>
+      <td class="small-muted">${formatDateTime(h.closedAt)}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
 function renderOrders() {
   const container = document.getElementById('ordersBody');
   container.innerHTML = '';
@@ -976,7 +956,7 @@ function renderOrders() {
       <div>${o.tp ? formatPrice(o.tp) : '—'}</div>
       <div>${o.sl ? formatPrice(o.sl) : '—'}</div>
       <div class="order-actions">
-        <button data-id="${o.id}">❌</button>
+        <button data-id="${o.id}" style="padding:4px 8px">❌</button>
       </div>
     `;
     container.appendChild(line);
@@ -998,6 +978,13 @@ function renderTotals() {
   document.getElementById('usedMargin').innerText = formatMoney(usedMargin);
 }
 
+function renderAll() {
+  renderPositions();
+  renderHistory();
+  renderOrders();
+  renderTotals();
+}
+
 // ============================================================================
 // WATCHLIST INIT
 // ============================================================================
@@ -1007,7 +994,6 @@ const ordSymbol = document.getElementById('ordSymbol');
 WATCHLIST.forEach(w => {
   const item = document.createElement('div');
   item.className = 'wl-item';
-  item.dataset.symbol = w.api;
   item.innerHTML = `
     <div>
       <div class="wl-symbol">${w.label}</div>
@@ -1027,8 +1013,6 @@ WATCHLIST.forEach(w => {
   ordSymbol.appendChild(opt);
 });
 
-console.log('✅ Watchlist initialized with', WATCHLIST.length, 'symbols');
-
 // ============================================================================
 // TRADINGVIEW
 // ============================================================================
@@ -1042,13 +1026,9 @@ function initTradingView() {
     console.warn('TradingView cleanup:', e);
   }
   
-  if (typeof TradingView === 'undefined') {
-    console.error('TradingView not loaded');
-    return;
-  }
+  if (typeof TradingView === 'undefined') return;
   
   try {
-    console.log(`Initializing TradingView for ${currentSymbol.tv}`);
     tvWidget = new TradingView.widget({
       container_id: 'tv_chart_container',
       autosize: true,
@@ -1059,22 +1039,13 @@ function initTradingView() {
       locale: 'fr',
       disabled_features: ['use_localstorage_for_settings']
     });
-    console.log('✅ TradingView initialized successfully');
   } catch (e) {
-    console.error('TradingView init error:', e);
+    console.error('TradingView init:', e);
   }
 }
 
 function selectSymbol(sym) {
   currentSymbol = sym;
-  
-  document.querySelectorAll('.wl-item').forEach(item => {
-    item.classList.remove('active');
-    if (item.dataset.symbol === sym.api) {
-      item.classList.add('active');
-    }
-  });
-  
   document.getElementById('currentSymbolBadge').innerText = sym.tv;
   document.getElementById('currentSymbolTitle').innerText = sym.label;
   
@@ -1118,7 +1089,6 @@ document.getElementById('addOrderBtn').addEventListener('click', () => {
   
   if (!symbol || !price) {
     showToast('❌ Symbole et prix requis', 'error');
-    AudioSystem.playError();
     return;
   }
   
@@ -1135,7 +1105,6 @@ document.getElementById('refreshPricesBtn').addEventListener('click', () => {
     showToast('🔄 Rafraîchissement...', 'info');
   } else {
     showToast('❌ WebSocket non connecté', 'error');
-    AudioSystem.playError();
   }
 });
 
@@ -1146,6 +1115,22 @@ document.getElementById('buyBtn').addEventListener('click', () =>
 document.getElementById('sellBtn').addEventListener('click', () => 
   openPosition(currentSymbol, 'SELL', parseFloat(document.getElementById('lotInput').value) || 1)
 );
+
+document.getElementById('tabPositions').addEventListener('click', () => {
+  document.getElementById('tabPositions').classList.add('active');
+  document.getElementById('tabHistory').classList.remove('active');
+  document.getElementById('positionsPane').style.display = 'block';
+  document.getElementById('historyPane').style.display = 'none';
+  renderPositions();
+});
+
+document.getElementById('tabHistory').addEventListener('click', () => {
+  document.getElementById('tabHistory').classList.add('active');
+  document.getElementById('tabPositions').classList.remove('active');
+  document.getElementById('positionsPane').style.display = 'none';
+  document.getElementById('historyPane').style.display = 'block';
+  renderHistory();
+});
 
 document.getElementById('modalCancel').addEventListener('click', () => 
   document.getElementById('positionModal').style.display = 'none'
@@ -1165,12 +1150,12 @@ document.getElementById('modalSave').addEventListener('click', () => {
   if (sellLots > 0) closePosition(pos.id, sellLots);
   
   document.getElementById('positionModal').style.display = 'none';
-  updateStats();
+  renderPositions();
   renderTotals();
   showToast('✅ TP/SL enregistrés', 'success');
-  AudioSystem.playOrder();
 });
 
+// Global functions
 window.closePosition = closePosition;
 window.removeOrder = removeOrder;
 
@@ -1179,27 +1164,15 @@ window.removeOrder = removeOrder;
 // ============================================================================
 console.log('🚀 Mini Broker - Prop Firm Edition');
 console.log('📡 Proxy:', WS_PROXY_URL);
-console.log('💰 Balance:', simBalance, 'USD');
-console.log('⚖️ Leverage:', LEVERAGE + ':1');
-console.log('🔊 Audio:', AudioSystem.context ? 'Enabled ✓' : 'Disabled ✗');
-console.log('📊 TradingView:', typeof TradingView !== 'undefined' ? 'Loaded ✓' : 'NOT LOADED ✗');
 
-updateStats();
-renderTotals();
+renderAll();
 selectSymbol(WATCHLIST[0]);
-
-setTimeout(() => {
-  console.log('Initializing TradingView chart...');
-  initTradingView();
-}, 500);
-
-console.log('Starting WebSocket connection...');
+initTradingView();
 startWebSocket();
 
 debugLog('=== BROKER INITIALIZED ===');
 debugLog(`Watchlist: ${WATCHLIST.length} symbols`);
 debugLog(`Starting balance: ${simBalance} USD`);
-debugLog(`Leverage: ${LEVERAGE}:1`);
 </script>
 </body>
 </html>
