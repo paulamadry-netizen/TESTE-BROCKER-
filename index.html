@@ -247,13 +247,13 @@
 // CONFIGURATION
 // ============================================================================
 const WS_PROXY_URL = 'wss://finnhub-proxy-477220862918.europe-west1.run.app';
-const KEEPALIVE_INTERVAL = 20000; // 20 secondes
+const KEEPALIVE_INTERVAL = 20000;
 const RECONNECT_BASE_DELAY = 2000;
 const RECONNECT_MAX_DELAY = 30000;
 const BASE_LOT_SIZE = 100000;
 const LEVERAGE = 20;
 
-// Watchlist avec symboles Finnhub corrects + INDICES BOURSIERS
+// Watchlist - Le proxy envoie maintenant les symboles mappés (INDEXSP:.INX, etc.)
 const WATCHLIST = [
   // FOREX
   {tv:'OANDA:EURUSD', label:'EUR / USD', api:'OANDA:EUR_USD', type:'forex'},
@@ -263,11 +263,11 @@ const WATCHLIST = [
   {tv:'OANDA:AUDUSD', label:'AUD / USD', api:'OANDA:AUD_USD', type:'forex'},
   {tv:'OANDA:XAUUSD', label:'Gold / USD', api:'OANDA:XAU_USD', type:'metal'},
   
-  // INDICES BOURSIERS
-  {tv:'DJ:DJI', label:'Dow Jones', api:'INDEXDJX:.DJI', type:'index'},
-  {tv:'NASDAQ:NDX', label:'Nasdaq 100', api:'INDEXNASDAQ:.NDX', type:'index'},
-  {tv:'SP:SPX', label:'S&P 500', api:'INDEXSP:.INX', type:'index'},
-  {tv:'INDEX:PX1', label:'CAC 40', api:'INDEXEURO:PX1', type:'index'},
+  // INDICES (le proxy les envoie déjà mappés depuis les ETFs)
+  {tv:'TVC:DJI', label:'Dow Jones', api:'INDEXDJX:.DJI', type:'index'},
+  {tv:'TVC:NDX', label:'Nasdaq 100', api:'INDEXNASDAQ:.NDX', type:'index'},
+  {tv:'TVC:SPX', label:'S&P 500', api:'INDEXSP:.INX', type:'index'},
+  {tv:'TVC:CAC', label:'CAC 40', api:'INDEXEURO:PX1', type:'index'},
   {tv:'XETR:DAX', label:'DAX', api:'INDEXDB:DAX', type:'index'}
 ];
 
@@ -335,7 +335,6 @@ function escapeId(val) {
 function formatPrice(val) {
   if (val === undefined || val === null) return '—';
   const num = Number(val);
-  // Pour les indices, on affiche avec 2 décimales
   if (currentSymbol && currentSymbol.type === 'index') {
     return num.toFixed(2);
   }
@@ -352,7 +351,6 @@ function formatDateTime(timestamp) {
 }
 
 function lotUnits(symbol) {
-  // Pour les indices, 1 lot = 1 unité d'indice
   const symbolObj = WATCHLIST.find(w => w.api === symbol);
   if (symbolObj && symbolObj.type === 'index') return 1;
   if (symbol.includes('XAU')) return 100;
@@ -384,9 +382,8 @@ function pipValuePerLot(symbol, price) {
   const units = lotUnits(symbol);
   let baseValue;
   
-  // Pour les indices: 1 point = 1 USD par lot
   if (isIndex(symbol)) {
-    return step * units; // 1 point = 1 USD
+    return step * units;
   }
   
   if (symbol.includes('XAU')) {
@@ -415,7 +412,6 @@ function marginRequirement(symbol, lots, price) {
   const resolvedLots = Number(lots);
   if (!resolvedLots) return 0;
   
-  // Pour les indices: marge basée sur la valeur de l'indice
   if (isIndex(symbol)) {
     const resolvedPrice = Number(price) || 0;
     const exposure = resolvedPrice * resolvedLots;
@@ -508,17 +504,6 @@ function startWebSocket() {
       reconnectDelay = RECONNECT_BASE_DELAY;
       messageCount = 0;
       
-      // Subscribe to all symbols
-      WATCHLIST.forEach(w => {
-        try {
-          const msg = JSON.stringify({type: 'subscribe', symbol: w.api});
-          ws.send(msg);
-          debugLog(`Subscribed to: ${w.api}`);
-        } catch (e) {
-          debugLog(`Subscribe error for ${w.api}: ${e.message}`);
-        }
-      });
-      
       startKeepalive();
       showToast('✅ Connecté au proxy', 'success');
     });
@@ -556,26 +541,22 @@ function startWebSocket() {
 function handleWsMessage(msg) {
   if (!msg) return;
   
-  // Handle array of messages
   if (Array.isArray(msg)) {
     msg.forEach(m => handleWsMessage(m));
     return;
   }
   
-  // Ignore ping/pong
   if (msg.type === 'ping' || msg.type === 'pong') {
     debugLog('Received ping/pong');
     return;
   }
   
-  // Handle errors
   if (msg.type === 'error') {
     debugLog(`Server error: ${JSON.stringify(msg)}`);
     showToast(`Erreur serveur: ${msg.message || 'Unknown'}`, 'error');
     return;
   }
   
-  // Handle trade data
   if (msg.type === 'trade' && Array.isArray(msg.data)) {
     msg.data.forEach(d => {
       const sym = d.s || d.sym || d.symbol;
@@ -595,7 +576,6 @@ function handleWsMessage(msg) {
     return;
   }
   
-  // Handle single data object
   if (msg.data && typeof msg.data === 'object') {
     const sym = msg.data.s || msg.data.symbol;
     const price = msg.data.p || msg.data.price || msg.data.c;
@@ -621,7 +601,6 @@ function updatePriceUI(symbol, oldPrice) {
   const price = priceCache[symbol];
   
   if (el) {
-    // Format différent pour les indices
     const symbolObj = WATCHLIST.find(w => w.api === symbol);
     if (symbolObj && symbolObj.type === 'index') {
       el.innerText = Number(price).toFixed(2);
@@ -629,7 +608,6 @@ function updatePriceUI(symbol, oldPrice) {
       el.innerText = formatPrice(price);
     }
     
-    // Show price change
     const parentItem = el.closest('.wl-item');
     if (parentItem && oldPrice !== undefined && oldPrice !== price) {
       parentItem.classList.add('updating');
@@ -1219,7 +1197,7 @@ window.removeOrder = removeOrder;
 // ============================================================================
 // INITIALIZATION
 // ============================================================================
-console.log('🚀 Mini Broker - Prop Firm Edition + Indices Boursiers');
+console.log('🚀 Mini Broker - Prop Firm Edition + Indices (via ETFs)');
 console.log('📡 Proxy:', WS_PROXY_URL);
 
 renderAll();
@@ -1228,7 +1206,7 @@ initTradingView();
 startWebSocket();
 
 debugLog('=== BROKER INITIALIZED ===');
-debugLog(`Watchlist: ${WATCHLIST.length} symbols (${WATCHLIST.filter(w => w.type === 'index').length} indices)`);
+debugLog(`Watchlist: ${WATCHLIST.length} symbols (${WATCHLIST.filter(w => w.type === 'index').length} indices via ETFs)`);
 debugLog(`Starting balance: ${simBalance} USD`);
 </script>
 </body>
