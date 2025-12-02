@@ -264,9 +264,9 @@ const WATCHLIST = [
   {tv:'OANDA:XAUUSD', label:'Gold / USD', api:'OANDA:XAU_USD', type:'metal'},
   
   // FUTURES Indices US (cotation 23h/24 - 5j/7)
-  {tv:'CME_MINI:ES1!', label:'S&P 500 Future', api:'INDEXSP:.INX', type:'index'},
-  {tv:'CBOT_MINI:YM1!', label:'Dow Jones Future', api:'INDEXDJX:.DJI', type:'index'},
-  {tv:'CME_MINI:NQ1!', label:'Nasdaq 100 Future', api:'INDEXNASDAQ:.NDX', type:'index'}
+  {tv:'CME:ES1!', label:'S&P 500 Future', api:'INDEXSP:.INX', type:'index'},
+  {tv:'CBOT:YM1!', label:'Dow Jones Future', api:'INDEXDJX:.DJI', type:'index'},
+  {tv:'CME:NQ1!', label:'Nasdaq 100 Future', api:'INDEXNASDAQ:.NDX', type:'index'}
 ];
 
 const PIP_STEPS = {default: 0.0001, jpy: 0.01, xau: 0.1, index: 1};
@@ -301,6 +301,11 @@ let interpolationTimers = {};
 // ============================================================================
 // INTERPOLATION DES PRIX (pour lisser les indices)
 // ============================================================================
+function easeInOutQuad(t) {
+  // Courbe d'accélération douce pour un mouvement naturel
+  return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+}
+
 function startPriceInterpolation(symbol, oldPrice, newPrice) {
   // Ne lisser que les indices
   const symbolObj = WATCHLIST.find(w => w.api === symbol);
@@ -316,8 +321,8 @@ function startPriceInterpolation(symbol, oldPrice, newPrice) {
   
   const startPrice = oldPrice;
   const endPrice = newPrice;
-  const duration = 10000; // 10 secondes
-  const steps = 100; // 100 étapes
+  const duration = 6000; // 6 secondes (durée du polling Yahoo)
+  const steps = 60; // 60 étapes pour mouvement fluide
   const stepDuration = duration / steps;
   let currentStep = 0;
   
@@ -328,21 +333,39 @@ function startPriceInterpolation(symbol, oldPrice, newPrice) {
     startTime: Date.now()
   };
   
-  debugLog(`Starting interpolation for ${symbol}: ${startPrice} → ${endPrice}`);
+  debugLog(`Starting interpolation for ${symbol}: ${startPrice.toFixed(2)} → ${endPrice.toFixed(2)}`);
   
   interpolationTimers[symbol] = setInterval(() => {
     currentStep++;
     
     if (currentStep >= steps) {
+      // Forcer le prix final exact
+      priceInterpolation[symbol].current = endPrice;
+      updatePriceUI(symbol, priceCache[symbol], endPrice);
+      
+      let updated = false;
+      positions.forEach(pos => {
+        if (pos.symbol.api === symbol) {
+          pos.current = endPrice;
+          updated = true;
+        }
+      });
+      
+      if (updated) {
+        renderPositions();
+        renderTotals();
+      }
+      
       clearInterval(interpolationTimers[symbol]);
       delete interpolationTimers[symbol];
       delete priceInterpolation[symbol];
       return;
     }
     
-    // Interpolation linéaire
-    const progress = currentStep / steps;
-    const interpolatedPrice = startPrice + (endPrice - startPrice) * progress;
+    // Interpolation avec courbe d'accélération douce
+    const linearProgress = currentStep / steps;
+    const easedProgress = easeInOutQuad(linearProgress);
+    const interpolatedPrice = startPrice + (endPrice - startPrice) * easedProgress;
     
     priceInterpolation[symbol].current = interpolatedPrice;
     
