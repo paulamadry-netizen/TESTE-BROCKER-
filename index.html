@@ -253,7 +253,7 @@ const RECONNECT_MAX_DELAY = 30000;
 const BASE_LOT_SIZE = 100000;
 const LEVERAGE = 20;
 
-// Watchlist - Le proxy envoie maintenant les symboles mappés (INDEXSP:.INX, etc.)
+// Watchlist - FOREX + 3 Indices US
 const WATCHLIST = [
   // FOREX
   {tv:'OANDA:EURUSD', label:'EUR / USD', api:'OANDA:EUR_USD', type:'forex'},
@@ -263,12 +263,10 @@ const WATCHLIST = [
   {tv:'OANDA:AUDUSD', label:'AUD / USD', api:'OANDA:AUD_USD', type:'forex'},
   {tv:'OANDA:XAUUSD', label:'Gold / USD', api:'OANDA:XAU_USD', type:'metal'},
   
-  // INDICES (le proxy les envoie déjà mappés depuis les ETFs)
-  {tv:'TVC:DJI', label:'Dow Jones', api:'INDEXDJX:.DJI', type:'index'},
-  {tv:'TVC:NDX', label:'Nasdaq 100', api:'INDEXNASDAQ:.NDX', type:'index'},
+  // INDICES US (via ETFs SPY, DIA, QQQ)
   {tv:'TVC:SPX', label:'S&P 500', api:'INDEXSP:.INX', type:'index'},
-  {tv:'TVC:CAC', label:'CAC 40', api:'INDEXEURO:PX1', type:'index'},
-  {tv:'XETR:DAX', label:'DAX', api:'INDEXDB:DAX', type:'index'}
+  {tv:'TVC:DJI', label:'Dow Jones', api:'INDEXDJX:.DJI', type:'index'},
+  {tv:'TVC:NDX', label:'Nasdaq 100', api:'INDEXNASDAQ:.NDX', type:'index'}
 ];
 
 const PIP_STEPS = {default: 0.0001, jpy: 0.01, xau: 0.1, index: 1};
@@ -1197,7 +1195,7 @@ window.removeOrder = removeOrder;
 // ============================================================================
 // INITIALIZATION
 // ============================================================================
-console.log('🚀 Mini Broker - Prop Firm Edition + Indices (via ETFs)');
+console.log('🚀 Mini Broker - Prop Firm Edition (FOREX + 3 Indices US)');
 console.log('📡 Proxy:', WS_PROXY_URL);
 
 renderAll();
@@ -1206,12 +1204,11 @@ initTradingView();
 startWebSocket();
 
 debugLog('=== BROKER INITIALIZED ===');
-debugLog(`Watchlist: ${WATCHLIST.length} symbols (${WATCHLIST.filter(w => w.type === 'index').length} indices via ETFs)`);
+debugLog(`Watchlist: ${WATCHLIST.length} symbols (6 FOREX + 3 Indices US)`);
 debugLog(`Starting balance: ${simBalance} USD`);
 </script>
 </body>
 </html>
-
 
 
 
