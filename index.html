@@ -576,37 +576,6 @@
     height:100%;
   }
   
-  #custom_chart_container{
-    width:100%;
-    height:100%;
-    display:none;
-    position:relative;
-  }
-  
-  #custom_chart_container.active{
-    display:block;
-  }
-  
-  #custom_chart_container.loading::before{
-    content:'📊 Chargement du graphique...';
-    position:absolute;
-    top:50%;
-    left:50%;
-    transform:translate(-50%, -50%);
-    color:var(--text-muted);
-    font-size:16px;
-    font-weight:600;
-    z-index:100;
-    background:var(--surface);
-    padding:20px 40px;
-    border-radius:var(--radius-md);
-    border:1px solid var(--border);
-  }
-  
-  #tv_chart_container.hidden{
-    display:none;
-  }
-  
   /* ORDERS PANEL */
   .orders-panel{
     width:380px;
@@ -1198,7 +1167,6 @@
         </div>
       </div>
       <div id="tv_chart_container"></div>
-      <div id="custom_chart_container"></div>
     </div>
 
     <!-- ORDERS PANEL -->
@@ -1408,6 +1376,14 @@ let activeModalId = null;
 let debugMode = false;
 let messageCount = 0;
 
+// Offsets entre prix Yahoo et TradingView pour les indices
+let priceOffsets = {
+  'US500': 0,
+  'US30': 0,
+  'US100': 0
+};
+let offsetsCalculated = false;
+
 // Historique des prix pour les indices (pour graphique custom)
 let priceHistory = {
   'US500': [],
@@ -1595,6 +1571,67 @@ function marginRequirement(symbol, lots, price) {
   const units = lotUnits(symbol);
   const exposure = resolvedPrice ? resolvedPrice * units * resolvedLots : units * resolvedLots;
   return exposure / LEVERAGE;
+}
+
+// ============================================================================
+// PRICE OFFSET CALCULATION (Yahoo vs TradingView)
+// ============================================================================
+async function calculatePriceOffsets() {
+  debugLog('📊 Calculating price offsets between Yahoo and TradingView...');
+  
+  const symbolMap = {
+    'US500': { yahoo: 'ES=F', tv: 'CME:ES1!' },
+    'US30': { yahoo: 'YM=F', tv: 'CBOT:YM1!' },
+    'US100': { yahoo: 'NQ=F', tv: 'CME:NQ1!' }
+  };
+  
+  for (const [symbol, urls] of Object.entries(symbolMap)) {
+    try {
+      // Récupérer le prix TradingView via l'API TradingView (prix du future)
+      const tvResponse = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${urls.yahoo}?interval=1m&range=1d`);
+      
+      if (!tvResponse.ok) {
+        console.warn(`Failed to fetch TradingView price for ${symbol}`);
+        continue;
+      }
+      
+      const tvData = await tvResponse.json();
+      
+      if (tvData.chart && tvData.chart.result && tvData.chart.result[0]) {
+        const result = tvData.chart.result[0];
+        const tvPrice = result.meta.regularMarketPrice;
+        const yahooPrice = priceCache[symbol];
+        
+        if (tvPrice && yahooPrice) {
+          const offset = tvPrice - yahooPrice;
+          priceOffsets[symbol] = offset;
+          
+          console.log(`✅ ${symbol}: Yahoo=${yahooPrice.toFixed(2)}, TradingView=${tvPrice.toFixed(2)}, Offset=${offset.toFixed(2)}`);
+          debugLog(`✅ ${symbol}: Offset=${offset.toFixed(2)} (TV: ${tvPrice.toFixed(2)} - Yahoo: ${yahooPrice.toFixed(2)})`);
+        }
+      }
+    } catch (error) {
+      console.error(`Error calculating offset for ${symbol}:`, error);
+      debugLog(`Error calculating offset for ${symbol}: ${error.message}`);
+    }
+  }
+  
+  offsetsCalculated = true;
+  debugLog('✅ Price offsets calculated');
+  showToast('✅ Calibration des prix terminée', 'success', 2000);
+}
+
+// Fonction pour obtenir le prix ajusté (avec offset TradingView)
+function getAdjustedPrice(symbol, yahooPrice) {
+  if (!priceOffsets.hasOwnProperty(symbol)) {
+    return yahooPrice; // Pas un indice, retourner le prix tel quel
+  }
+  
+  const offset = priceOffsets[symbol];
+  const adjusted = yahooPrice + offset;
+  
+  debugLog(`Adjusted ${symbol}: ${yahooPrice.toFixed(2)} + ${offset.toFixed(2)} = ${adjusted.toFixed(2)}`);
+  return adjusted;
 }
 
 // ============================================================================
@@ -2043,7 +2080,9 @@ function onPriceUpdate(symbol) {
   
   positions.forEach(pos => {
     if (pos.symbol.api === symbol) {
-      pos.current = priceCache[symbol];
+      // Utiliser le prix ajusté pour les calculs
+      const yahooPrice = priceCache[symbol];
+      pos.current = getAdjustedPrice(symbol, yahooPrice);
       updated = true;
     }
   });
@@ -2056,8 +2095,10 @@ function onPriceUpdate(symbol) {
 }
 
 function checkPositionTargets(symbol) {
-  const price = priceCache[symbol];
-  if (price === undefined) return;
+  const yahooPrice = priceCache[symbol];
+  if (yahooPrice === undefined) return;
+  
+  const price = getAdjustedPrice(symbol, yahooPrice);
   
   const toClose = [];
   
@@ -2088,8 +2129,10 @@ function checkPositionTargets(symbol) {
 }
 
 function checkOrdersForSymbol(symbol) {
-  const price = priceCache[symbol];
-  if (price === undefined) return;
+  const yahooPrice = priceCache[symbol];
+  if (yahooPrice === undefined) return;
+  
+  const price = getAdjustedPrice(symbol, yahooPrice);
   
   const matches = orders.filter(o => 
     o.symbol === symbol && 
@@ -2102,7 +2145,7 @@ function checkOrdersForSymbol(symbol) {
                    {label: m.symbol, tv: m.symbol, api: m.symbol, type:'forex'};
     
     debugLog(`Executing limit order: ${m.side} ${m.symbol} @ ${m.price}`);
-    await openPosition(symObj, m.side, m.size, m.price, m.tp, m.sl);
+    await openPosition(symObj, m.side, m.size, yahooPrice, m.tp, m.sl);
     removeOrder(m.id);
   });
 }
@@ -2140,12 +2183,15 @@ async function openPosition(symObj, side, lots = 1, forcedEntry = null, tp = nul
     return false;
   }
   
-  let price = forcedEntry !== null ? Number(forcedEntry) : Number(priceCache[symObj.api]);
+  let yahooPrice = forcedEntry !== null ? Number(forcedEntry) : Number(priceCache[symObj.api]);
   
-  if (!price || Number.isNaN(price)) {
+  if (!yahooPrice || Number.isNaN(yahooPrice)) {
     showToast('❌ Prix indisponible', 'error');
     return false;
   }
+  
+  // Appliquer l'offset TradingView pour les indices
+  let price = getAdjustedPrice(symObj.api, yahooPrice);
   
   const required = marginRequirement(symObj.api, resolvedLots, price);
   
@@ -2160,18 +2206,20 @@ async function openPosition(symObj, side, lots = 1, forcedEntry = null, tp = nul
     id: 'pos_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
     symbol: symObj,
     side,
-    entry: price,
+    entry: price,  // Prix ajusté (TradingView)
     size: resolvedLots,
     current: price,
-    tp: tp ? Number(tp) : null,
-    sl: sl ? Number(sl) : null,
+    tp: tp ? getAdjustedPrice(symObj.api, Number(tp)) : null,
+    sl: sl ? getAdjustedPrice(symObj.api, Number(sl)) : null,
     openedAt: Date.now()
   };
   
   positions.unshift(pos);
   renderPositions();
   renderTotals();
-  showToast(`✅ Position ${side} ouverte: ${symObj.label}`, 'success');
+  
+  const displayPrice = symObj.type === 'index' ? price.toFixed(2) : formatPrice(price);
+  showToast(`✅ Position ${side} ouverte: ${symObj.label} @ ${displayPrice}`, 'success');
   debugLog(`Opened position: ${JSON.stringify(pos)}`);
   
   return true;
@@ -2186,7 +2234,9 @@ function closePosition(id, lotsToSell = null) {
   
   if (sellLots <= 0) return;
   
-  const closePrice = priceCache[pos.symbol.api] ?? pos.current;
+  const yahooPrice = priceCache[pos.symbol.api];
+  const closePrice = yahooPrice ? getAdjustedPrice(pos.symbol.api, yahooPrice) : pos.current;
+  
   const pnl = computePnl({...pos, size: sellLots, current: closePrice});
   const released = marginRequirement(pos.symbol.api, sellLots, closePrice);
   
@@ -2221,12 +2271,15 @@ function closePosition(id, lotsToSell = null) {
 // ============================================================================
 function addLimitOrder(symbol, side, price, lots, tp, sl) {
   const resolvedLots = Number(lots);
-  const resolvedPrice = Number(price);
+  const yahooPrice = Number(price);
   
-  if (!resolvedLots || !resolvedPrice) {
+  if (!resolvedLots || !yahooPrice) {
     showToast('❌ Prix et lots requis', 'error');
     return;
   }
+  
+  // Appliquer l'offset pour les indices
+  const resolvedPrice = getAdjustedPrice(symbol, yahooPrice);
   
   const required = marginRequirement(symbol, resolvedLots, resolvedPrice);
   
@@ -2241,10 +2294,10 @@ function addLimitOrder(symbol, side, price, lots, tp, sl) {
     id: 'ord_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
     symbol,
     side,
-    price: resolvedPrice,
+    price: resolvedPrice,  // Prix ajusté
     size: resolvedLots,
-    tp: tp ? Number(tp) : null,
-    sl: sl ? Number(sl) : null,
+    tp: tp ? getAdjustedPrice(symbol, Number(tp)) : null,
+    sl: sl ? getAdjustedPrice(symbol, Number(sl)) : null,
     margin: required,
     createdAt: Date.now()
   });
@@ -2252,7 +2305,7 @@ function addLimitOrder(symbol, side, price, lots, tp, sl) {
   renderOrders();
   renderTotals();
   showToast('✅ Ordre limite ajouté', 'success');
-  debugLog(`Added limit order: ${side} ${symbol} @ ${resolvedPrice}`);
+  debugLog(`Added limit order: ${side} ${symbol} @ ${resolvedPrice.toFixed(2)}`);
 }
 
 function removeOrder(id) {
@@ -2657,32 +2710,7 @@ function selectSymbol(sym) {
   }
   
   refreshLotInfo();
-  
-  // Basculer entre TradingView et graphique custom
-  const tvContainer = document.getElementById('tv_chart_container');
-  const customContainer = document.getElementById('custom_chart_container');
-  const timeframeSelector = document.getElementById('timeframeSelector');
-  
-  if (sym.type === 'index') {
-    // Afficher le graphique custom pour les indices
-    tvContainer.classList.add('hidden');
-    customContainer.classList.add('active');
-    timeframeSelector.style.display = 'flex'; // Afficher le sélecteur de timeframe
-    
-    // Attendre que le conteneur soit visible avant d'initialiser
-    setTimeout(() => {
-      initCustomChart();
-    }, 100);
-    
-    debugLog(`Switched to custom chart for ${sym.label}`);
-  } else {
-    // Afficher TradingView pour FOREX et métaux
-    tvContainer.classList.remove('hidden');
-    customContainer.classList.remove('active');
-    timeframeSelector.style.display = 'none'; // Masquer le sélecteur de timeframe
-    initTradingView();
-    debugLog(`Switched to TradingView for ${sym.label}`);
-  }
+  initTradingView(); // Toujours utiliser TradingView maintenant
   
   debugLog(`Selected symbol: ${sym.label}`);
 }
@@ -2844,15 +2872,23 @@ selectSymbol(WATCHLIST[0]);
 initTradingView();
 startWebSocket();
 
-// Charger les données historiques pour les indices
+// Calculer les offsets de prix après quelques secondes (attendre que les prix arrivent)
 setTimeout(() => {
-  loadAllHistoricalData();
-}, 2000); // Attendre 2 secondes après la connexion WebSocket
+  if (priceCache['US500'] && priceCache['US30'] && priceCache['US100']) {
+    calculatePriceOffsets();
+  } else {
+    debugLog('⏳ Waiting for initial prices before calculating offsets...');
+    // Réessayer après 5 secondes supplémentaires
+    setTimeout(() => {
+      calculatePriceOffsets();
+    }, 5000);
+  }
+}, 3000);
 
 debugLog('=== AMABROCKER INITIALIZED ===');
 debugLog(`Watchlist: ${WATCHLIST.length} symbols (6 FOREX + 3 Indices CFD US)`);
 debugLog(`Starting balance: ${simBalance} USD`);
-debugLog('Dual chart system: TradingView (FOREX) + Custom Chart (Indices)');
+debugLog('TradingView charts with automatic price offset correction');
 debugLog('Modular & resizable interface ready');
 </script>
 </body>
