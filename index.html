@@ -1344,9 +1344,9 @@ const WATCHLIST = [
   {tv:'OANDA:XAUUSD', label:'Gold / USD', api:'OANDA:XAU_USD', type:'metal'},
   
   // Indices CFD US (cotation 23h/24 - 5j/7)
-  {tv:'CAPITALCOM:US500', label:'US500 (S&P 500)', api:'US500', type:'index'},
-  {tv:'CAPITALCOM:US30', label:'US30 (Dow Jones)', api:'US30', type:'index'},
-  {tv:'CAPITALCOM:US100', label:'US100 (Nasdaq 100)', api:'US100', type:'index'}
+  {tv:'CME_MINI:ES1!', label:'US500 (S&P 500)', api:'US500', type:'index'},
+  {tv:'CBOT_MINI:YM1!', label:'US30 (Dow Jones)', api:'US30', type:'index'},
+  {tv:'CME_MINI:NQ1!', label:'US100 (Nasdaq 100)', api:'US100', type:'index'}
 ];
 
 const PIP_STEPS = {default: 0.0001, jpy: 0.01, xau: 0.1, index: 1};
@@ -1580,36 +1580,41 @@ async function calculatePriceOffsets() {
   debugLog('📊 Calculating price offsets between Yahoo and TradingView...');
   
   const symbolMap = {
-    'US500': { yahoo: 'ES=F', tv: 'CAPITALCOM:US500', spotIndex: '^GSPC' },
-    'US30': { yahoo: 'YM=F', tv: 'CAPITALCOM:US30', spotIndex: '^DJI' },
-    'US100': { yahoo: 'NQ=F', tv: 'CAPITALCOM:US100', spotIndex: '^IXIC' }
+    'US500': { yahoo: 'ES=F', tv: 'CME_MINI:ES1!', spotIndex: '^GSPC' },
+    'US30': { yahoo: 'YM=F', tv: 'CBOT_MINI:YM1!', spotIndex: '^DJI' },
+    'US100': { yahoo: 'NQ=F', tv: 'CME_MINI:NQ1!', spotIndex: '^IXIC' }
   };
   
   for (const [symbol, urls] of Object.entries(symbolMap)) {
     try {
-      // Stratégie : Utiliser l'indice spot comme référence TradingView
-      // Car CAPITALCOM:US500 suit plutôt l'indice spot que le future
-      const tvResponse = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${urls.spotIndex}?interval=1m&range=1d`);
+      // Vérifier le prix du future via API Yahoo
+      const futureResponse = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${urls.yahoo}?interval=1m&range=1d`);
       
-      if (!tvResponse.ok) {
-        console.warn(`Failed to fetch spot index price for ${symbol}`);
+      if (!futureResponse.ok) {
+        console.warn(`Failed to fetch future price for ${symbol}`);
         continue;
       }
       
-      const tvData = await tvResponse.json();
+      const futureData = await futureResponse.json();
       
-      if (tvData.chart && tvData.chart.result && tvData.chart.result[0]) {
-        const result = tvData.chart.result[0];
-        const spotPrice = result.meta.regularMarketPrice;
+      if (futureData.chart && futureData.chart.result && futureData.chart.result[0]) {
+        const result = futureData.chart.result[0];
+        const futurePrice = result.meta.regularMarketPrice;
         const yahooPrice = priceCache[symbol];
         
-        if (spotPrice && yahooPrice) {
-          // Le prix spot est plus proche du CFD TradingView que le future
-          const offset = spotPrice - yahooPrice;
+        if (futurePrice && yahooPrice) {
+          // Normalement, Yahoo ES=F et TradingView CME_MINI:ES1! devraient être identiques
+          // Mais on calcule quand même l'offset pour compenser les micro-différences
+          const offset = futurePrice - yahooPrice;
           priceOffsets[symbol] = offset;
           
-          console.log(`✅ ${symbol}: Yahoo Future=${yahooPrice.toFixed(2)}, Spot Index=${spotPrice.toFixed(2)}, Offset=${offset.toFixed(2)}`);
-          debugLog(`✅ ${symbol}: Offset=${offset.toFixed(2)} (Spot: ${spotPrice.toFixed(2)} - Yahoo Future: ${yahooPrice.toFixed(2)})`);
+          console.log(`✅ ${symbol}: Yahoo Future=${yahooPrice.toFixed(2)}, API Future=${futurePrice.toFixed(2)}, Offset=${offset.toFixed(2)}`);
+          debugLog(`✅ ${symbol}: Offset=${offset.toFixed(2)} (Future API: ${futurePrice.toFixed(2)} - Yahoo WS: ${yahooPrice.toFixed(2)})`);
+          
+          if (Math.abs(offset) < 1) {
+            console.log(`🎯 ${symbol}: Prices are nearly identical! (offset < 1 point)`);
+            debugLog(`🎯 ${symbol}: Excellente correspondance Yahoo ↔ TradingView!`);
+          }
         }
       }
     } catch (error) {
