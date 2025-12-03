@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Mini Broker — Pro Edition</title>
+<title>AmABrocker — Pro Trading Platform</title>
 <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <style>
@@ -71,6 +71,51 @@
     display:flex;
     align-items:center;
     gap:20px;
+    flex:1;
+  }
+  
+  .header-account{
+    display:flex;
+    align-items:center;
+    gap:16px;
+    margin-left:auto;
+    padding-left:24px;
+    border-left:1px solid var(--border);
+  }
+  
+  .account-stat{
+    display:flex;
+    flex-direction:column;
+    gap:4px;
+  }
+  
+  .stat-label{
+    font-size:10px;
+    color:var(--text-muted);
+    text-transform:uppercase;
+    letter-spacing:0.5px;
+    font-weight:600;
+    display:flex;
+    align-items:center;
+    gap:4px;
+  }
+  
+  .stat-value{
+    font-size:14px;
+    font-weight:700;
+    color:var(--text-primary);
+  }
+  
+  .pnl-stat .stat-value{
+    font-size:16px;
+  }
+  
+  .pnl-stat .stat-value.positive{
+    color:var(--success);
+  }
+  
+  .pnl-stat .stat-value.negative{
+    color:var(--danger);
   }
   
   .logo{
@@ -642,13 +687,12 @@
   .bottom-panel{
     height:280px;
     border-top:1px solid var(--border);
-    display:flex;
     background:var(--surface);
   }
   
   .positions-panel{
-    flex:1;
-    border-right:1px solid var(--border);
+    width:100%;
+    height:100%;
   }
   
   .section-header{
@@ -812,88 +856,6 @@
     font-size:13px;
   }
   
-  /* ACCOUNT PANEL */
-  .account-panel{
-    width:380px;
-  }
-  
-  .account-content{
-    padding:16px;
-    display:flex;
-    flex-direction:column;
-    gap:16px;
-  }
-  
-  .account-header{
-    display:flex;
-    justify-content:space-between;
-    align-items:flex-start;
-  }
-  
-  .account-info h3{
-    font-size:13px;
-    font-weight:700;
-    text-transform:uppercase;
-    letter-spacing:0.5px;
-    color:var(--text-secondary);
-    margin-bottom:12px;
-  }
-  
-  .balance-item{
-    display:flex;
-    justify-content:space-between;
-    padding:8px 0;
-    font-size:13px;
-    border-bottom:1px solid var(--border);
-  }
-  
-  .balance-label{
-    color:var(--text-muted);
-  }
-  
-  .balance-value{
-    font-weight:700;
-  }
-  
-  .total-pnl{
-    text-align:right;
-  }
-  
-  .total-pnl-label{
-    font-size:11px;
-    color:var(--text-muted);
-    text-transform:uppercase;
-    letter-spacing:0.5px;
-  }
-  
-  .total-pnl-value{
-    font-size:28px;
-    font-weight:800;
-    margin-top:4px;
-  }
-  
-  .position-details{
-    padding:16px;
-    background:var(--bg-tertiary);
-    border-radius:var(--radius-md);
-    border:1px solid var(--border);
-  }
-  
-  .position-details-header{
-    font-size:12px;
-    font-weight:700;
-    text-transform:uppercase;
-    letter-spacing:0.5px;
-    color:var(--text-secondary);
-    margin-bottom:12px;
-  }
-  
-  .position-details-content{
-    font-size:12px;
-    color:var(--text-muted);
-    line-height:1.6;
-  }
-  
   /* MODAL */
   .modal{
     position:fixed;
@@ -1051,14 +1013,14 @@
   @media (max-width:1400px){
     .watchlist-panel{width:280px}
     .orders-panel{width:340px}
-    .account-panel{width:340px}
+    .header-account{display:none}
   }
   
   @media (max-width:1100px){
     .workspace{flex-direction:column}
     .watchlist-panel,.orders-panel{width:100%;border:none;border-bottom:1px solid var(--border)}
     .bottom-panel{flex-direction:column;height:auto}
-    .account-panel{width:100%;border-top:1px solid var(--border)}
+    .header-account{display:none}
   }
 </style>
 </head>
@@ -1072,13 +1034,33 @@
         <div class="logo-icon">
           <i class="fas fa-chart-line"></i>
         </div>
-        <span>Mini Broker Pro</span>
+        <span>AmABrocker</span>
       </div>
       <div class="header-symbol">
         <div class="symbol-badge" id="currentSymbolBadge">OANDA:EURUSD</div>
         <div class="symbol-price">
           <div class="price-value" id="currentPriceValue">—</div>
           <div class="price-label">Prix actuel</div>
+        </div>
+      </div>
+      
+      <!-- Account Info -->
+      <div class="header-account">
+        <div class="account-stat">
+          <div class="stat-label"><i class="fas fa-wallet"></i> Balance</div>
+          <div class="stat-value" id="simBalance">50000.00 USD</div>
+        </div>
+        <div class="account-stat">
+          <div class="stat-label"><i class="fas fa-money-bill-wave"></i> Disponible</div>
+          <div class="stat-value" id="availableBalance">50000.00 USD</div>
+        </div>
+        <div class="account-stat">
+          <div class="stat-label"><i class="fas fa-percentage"></i> Marge</div>
+          <div class="stat-value" id="usedMargin">0.00 USD</div>
+        </div>
+        <div class="account-stat pnl-stat">
+          <div class="stat-label"><i class="fas fa-chart-line"></i> PnL Total</div>
+          <div class="stat-value total-pnl-value" id="totalPnl">0.00 USD</div>
         </div>
       </div>
     </div>
@@ -1247,46 +1229,6 @@
         </div>
       </div>
       <div class="resize-handle resize-handle-top"></div>
-    </div>
-
-    <div class="resizable-panel account-panel">
-      <div class="panel-header">
-        <div class="panel-title">
-          <i class="fas fa-wallet"></i>
-          Compte Démo
-        </div>
-      </div>
-      <div class="account-content">
-        <div class="account-header">
-          <div class="account-info">
-            <h3><i class="fas fa-money-bill-wave"></i> Balance</h3>
-            <div class="balance-item">
-              <span class="balance-label">Balance totale</span>
-              <span class="balance-value" id="simBalance">50000.00 USD</span>
-            </div>
-            <div class="balance-item">
-              <span class="balance-label">Disponible</span>
-              <span class="balance-value" id="availableBalance">50000.00 USD</span>
-            </div>
-            <div class="balance-item">
-              <span class="balance-label">Marge utilisée</span>
-              <span class="balance-value" id="usedMargin">0.00 USD</span>
-            </div>
-          </div>
-          <div class="total-pnl">
-            <div class="total-pnl-label">PnL Total</div>
-            <div class="total-pnl-value" id="totalPnl">0.00</div>
-          </div>
-        </div>
-        <div class="position-details">
-          <div class="position-details-header">
-            <i class="fas fa-map-marker-alt"></i> Position sélectionnée
-          </div>
-          <div class="position-details-content" id="posDetails">
-            Aucune position ouverte
-          </div>
-        </div>
-      </div>
     </div>
   </div>
 </div>
@@ -2059,22 +2001,6 @@ function renderPositions() {
   tbody.querySelectorAll('button[data-close]').forEach(btn => 
     btn.addEventListener('click', () => closePosition(btn.dataset.close))
   );
-  
-  const details = document.getElementById('posDetails');
-  if (positions.length > 0) {
-    const p = positions[0];
-    const pnl = computePnl(p);
-    const pnlClass = pnl >= 0 ? 'positive' : 'negative';
-    details.innerHTML = `
-      <strong>${p.symbol.label}</strong> · ${p.side} · ${p.size} lots<br>
-      Entry: ${formatPrice(p.entry)} · Current: ${formatPrice(p.current)}<br>
-      PNL: <span class="pnl-value ${pnlClass}">${formatMoney(pnl)}</span>
-      ${p.tp ? ` · TP: ${formatPrice(p.tp)}` : ''}
-      ${p.sl ? ` · SL: ${formatPrice(p.sl)}` : ''}
-    `;
-  } else {
-    details.innerText = 'Aucune position ouverte';
-  }
 }
 
 function renderHistory() {
@@ -2147,8 +2073,9 @@ function renderTotals() {
   const total = positions.reduce((sum, p) => sum + computePnl(p), 0);
   const usedMargin = getTotalMarginUsed();
   
+  // Update header stats
   document.getElementById('totalPnl').innerText = formatMoney(total) + ' USD';
-  document.getElementById('totalPnl').className = 'total-pnl-value ' + (total >= 0 ? 'positive' : 'negative');
+  document.getElementById('totalPnl').className = 'stat-value total-pnl-value ' + (total >= 0 ? 'positive' : 'negative');
   document.getElementById('simBalance').innerText = formatMoney(simBalance) + ' USD';
   document.getElementById('availableBalance').innerText = formatMoney(availableBalance) + ' USD';
   document.getElementById('usedMargin').innerText = formatMoney(usedMargin) + ' USD';
@@ -2349,7 +2276,7 @@ window.removeOrder = removeOrder;
 // ============================================================================
 // INITIALIZATION
 // ============================================================================
-console.log('🚀 Mini Broker Pro Edition - Modern & Modular UI');
+console.log('🚀 AmABrocker - Modern & Modular Trading Platform');
 console.log('📡 Proxy:', WS_PROXY_URL);
 
 initResizable();
@@ -2358,7 +2285,7 @@ selectSymbol(WATCHLIST[0]);
 initTradingView();
 startWebSocket();
 
-debugLog('=== BROKER INITIALIZED ===');
+debugLog('=== AMABROCKER INITIALIZED ===');
 debugLog(`Watchlist: ${WATCHLIST.length} symbols (6 FOREX + 3 Indices US)`);
 debugLog(`Starting balance: ${simBalance} USD`);
 debugLog('Modular & resizable interface ready');
