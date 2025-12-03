@@ -3,243 +3,1252 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Mini Broker — Prop Firm Edition</title>
+<title>Mini Broker — Pro Edition</title>
 <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
 <style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+  
   :root{
-    --bg:#0f1720;
-    --panel:#0b1220;
-    --muted:#9aa4b2;
-    --accent:#00c4a7;
-    --danger:#ff6b6b;
-    --glass:rgba(255,255,255,0.03);
-    --card-shadow:0 8px 28px rgba(2,6,23,0.7);
-    --radius:16px;
-    font-family:Inter,system-ui,Roboto,sans-serif;
+    --bg-primary:#0a0e1a;
+    --bg-secondary:#0f1419;
+    --bg-tertiary:#141925;
+    --surface:#1a1f2e;
+    --surface-elevated:#1f2433;
+    --border:#252b3d;
+    --border-light:#2d3548;
+    --text-primary:#e8edf4;
+    --text-secondary:#9ba3b4;
+    --text-muted:#6b7280;
+    --accent:#00d9b8;
+    --accent-hover:#00f0cc;
+    --accent-dark:#00b397;
+    --success:#10b981;
+    --success-bg:rgba(16,185,129,0.1);
+    --danger:#ef4444;
+    --danger-bg:rgba(239,68,68,0.1);
+    --warning:#f59e0b;
+    --warning-bg:rgba(245,158,11,0.1);
+    --shadow-sm:0 2px 8px rgba(0,0,0,0.3);
+    --shadow-md:0 4px 16px rgba(0,0,0,0.4);
+    --shadow-lg:0 8px 32px rgba(0,0,0,0.5);
+    --shadow-xl:0 20px 60px rgba(0,0,0,0.6);
+    --radius-sm:8px;
+    --radius-md:12px;
+    --radius-lg:16px;
+    --transition:all 0.2s cubic-bezier(0.4,0,0.2,1);
+    font-family:'Inter',system-ui,-apple-system,sans-serif;
   }
-  html,body{height:100%;margin:0;background:linear-gradient(180deg,#071025,#071423);color:#e6eef6}
-  .app{display:grid;grid-template-columns:1fr 380px;grid-template-rows:1fr 320px;gap:18px;height:100vh;padding:18px}
-  .card{background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01));border-radius:var(--radius);padding:18px;box-shadow:var(--card-shadow);display:flex;flex-direction:column}
-  .chart-card{grid-column:1/2;grid-row:1/2;min-width:0}
-  .chart-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
-  .symbol-info{display:flex;gap:12px;align-items:center}
-  .symbol-badge{background:var(--glass);padding:10px 14px;border-radius:12px;font-weight:600;color:var(--accent)}
-  .control-row{display:flex;gap:10px;align-items:center}
-  .btn{padding:10px 14px;border-radius:12px;border:0;cursor:pointer;font-weight:700;letter-spacing:0.4px;transition:all .2s}
-  .btn:hover{transform:translateY(-2px);box-shadow:0 4px 12px rgba(0,196,167,0.3)}
-  .btn-buy{background:linear-gradient(90deg,#0ea5a3,#00c4a7);color:#022}
-  .btn-sell{background:linear-gradient(90deg,#ff6b6b,#ff8a8a);color:#111}
-  .btn-ghost{background:transparent;color:var(--muted);border:1px solid rgba(255,255,255,0.2)}
-  #tv_chart_container{flex:1;min-height:420px;border-radius:16px;overflow:hidden;margin-top:12px}
-  .watchlist{grid-column:2/3;grid-row:1/2;background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01));border-radius:var(--radius);padding:16px;box-shadow:var(--card-shadow);display:flex;flex-direction:column}
-  .watchlist h3{margin:0 0 10px 0;font-size:16px;color:var(--muted)}
-  .wl-item{display:flex;justify-content:space-between;align-items:center;padding:12px;border-radius:14px;cursor:pointer;transition:transform .15s ease,background .15s ease;background:rgba(255,255,255,0.01)}
-  .wl-item:hover{transform:translateY(-4px);background:rgba(255,255,255,0.12)}
-  .wl-item.updating{animation:pulse 1s infinite}
-  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.6}}
-  .wl-symbol{font-weight:700}
-  .wl-details{text-align:right}
-  .wl-price{font-weight:600;font-size:14px}
-  .wl-change{font-size:11px;margin-top:2px}
-  .wl-change.positive{color:#10b981}
-  .wl-change.negative{color:#ef4444}
-  .orders-card{margin-top:12px;background:rgba(255,255,255,0.01);padding:16px;border-radius:14px;display:flex;flex-direction:column;gap:12px;border:1px solid rgba(255,255,255,0.06)}
-  .orders-card h4{margin:0;color:var(--muted);font-size:15px}
-  .orders-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
-  .order-input{width:100%;padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,0.2);background:transparent;color:inherit;font-size:13px}
-  .order-grid-actions{display:flex;gap:10px}
-  .order-grid-actions .btn{flex:1}
-  .orders-list{display:flex;flex-direction:column;gap:8px;max-height:200px;overflow-y:auto}
-  .order-line{display:grid;grid-template-columns:1.5fr repeat(5,1fr) auto;gap:8px;padding:10px;border-radius:12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);align-items:center;font-size:13px}
-  .order-line strong{font-weight:600}
-  .order-line small{color:var(--muted)}
-  .order-actions button{padding:4px 8px;border-radius:8px;border:1px solid rgba(255,255,255,0.2);background:transparent;color:var(--muted);cursor:pointer}
-  .orders-head{display:grid;grid-template-columns:1.5fr repeat(5,1fr) auto;gap:8px;font-size:11px;text-transform:uppercase;letter-spacing:0.1em;color:var(--muted);margin-bottom:4px}
-  .small-muted{color:var(--muted);font-size:12px}
-  .bottom-left{grid-column:1/2;grid-row:2/3;background:linear-gradient(180deg,rgba(255,255,255,0.01),rgba(255,255,255,0));border-radius:var(--radius);padding:16px;box-shadow:var(--card-shadow);display:flex;flex-direction:column;overflow:auto}
-  .tabs{display:flex;gap:10px;margin-bottom:12px}
-  .tab{padding:8px 12px;border-radius:10px;cursor:pointer;background:transparent;color:var(--muted);font-weight:700;transition:all .2s}
-  .tab.active{color:var(--accent);background:rgba(0,196,167,0.08)}
-  .positions-table,.history-table{width:100%;border-collapse:collapse;font-size:13px;color:var(--muted)}
-  .positions-table th,.positions-table td,.history-table th,.history-table td{padding:10px;border-bottom:1px dashed rgba(255,255,255,0.02);text-align:left}
-  .positive{color:#10b981;background:rgba(16,185,129,0.12);border-radius:6px;padding:6px;font-weight:700;display:inline-block}
-  .negative{color:#ef4444;background:rgba(239,68,68,0.12);border-radius:6px;padding:6px;font-weight:700;display:inline-block}
-  .bottom-right{grid-column:2/3;grid-row:2/3;background:linear-gradient(180deg,rgba(255,255,255,0.01),rgba(255,255,255,0));border-radius:var(--radius);padding:16px;box-shadow:var(--card-shadow);display:flex;flex-direction:column;gap:10px;overflow:auto}
-  .status{padding:6px 10px;border-radius:8px;font-weight:700;font-size:12px}
-  .status.connected{background:rgba(16,185,129,0.12);color:#10b981}
-  .status.connecting{background:rgba(251,191,36,0.12);color:#fbbf24}
-  .status.disconnected{background:rgba(239,68,68,0.12);color:#ef4444}
-  .lot-grid{display:flex;gap:10px;align-items:center;margin-top:4px}
-  .lot-grid input{width:90px;padding:7px;border-radius:8px;border:1px solid rgba(255,255,255,0.2);background:transparent;color:inherit}
-  .lot-info{font-size:13px;color:var(--muted);margin-top:6px}
-  .modal{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.75);display:flex;align-items:center;justify-content:center;z-index:100;backdrop-filter:blur(4px)}
-  .modal-content{background:#0b1220;border-radius:14px;padding:24px;width:400px;box-shadow:0 20px 60px rgba(0,0,0,0.8);border:1px solid rgba(255,255,255,0.1)}
-  .modal-header{font-weight:700;margin-bottom:16px;font-size:18px;color:var(--accent)}
-  .modal-row{display:flex;flex-direction:column;margin-bottom:12px}
-  .modal-row label{font-size:12px;margin-bottom:6px;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em}
-  .modal-row input,.modal-row div:not(.modal-header){padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.05);color:inherit}
-  .modal-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:20px}
-  .toast{position:fixed;bottom:20px;right:20px;background:rgba(15,23,42,0.95);color:#fff;padding:14px 20px;border-radius:12px;font-weight:600;opacity:0;transform:translateY(20px);transition:opacity .3s ease,transform .3s ease;pointer-events:none;z-index:200;border:1px solid rgba(0,196,167,0.3);box-shadow:0 10px 30px rgba(0,0,0,0.5)}
-  .toast.visible{opacity:1;transform:translateY(0);pointer-events:auto}
-  .toast.error{border-color:rgba(239,68,68,0.3)}
-  .toast.success{border-color:rgba(16,185,129,0.3)}
-  .debug-panel{position:fixed;bottom:10px;left:10px;background:rgba(0,0,0,0.9);color:#0f0;font-family:monospace;font-size:10px;padding:10px;border-radius:8px;max-width:400px;max-height:200px;overflow-y:auto;z-index:1000;display:none}
-  .debug-panel.active{display:block}
-  @media (max-width:1100px){.app{grid-template-columns:1fr;grid-template-rows:auto auto auto}.watchlist{grid-column:1/-1;grid-row:2/3}.bottom-left{grid-row:3/4}.bottom-right{display:none}}
+  
+  *{box-sizing:border-box;margin:0;padding:0}
+  
+  html,body{
+    height:100%;
+    background:linear-gradient(135deg,var(--bg-primary) 0%,var(--bg-secondary) 100%);
+    color:var(--text-primary);
+    overflow:hidden;
+  }
+  
+  .app{
+    display:grid;
+    grid-template-columns:320px 1fr 380px;
+    grid-template-rows:auto 1fr auto;
+    height:100vh;
+    gap:0;
+  }
+  
+  /* HEADER */
+  .header{
+    grid-column:1/-1;
+    background:var(--surface);
+    border-bottom:1px solid var(--border);
+    padding:16px 24px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    backdrop-filter:blur(20px);
+  }
+  
+  .header-left{
+    display:flex;
+    align-items:center;
+    gap:20px;
+  }
+  
+  .logo{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    font-size:20px;
+    font-weight:800;
+    color:var(--accent);
+  }
+  
+  .logo-icon{
+    width:36px;
+    height:36px;
+    background:linear-gradient(135deg,var(--accent),var(--accent-dark));
+    border-radius:10px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:20px;
+  }
+  
+  .header-symbol{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    padding:10px 16px;
+    background:var(--bg-tertiary);
+    border-radius:var(--radius-md);
+    border:1px solid var(--border);
+  }
+  
+  .symbol-badge{
+    font-weight:700;
+    font-size:14px;
+    color:var(--accent);
+  }
+  
+  .symbol-price{
+    display:flex;
+    flex-direction:column;
+  }
+  
+  .price-value{
+    font-weight:700;
+    font-size:16px;
+  }
+  
+  .price-label{
+    font-size:11px;
+    color:var(--text-muted);
+    text-transform:uppercase;
+    letter-spacing:0.5px;
+  }
+  
+  .header-right{
+    display:flex;
+    align-items:center;
+    gap:12px;
+  }
+  
+  .status-badge{
+    padding:8px 14px;
+    border-radius:var(--radius-md);
+    font-weight:600;
+    font-size:12px;
+    display:flex;
+    align-items:center;
+    gap:8px;
+    border:1px solid;
+  }
+  
+  .status-badge.connected{
+    background:var(--success-bg);
+    color:var(--success);
+    border-color:var(--success);
+  }
+  
+  .status-badge.connecting{
+    background:var(--warning-bg);
+    color:var(--warning);
+    border-color:var(--warning);
+  }
+  
+  .status-badge.disconnected{
+    background:var(--danger-bg);
+    color:var(--danger);
+    border-color:var(--danger);
+  }
+  
+  .status-dot{
+    width:8px;
+    height:8px;
+    border-radius:50%;
+    background:currentColor;
+    animation:pulse 2s infinite;
+  }
+  
+  @keyframes pulse{
+    0%,100%{opacity:1}
+    50%{opacity:0.5}
+  }
+  
+  .icon-btn{
+    width:40px;
+    height:40px;
+    border-radius:var(--radius-md);
+    border:1px solid var(--border);
+    background:var(--bg-tertiary);
+    color:var(--text-secondary);
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    transition:var(--transition);
+    font-size:18px;
+  }
+  
+  .icon-btn:hover{
+    background:var(--surface-elevated);
+    border-color:var(--border-light);
+    color:var(--text-primary);
+    transform:translateY(-2px);
+  }
+  
+  /* SIDEBAR LEFT - WATCHLIST */
+  .sidebar-left{
+    grid-column:1/2;
+    grid-row:2/3;
+    background:var(--surface);
+    border-right:1px solid var(--border);
+    display:flex;
+    flex-direction:column;
+    overflow:hidden;
+  }
+  
+  .sidebar-header{
+    padding:20px;
+    border-bottom:1px solid var(--border);
+  }
+  
+  .sidebar-title{
+    font-size:14px;
+    font-weight:700;
+    text-transform:uppercase;
+    letter-spacing:1px;
+    color:var(--text-secondary);
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+  
+  .watchlist{
+    flex:1;
+    overflow-y:auto;
+    padding:12px;
+  }
+  
+  .wl-item{
+    padding:14px;
+    border-radius:var(--radius-md);
+    cursor:pointer;
+    transition:var(--transition);
+    background:var(--bg-tertiary);
+    border:1px solid transparent;
+    margin-bottom:8px;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+  }
+  
+  .wl-item:hover{
+    background:var(--surface-elevated);
+    border-color:var(--border-light);
+    transform:translateX(4px);
+  }
+  
+  .wl-item.active{
+    background:var(--surface-elevated);
+    border-color:var(--accent);
+  }
+  
+  .wl-item.updating{
+    animation:flash 0.5s;
+  }
+  
+  @keyframes flash{
+    0%,100%{opacity:1}
+    50%{opacity:0.7}
+  }
+  
+  .wl-left{
+    display:flex;
+    flex-direction:column;
+    gap:4px;
+  }
+  
+  .wl-symbol{
+    font-weight:700;
+    font-size:13px;
+  }
+  
+  .wl-label{
+    font-size:11px;
+    color:var(--text-muted);
+  }
+  
+  .wl-right{
+    text-align:right;
+  }
+  
+  .wl-price{
+    font-weight:700;
+    font-size:14px;
+  }
+  
+  .wl-change{
+    font-size:11px;
+    margin-top:2px;
+  }
+  
+  .wl-change.positive{color:var(--success)}
+  .wl-change.negative{color:var(--danger)}
+  
+  /* MAIN CHART */
+  .main-chart{
+    grid-column:2/3;
+    grid-row:2/3;
+    background:var(--bg-secondary);
+    display:flex;
+    flex-direction:column;
+    position:relative;
+  }
+  
+  .chart-toolbar{
+    padding:16px 24px;
+    border-bottom:1px solid var(--border);
+    display:flex;
+    align-items:center;
+    gap:16px;
+    background:var(--surface);
+  }
+  
+  .lot-selector{
+    display:flex;
+    align-items:center;
+    gap:12px;
+  }
+  
+  .lot-selector label{
+    font-size:12px;
+    font-weight:600;
+    color:var(--text-secondary);
+    text-transform:uppercase;
+    letter-spacing:0.5px;
+  }
+  
+  .lot-input{
+    width:100px;
+    padding:10px 14px;
+    border-radius:var(--radius-md);
+    border:1px solid var(--border);
+    background:var(--bg-tertiary);
+    color:var(--text-primary);
+    font-weight:600;
+    font-size:14px;
+    transition:var(--transition);
+  }
+  
+  .lot-input:focus{
+    outline:none;
+    border-color:var(--accent);
+    background:var(--surface-elevated);
+  }
+  
+  .lot-info{
+    font-size:12px;
+    color:var(--text-muted);
+    flex:1;
+  }
+  
+  .trade-buttons{
+    display:flex;
+    gap:12px;
+    margin-left:auto;
+  }
+  
+  .btn{
+    padding:12px 24px;
+    border-radius:var(--radius-md);
+    border:none;
+    cursor:pointer;
+    font-weight:700;
+    font-size:14px;
+    text-transform:uppercase;
+    letter-spacing:0.5px;
+    transition:var(--transition);
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+  
+  .btn:hover{
+    transform:translateY(-2px);
+    box-shadow:var(--shadow-md);
+  }
+  
+  .btn:active{
+    transform:translateY(0);
+  }
+  
+  .btn-buy{
+    background:linear-gradient(135deg,var(--success),#059669);
+    color:#fff;
+  }
+  
+  .btn-buy:hover{
+    background:linear-gradient(135deg,#10b981,#047857);
+  }
+  
+  .btn-sell{
+    background:linear-gradient(135deg,var(--danger),#dc2626);
+    color:#fff;
+  }
+  
+  .btn-sell:hover{
+    background:linear-gradient(135deg,#ef4444,#b91c1c);
+  }
+  
+  .btn-ghost{
+    background:transparent;
+    color:var(--text-secondary);
+    border:1px solid var(--border);
+  }
+  
+  .btn-ghost:hover{
+    background:var(--surface-elevated);
+    border-color:var(--border-light);
+    color:var(--text-primary);
+  }
+  
+  #tv_chart_container{
+    flex:1;
+    position:relative;
+  }
+  
+  /* SIDEBAR RIGHT - ORDERS */
+  .sidebar-right{
+    grid-column:3/4;
+    grid-row:2/3;
+    background:var(--surface);
+    border-left:1px solid var(--border);
+    display:flex;
+    flex-direction:column;
+    overflow:hidden;
+  }
+  
+  .orders-panel{
+    padding:20px;
+    border-bottom:1px solid var(--border);
+  }
+  
+  .panel-title{
+    font-size:13px;
+    font-weight:700;
+    text-transform:uppercase;
+    letter-spacing:0.5px;
+    color:var(--text-secondary);
+    margin-bottom:16px;
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+  
+  .order-form{
+    display:grid;
+    gap:12px;
+  }
+  
+  .form-group{
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+  }
+  
+  .form-label{
+    font-size:11px;
+    font-weight:600;
+    color:var(--text-muted);
+    text-transform:uppercase;
+    letter-spacing:0.5px;
+  }
+  
+  .form-input,.form-select{
+    width:100%;
+    padding:10px 12px;
+    border-radius:var(--radius-md);
+    border:1px solid var(--border);
+    background:var(--bg-tertiary);
+    color:var(--text-primary);
+    font-size:13px;
+    transition:var(--transition);
+  }
+  
+  .form-input:focus,.form-select:focus{
+    outline:none;
+    border-color:var(--accent);
+    background:var(--surface-elevated);
+  }
+  
+  .form-row{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:12px;
+  }
+  
+  .btn-add-order{
+    background:linear-gradient(135deg,var(--accent),var(--accent-dark));
+    color:#0a0e1a;
+    margin-top:8px;
+  }
+  
+  .btn-add-order:hover{
+    background:linear-gradient(135deg,var(--accent-hover),var(--accent));
+  }
+  
+  .orders-list{
+    flex:1;
+    overflow-y:auto;
+    padding:12px;
+  }
+  
+  .order-card{
+    background:var(--bg-tertiary);
+    border:1px solid var(--border);
+    border-radius:var(--radius-md);
+    padding:12px;
+    margin-bottom:8px;
+    transition:var(--transition);
+  }
+  
+  .order-card:hover{
+    background:var(--surface-elevated);
+    border-color:var(--border-light);
+  }
+  
+  .order-header{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-bottom:8px;
+  }
+  
+  .order-symbol{
+    font-weight:700;
+    font-size:13px;
+  }
+  
+  .order-side{
+    padding:4px 8px;
+    border-radius:6px;
+    font-size:11px;
+    font-weight:700;
+  }
+  
+  .order-side.buy{
+    background:var(--success-bg);
+    color:var(--success);
+  }
+  
+  .order-side.sell{
+    background:var(--danger-bg);
+    color:var(--danger);
+  }
+  
+  .order-details{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:8px;
+    font-size:12px;
+    color:var(--text-muted);
+  }
+  
+  .order-detail span{
+    color:var(--text-primary);
+    font-weight:600;
+  }
+  
+  .order-actions{
+    margin-top:8px;
+    padding-top:8px;
+    border-top:1px solid var(--border);
+    display:flex;
+    justify-content:flex-end;
+  }
+  
+  .btn-remove{
+    padding:6px 12px;
+    font-size:11px;
+    background:transparent;
+    color:var(--danger);
+    border:1px solid var(--danger);
+  }
+  
+  .btn-remove:hover{
+    background:var(--danger-bg);
+  }
+  
+  /* BOTTOM PANEL */
+  .bottom-panel{
+    grid-column:1/-1;
+    grid-row:3/4;
+    background:var(--surface);
+    border-top:1px solid var(--border);
+    display:grid;
+    grid-template-columns:1fr 380px;
+    max-height:320px;
+  }
+  
+  .positions-section{
+    display:flex;
+    flex-direction:column;
+    overflow:hidden;
+    border-right:1px solid var(--border);
+  }
+  
+  .section-header{
+    padding:16px 24px;
+    border-bottom:1px solid var(--border);
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+  }
+  
+  .tabs{
+    display:flex;
+    gap:8px;
+  }
+  
+  .tab{
+    padding:8px 16px;
+    border-radius:var(--radius-md);
+    cursor:pointer;
+    font-weight:600;
+    font-size:13px;
+    color:var(--text-secondary);
+    transition:var(--transition);
+    background:transparent;
+  }
+  
+  .tab:hover{
+    background:var(--bg-tertiary);
+    color:var(--text-primary);
+  }
+  
+  .tab.active{
+    background:var(--accent);
+    color:#0a0e1a;
+  }
+  
+  .info-text{
+    font-size:11px;
+    color:var(--text-muted);
+  }
+  
+  .table-container{
+    flex:1;
+    overflow-y:auto;
+  }
+  
+  .data-table{
+    width:100%;
+    border-collapse:collapse;
+  }
+  
+  .data-table thead{
+    position:sticky;
+    top:0;
+    background:var(--bg-tertiary);
+    z-index:10;
+  }
+  
+  .data-table th{
+    padding:12px 16px;
+    text-align:left;
+    font-size:11px;
+    font-weight:700;
+    text-transform:uppercase;
+    letter-spacing:0.5px;
+    color:var(--text-muted);
+    border-bottom:1px solid var(--border);
+  }
+  
+  .data-table td{
+    padding:14px 16px;
+    font-size:13px;
+    border-bottom:1px solid var(--border);
+  }
+  
+  .data-table tbody tr{
+    transition:var(--transition);
+  }
+  
+  .data-table tbody tr:hover{
+    background:var(--bg-tertiary);
+  }
+  
+  .symbol-cell{
+    font-weight:700;
+  }
+  
+  .symbol-label{
+    font-size:11px;
+    color:var(--text-muted);
+    margin-top:2px;
+  }
+  
+  .side-badge{
+    padding:4px 10px;
+    border-radius:6px;
+    font-size:11px;
+    font-weight:700;
+    display:inline-block;
+  }
+  
+  .side-badge.buy{
+    background:var(--success-bg);
+    color:var(--success);
+  }
+  
+  .side-badge.sell{
+    background:var(--danger-bg);
+    color:var(--danger);
+  }
+  
+  .pnl-value{
+    font-weight:700;
+    padding:6px 12px;
+    border-radius:6px;
+    display:inline-block;
+  }
+  
+  .pnl-value.positive{
+    background:var(--success-bg);
+    color:var(--success);
+  }
+  
+  .pnl-value.negative{
+    background:var(--danger-bg);
+    color:var(--danger);
+  }
+  
+  .action-buttons{
+    display:flex;
+    gap:8px;
+  }
+  
+  .btn-action{
+    width:32px;
+    height:32px;
+    border-radius:var(--radius-sm);
+    border:1px solid var(--border);
+    background:transparent;
+    color:var(--text-secondary);
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    transition:var(--transition);
+    font-size:14px;
+  }
+  
+  .btn-action:hover{
+    background:var(--surface-elevated);
+    border-color:var(--border-light);
+    color:var(--text-primary);
+  }
+  
+  .empty-state{
+    padding:40px;
+    text-align:center;
+    color:var(--text-muted);
+    font-size:13px;
+  }
+  
+  /* ACCOUNT SECTION */
+  .account-section{
+    display:flex;
+    flex-direction:column;
+    padding:20px;
+    gap:16px;
+  }
+  
+  .account-header{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+  }
+  
+  .account-info h3{
+    font-size:13px;
+    font-weight:700;
+    text-transform:uppercase;
+    letter-spacing:0.5px;
+    color:var(--text-secondary);
+    margin-bottom:8px;
+  }
+  
+  .balance-item{
+    display:flex;
+    justify-content:space-between;
+    padding:8px 0;
+    font-size:13px;
+    border-bottom:1px solid var(--border);
+  }
+  
+  .balance-label{
+    color:var(--text-muted);
+  }
+  
+  .balance-value{
+    font-weight:700;
+  }
+  
+  .total-pnl{
+    text-align:right;
+  }
+  
+  .total-pnl-label{
+    font-size:11px;
+    color:var(--text-muted);
+    text-transform:uppercase;
+    letter-spacing:0.5px;
+  }
+  
+  .total-pnl-value{
+    font-size:28px;
+    font-weight:800;
+    margin-top:4px;
+  }
+  
+  .position-details{
+    padding:16px;
+    background:var(--bg-tertiary);
+    border-radius:var(--radius-md);
+    border:1px solid var(--border);
+  }
+  
+  .position-details-header{
+    font-size:12px;
+    font-weight:700;
+    text-transform:uppercase;
+    letter-spacing:0.5px;
+    color:var(--text-secondary);
+    margin-bottom:12px;
+  }
+  
+  .position-details-content{
+    font-size:12px;
+    color:var(--text-muted);
+    line-height:1.6;
+  }
+  
+  /* MODAL */
+  .modal{
+    position:fixed;
+    top:0;
+    left:0;
+    width:100%;
+    height:100%;
+    background:rgba(0,0,0,0.8);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    z-index:1000;
+    backdrop-filter:blur(8px);
+  }
+  
+  .modal-content{
+    background:var(--surface);
+    border-radius:var(--radius-lg);
+    padding:28px;
+    width:450px;
+    max-width:90vw;
+    box-shadow:var(--shadow-xl);
+    border:1px solid var(--border);
+  }
+  
+  .modal-header{
+    font-weight:700;
+    font-size:18px;
+    margin-bottom:24px;
+    color:var(--accent);
+    display:flex;
+    align-items:center;
+    gap:10px;
+  }
+  
+  .modal-body{
+    display:flex;
+    flex-direction:column;
+    gap:16px;
+  }
+  
+  .modal-info{
+    padding:12px;
+    background:var(--bg-tertiary);
+    border-radius:var(--radius-md);
+    border:1px solid var(--border);
+  }
+  
+  .modal-info-label{
+    font-size:11px;
+    font-weight:600;
+    color:var(--text-muted);
+    text-transform:uppercase;
+    letter-spacing:0.5px;
+  }
+  
+  .modal-info-value{
+    font-size:15px;
+    font-weight:700;
+    margin-top:4px;
+  }
+  
+  .modal-actions{
+    display:flex;
+    gap:12px;
+    justify-content:flex-end;
+    margin-top:8px;
+  }
+  
+  /* TOAST */
+  .toast{
+    position:fixed;
+    bottom:24px;
+    right:24px;
+    background:var(--surface-elevated);
+    color:var(--text-primary);
+    padding:16px 20px;
+    border-radius:var(--radius-md);
+    font-weight:600;
+    font-size:14px;
+    opacity:0;
+    transform:translateY(20px);
+    transition:var(--transition);
+    pointer-events:none;
+    z-index:2000;
+    border:1px solid var(--border);
+    box-shadow:var(--shadow-lg);
+    min-width:300px;
+  }
+  
+  .toast.visible{
+    opacity:1;
+    transform:translateY(0);
+    pointer-events:auto;
+  }
+  
+  .toast.error{
+    border-color:var(--danger);
+    background:var(--danger-bg);
+  }
+  
+  .toast.success{
+    border-color:var(--success);
+    background:var(--success-bg);
+  }
+  
+  .toast.info{
+    border-color:var(--accent);
+    background:rgba(0,217,184,0.1);
+  }
+  
+  /* DEBUG PANEL */
+  .debug-panel{
+    position:fixed;
+    bottom:10px;
+    left:10px;
+    background:rgba(0,0,0,0.95);
+    color:#00ff00;
+    font-family:'Courier New',monospace;
+    font-size:10px;
+    padding:12px;
+    border-radius:var(--radius-md);
+    max-width:500px;
+    max-height:300px;
+    overflow-y:auto;
+    z-index:1000;
+    display:none;
+    border:1px solid #00ff00;
+  }
+  
+  .debug-panel.active{
+    display:block;
+  }
+  
+  /* SCROLLBAR */
+  ::-webkit-scrollbar{
+    width:8px;
+    height:8px;
+  }
+  
+  ::-webkit-scrollbar-track{
+    background:var(--bg-tertiary);
+  }
+  
+  ::-webkit-scrollbar-thumb{
+    background:var(--border-light);
+    border-radius:4px;
+  }
+  
+  ::-webkit-scrollbar-thumb:hover{
+    background:var(--text-muted);
+  }
+  
+  /* RESPONSIVE */
+  @media (max-width:1400px){
+    .app{
+      grid-template-columns:280px 1fr 340px;
+    }
+  }
+  
+  @media (max-width:1100px){
+    .app{
+      grid-template-columns:1fr;
+      grid-template-rows:auto auto 1fr auto;
+    }
+    
+    .sidebar-left{
+      grid-column:1/-1;
+      grid-row:2/3;
+      max-height:200px;
+      border-right:none;
+      border-bottom:1px solid var(--border);
+    }
+    
+    .watchlist{
+      display:grid;
+      grid-template-columns:repeat(auto-fill,minmax(200px,1fr));
+      gap:8px;
+    }
+    
+    .main-chart{
+      grid-row:3/4;
+    }
+    
+    .sidebar-right{
+      display:none;
+    }
+    
+    .bottom-panel{
+      grid-template-columns:1fr;
+    }
+    
+    .account-section{
+      display:none;
+    }
+  }
 </style>
 </head>
 <body>
 
 <div class="app">
-  <div class="card chart-card">
-    <div class="chart-header">
-      <div class="symbol-info">
+  <!-- HEADER -->
+  <header class="header">
+    <div class="header-left">
+      <div class="logo">
+        <div class="logo-icon">💹</div>
+        <span>Mini Broker Pro</span>
+      </div>
+      <div class="header-symbol">
         <div class="symbol-badge" id="currentSymbolBadge">OANDA:EURUSD</div>
-        <div>
-          <div style="font-weight:800;font-size:16px" id="currentSymbolTitle">EUR / USD</div>
-          <div class="small-muted" id="currentPriceMini">Prix: —</div>
+        <div class="symbol-price">
+          <div class="price-value" id="currentPriceValue">—</div>
+          <div class="price-label">Prix actuel</div>
         </div>
       </div>
-      <div class="control-row">
-        <div id="wsStatus" class="status disconnected">⚫ Disconnected</div>
-        <button class="btn btn-ghost" id="debugToggle" title="Toggle Debug">🐛</button>
-        <button class="btn btn-ghost" id="refreshPricesBtn" title="Forcer mise à jour">↺</button>
-        <button class="btn btn-buy" id="buyBtn">BUY</button>
-        <button class="btn btn-sell" id="sellBtn">SELL</button>
+    </div>
+    <div class="header-right">
+      <div class="status-badge disconnected" id="wsStatus">
+        <div class="status-dot"></div>
+        <span>Déconnecté</span>
+      </div>
+      <button class="icon-btn" id="debugToggle" title="Debug">🐛</button>
+      <button class="icon-btn" id="refreshPricesBtn" title="Rafraîchir">↻</button>
+    </div>
+  </header>
+
+  <!-- SIDEBAR LEFT - WATCHLIST -->
+  <aside class="sidebar-left">
+    <div class="sidebar-header">
+      <div class="sidebar-title">
+        📊 Watchlist
       </div>
     </div>
-    <div class="lot-grid">
-      <label>Lots :</label>
-      <input type="number" id="lotInput" min="0.01" step="0.01" value="1"/>
+    <div class="watchlist" id="wlList"></div>
+  </aside>
+
+  <!-- MAIN CHART -->
+  <main class="main-chart">
+    <div class="chart-toolbar">
+      <div class="lot-selector">
+        <label>Lots</label>
+        <input type="number" class="lot-input" id="lotInput" min="0.01" step="0.01" value="1"/>
+      </div>
       <div class="lot-info" id="lotValueInfo">1 lot = 100 000 unités · marge 1:20</div>
+      <div class="trade-buttons">
+        <button class="btn btn-buy" id="buyBtn">
+          <span>📈</span>
+          <span>BUY</span>
+        </button>
+        <button class="btn btn-sell" id="sellBtn">
+          <span>📉</span>
+          <span>SELL</span>
+        </button>
+      </div>
     </div>
     <div id="tv_chart_container"></div>
-  </div>
+  </main>
 
-  <div class="card watchlist">
-    <h3>📊 Watchlist</h3>
-    <div id="wlList" style="display:flex;flex-direction:column;gap:8px;max-height:360px;overflow:auto;"></div>
-    <div class="orders-card">
-      <h4>⏱️ Ordres Limites</h4>
-      <div class="orders-grid">
-        <select id="ordSymbol" class="order-input"></select>
-        <select id="ordSide" class="order-input">
-          <option value="BUY">BUY</option>
-          <option value="SELL">SELL</option>
-        </select>
-        <input id="ordPrice" class="order-input" placeholder="Prix cible" type="number" step="0.00001"/>
-        <input id="ordSize" class="order-input" placeholder="Lots" value="1" type="number" step="0.01"/>
-        <input id="ordTp" class="order-input" placeholder="TP (price)" type="number" step="0.00001"/>
-        <input id="ordSl" class="order-input" placeholder="SL (price)" type="number" step="0.00001"/>
-      </div>
-      <div class="order-grid-actions">
-        <button class="btn btn-buy" id="addOrderBtn">➕ Ajouter l'ordre</button>
-      </div>
-      <div class="orders-head">
-        <span>Symbole</span>
-        <span>Side</span>
-        <span>Prix</span>
-        <span>Lots</span>
-        <span>TP</span>
-        <span>SL</span>
-        <span></span>
-      </div>
-      <div class="orders-list" id="ordersBody"></div>
+  <!-- SIDEBAR RIGHT - ORDERS -->
+  <aside class="sidebar-right">
+    <div class="orders-panel">
+      <div class="panel-title">⏱️ Ordres Limites</div>
+      <form class="order-form" onsubmit="return false;">
+        <div class="form-group">
+          <label class="form-label">Symbole</label>
+          <select id="ordSymbol" class="form-select"></select>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Type</label>
+            <select id="ordSide" class="form-select">
+              <option value="BUY">BUY</option>
+              <option value="SELL">SELL</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Lots</label>
+            <input id="ordSize" class="form-input" type="number" step="0.01" value="1"/>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Prix cible</label>
+          <input id="ordPrice" class="form-input" type="number" step="0.00001" placeholder="0.00000"/>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Take Profit</label>
+            <input id="ordTp" class="form-input" type="number" step="0.00001" placeholder="Optionnel"/>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Stop Loss</label>
+            <input id="ordSl" class="form-input" type="number" step="0.00001" placeholder="Optionnel"/>
+          </div>
+        </div>
+        <button class="btn btn-add-order" id="addOrderBtn">
+          ➕ Ajouter l'ordre
+        </button>
+      </form>
     </div>
-  </div>
+    <div class="orders-list" id="ordersBody"></div>
+  </aside>
 
-  <div class="card bottom-left">
-    <div style="display:flex;justify-content:space-between;align-items:center">
-      <div class="tabs">
-        <div class="tab active" id="tabPositions">📈 Positions</div>
-        <div class="tab" id="tabHistory">📜 Historique</div>
+  <!-- BOTTOM PANEL -->
+  <div class="bottom-panel">
+    <div class="positions-section">
+      <div class="section-header">
+        <div class="tabs">
+          <button class="tab active" id="tabPositions">📈 Positions</button>
+          <button class="tab" id="tabHistory">📜 Historique</button>
+        </div>
+        <div class="info-text">Simulé · Proxy WS · Effet 1:20</div>
       </div>
-      <div class="small-muted">Simulé · Proxy WS · Effet 1:20</div>
+      <div class="table-container">
+        <div id="positionsPane">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Symbole</th>
+                <th>Type</th>
+                <th>Entry</th>
+                <th>Actuel</th>
+                <th>Lots</th>
+                <th>PNL</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="positionsBody"></tbody>
+          </table>
+        </div>
+        <div id="historyPane" style="display:none">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Symbole</th>
+                <th>Type</th>
+                <th>Entry</th>
+                <th>Close</th>
+                <th>Lots</th>
+                <th>PNL</th>
+                <th>Date</th>
+              </tr>
+            </thead>
+            <tbody id="historyBody"></tbody>
+          </table>
+        </div>
+      </div>
     </div>
-    <div id="positionsPane">
-      <table class="positions-table">
-        <thead>
-          <tr>
-            <th>Symbole</th>
-            <th>Side</th>
-            <th>Entry</th>
-            <th>Actuel</th>
-            <th>Lots</th>
-            <th>PNL</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody id="positionsBody"></tbody>
-      </table>
-    </div>
-    <div id="historyPane" style="display:none">
-      <table class="history-table">
-        <thead>
-          <tr>
-            <th>Symbole</th>
-            <th>Side</th>
-            <th>Entry</th>
-            <th>Close</th>
-            <th>PNL</th>
-            <th>Date</th>
-          </tr>
-        </thead>
-        <tbody id="historyBody"></tbody>
-      </table>
-    </div>
-  </div>
 
-  <div class="card bottom-right">
-    <div style="display:flex;justify-content:space-between;align-items:center">
-      <div>
-        <div style="font-size:14px;font-weight:800">💰 Compte Démo</div>
-        <div class="small-muted">Balance: <span id="simBalance">50000.00</span> USD</div>
-        <div class="small-muted">Disponible: <span id="availableBalance">50000.00</span> USD</div>
-        <div class="small-muted">Marge utilisée: <span id="usedMargin">0.00</span> USD</div>
+    <div class="account-section">
+      <div class="account-header">
+        <div class="account-info">
+          <h3>💰 Compte Démo</h3>
+          <div class="balance-item">
+            <span class="balance-label">Balance</span>
+            <span class="balance-value" id="simBalance">50000.00 USD</span>
+          </div>
+          <div class="balance-item">
+            <span class="balance-label">Disponible</span>
+            <span class="balance-value" id="availableBalance">50000.00 USD</span>
+          </div>
+          <div class="balance-item">
+            <span class="balance-label">Marge utilisée</span>
+            <span class="balance-value" id="usedMargin">0.00 USD</span>
+          </div>
+        </div>
+        <div class="total-pnl">
+          <div class="total-pnl-label">PnL Total</div>
+          <div class="total-pnl-value" id="totalPnl">0.00</div>
+        </div>
       </div>
-      <div style="text-align:right">
-        <div class="small-muted">PnL Total:</div>
-        <div id="totalPnl" style="font-weight:800;font-size:20px">0.00</div>
+      <div class="position-details">
+        <div class="position-details-header">📍 Position sélectionnée</div>
+        <div class="position-details-content" id="posDetails">
+          Aucune position ouverte
+        </div>
       </div>
-    </div>
-    <div style="margin-top:12px;padding:12px;background:rgba(255,255,255,0.02);border-radius:10px">
-      <div style="font-weight:700;margin-bottom:8px">📍 Position sélectionnée</div>
-      <div class="small-muted" id="posDetails">Aucune position sélectionnée</div>
     </div>
   </div>
 </div>
 
+<!-- MODAL -->
 <div class="modal" id="positionModal" style="display:none">
   <div class="modal-content">
-    <div class="modal-header">⚙️ Modifier position</div>
-    <div class="modal-row">
-      <label>Symbol</label>
-      <div id="modalSymbol" style="background:transparent;border:none;font-weight:700"></div>
-    </div>
-    <div class="modal-row">
-      <label>Lots disponibles</label>
-      <div id="modalLots" style="background:transparent;border:none;font-weight:700"></div>
-    </div>
-    <div class="modal-row">
-      <label>Take Profit (price)</label>
-      <input type="number" id="modalTp" step="0.00001" placeholder="Laisser vide pour aucun"/>
-    </div>
-    <div class="modal-row">
-      <label>Stop Loss (price)</label>
-      <input type="number" id="modalSl" step="0.00001" placeholder="Laisser vide pour aucun"/>
-    </div>
-    <div class="modal-row">
-      <label>Lots à clôturer</label>
-      <input type="number" id="modalSellLots" min="0" step="0.01" value="0" placeholder="0 = garder ouvert"/>
+    <div class="modal-header">⚙️ Modifier la position</div>
+    <div class="modal-body">
+      <div class="modal-info">
+        <div class="modal-info-label">Symbole</div>
+        <div class="modal-info-value" id="modalSymbol">—</div>
+      </div>
+      <div class="modal-info">
+        <div class="modal-info-label">Lots disponibles</div>
+        <div class="modal-info-value" id="modalLots">—</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Take Profit (prix)</label>
+        <input type="number" class="form-input" id="modalTp" step="0.00001" placeholder="Laisser vide pour aucun"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Stop Loss (prix)</label>
+        <input type="number" class="form-input" id="modalSl" step="0.00001" placeholder="Laisser vide pour aucun"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Lots à clôturer</label>
+        <input type="number" class="form-input" id="modalSellLots" min="0" step="0.01" value="0" placeholder="0 = garder ouvert"/>
+      </div>
     </div>
     <div class="modal-actions">
       <button class="btn btn-ghost" id="modalCancel">Annuler</button>
-      <button class="btn btn-buy" id="modalSave">💾 Sauvegarder</button>
+      <button class="btn btn-add-order" id="modalSave">💾 Sauvegarder</button>
     </div>
   </div>
 </div>
 
-<div id="toast" class="toast" aria-live="polite"></div>
+<div id="toast" class="toast"></div>
 <div id="debugPanel" class="debug-panel"></div>
 
 <script>
@@ -293,100 +1302,6 @@ let tvWidget = null;
 let activeModalId = null;
 let debugMode = false;
 let messageCount = 0;
-
-// Système d'interpolation pour lisser les indices
-let priceInterpolation = {};
-let interpolationTimers = {};
-
-// ============================================================================
-// INTERPOLATION DES PRIX (pour lisser les indices)
-// ============================================================================
-function easeInOutQuad(t) {
-  // Courbe d'accélération douce pour un mouvement naturel
-  return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
-}
-
-function startPriceInterpolation(symbol, oldPrice, newPrice) {
-  // Ne lisser que les indices
-  const symbolObj = WATCHLIST.find(w => w.api === symbol);
-  if (!symbolObj || symbolObj.type !== 'index') return;
-  
-  // Annuler l'interpolation précédente si elle existe
-  if (interpolationTimers[symbol]) {
-    clearInterval(interpolationTimers[symbol]);
-    delete interpolationTimers[symbol];
-  }
-  
-  if (oldPrice === undefined || oldPrice === newPrice) return;
-  
-  const startPrice = oldPrice;
-  const endPrice = newPrice;
-  const duration = 6000; // 6 secondes (durée du polling Yahoo)
-  const steps = 60; // 60 étapes pour mouvement fluide
-  const stepDuration = duration / steps;
-  let currentStep = 0;
-  
-  priceInterpolation[symbol] = {
-    start: startPrice,
-    end: endPrice,
-    current: startPrice,
-    startTime: Date.now()
-  };
-  
-  debugLog(`Starting interpolation for ${symbol}: ${startPrice.toFixed(2)} → ${endPrice.toFixed(2)}`);
-  
-  interpolationTimers[symbol] = setInterval(() => {
-    currentStep++;
-    
-    if (currentStep >= steps) {
-      // Forcer le prix final exact
-      priceInterpolation[symbol].current = endPrice;
-      updatePriceUI(symbol, priceCache[symbol], endPrice);
-      
-      let updated = false;
-      positions.forEach(pos => {
-        if (pos.symbol.api === symbol) {
-          pos.current = endPrice;
-          updated = true;
-        }
-      });
-      
-      if (updated) {
-        renderPositions();
-        renderTotals();
-      }
-      
-      clearInterval(interpolationTimers[symbol]);
-      delete interpolationTimers[symbol];
-      delete priceInterpolation[symbol];
-      return;
-    }
-    
-    // Interpolation avec courbe d'accélération douce
-    const linearProgress = currentStep / steps;
-    const easedProgress = easeInOutQuad(linearProgress);
-    const interpolatedPrice = startPrice + (endPrice - startPrice) * easedProgress;
-    
-    priceInterpolation[symbol].current = interpolatedPrice;
-    
-    // Mettre à jour l'UI avec le prix interpolé
-    updatePriceUI(symbol, priceCache[symbol], interpolatedPrice);
-    
-    // Mettre à jour les positions avec le prix interpolé
-    let updated = false;
-    positions.forEach(pos => {
-      if (pos.symbol.api === symbol) {
-        pos.current = interpolatedPrice;
-        updated = true;
-      }
-    });
-    
-    if (updated) {
-      renderPositions();
-      renderTotals();
-    }
-  }, stepDuration);
-}
 
 // ============================================================================
 // DEBUG & LOGGING
@@ -528,14 +1443,14 @@ function setWsStatus(status) {
   wsConnected = status === 'connected';
   
   if (status === 'connected') {
-    el.className = 'status connected';
-    el.innerHTML = '🟢 Connected';
+    el.className = 'status-badge connected';
+    el.innerHTML = '<div class="status-dot"></div><span>Connecté</span>';
   } else if (status === 'connecting') {
-    el.className = 'status connecting';
-    el.innerHTML = '🟡 Connecting...';
+    el.className = 'status-badge connecting';
+    el.innerHTML = '<div class="status-dot"></div><span>Connexion...</span>';
   } else {
-    el.className = 'status disconnected';
-    el.innerHTML = '⚫ Disconnected';
+    el.className = 'status-badge disconnected';
+    el.innerHTML = '<div class="status-dot"></div><span>Déconnecté</span>';
   }
 }
 
@@ -663,16 +1578,7 @@ function handleWsMessage(msg) {
       lastPriceUpdate[sym] = Date.now();
       
       debugLog(`Price update: ${sym} = ${price} (was ${oldPrice})`);
-      
-      // Démarrer l'interpolation pour les indices
-      const symbolObj = WATCHLIST.find(w => w.api === sym);
-      if (symbolObj && symbolObj.type === 'index' && oldPrice !== undefined) {
-        startPriceInterpolation(sym, oldPrice, newPrice);
-      } else {
-        // Pour le FOREX, mise à jour immédiate
-        updatePriceUI(sym, oldPrice);
-      }
-      
+      updatePriceUI(sym, oldPrice, newPrice);
       onPriceUpdate(sym);
     });
     return;
@@ -690,16 +1596,7 @@ function handleWsMessage(msg) {
       lastPriceUpdate[sym] = Date.now();
       
       debugLog(`Price update: ${sym} = ${price}`);
-      
-      // Démarrer l'interpolation pour les indices
-      const symbolObj = WATCHLIST.find(w => w.api === sym);
-      if (symbolObj && symbolObj.type === 'index' && oldPrice !== undefined) {
-        startPriceInterpolation(sym, oldPrice, newPrice);
-      } else {
-        // Pour le FOREX, mise à jour immédiate
-        updatePriceUI(sym, oldPrice);
-      }
-      
+      updatePriceUI(sym, oldPrice, newPrice);
       onPriceUpdate(sym);
     }
   }
@@ -708,20 +1605,19 @@ function handleWsMessage(msg) {
 // ============================================================================
 // UI UPDATES
 // ============================================================================
-function updatePriceUI(symbol, oldPrice, interpolatedPrice = null) {
+function updatePriceUI(symbol, oldPrice, newPrice) {
   const el = document.getElementById('price_' + escapeId(symbol));
-  const price = interpolatedPrice !== null ? interpolatedPrice : priceCache[symbol];
   
   if (el) {
     const symbolObj = WATCHLIST.find(w => w.api === symbol);
     if (symbolObj && symbolObj.type === 'index') {
-      el.innerText = Number(price).toFixed(2);
+      el.innerText = Number(newPrice).toFixed(2);
     } else {
-      el.innerText = formatPrice(price);
+      el.innerText = formatPrice(newPrice);
     }
     
     const parentItem = el.closest('.wl-item');
-    if (parentItem && oldPrice !== undefined && oldPrice !== price) {
+    if (parentItem && oldPrice !== undefined && oldPrice !== newPrice) {
       parentItem.classList.add('updating');
       setTimeout(() => parentItem.classList.remove('updating'), 500);
     }
@@ -729,8 +1625,8 @@ function updatePriceUI(symbol, oldPrice, interpolatedPrice = null) {
   
   if (symbol === currentSymbol.api) {
     const displayPrice = currentSymbol.type === 'index' ? 
-      Number(price).toFixed(2) : formatPrice(price);
-    document.getElementById('currentPriceMini').innerText = 'Prix: ' + displayPrice;
+      Number(newPrice).toFixed(2) : formatPrice(newPrice);
+    document.getElementById('currentPriceValue').innerText = displayPrice;
   }
 }
 
@@ -834,13 +1730,7 @@ function checkOrdersForSymbol(symbol) {
 // PNL & CALCULATIONS
 // ============================================================================
 function computePnl(pos) {
-  let current = pos.current !== undefined ? pos.current : priceCache[pos.symbol.api];
-  
-  // Utiliser le prix interpolé si disponible pour les indices
-  if (priceInterpolation[pos.symbol.api]) {
-    current = priceInterpolation[pos.symbol.api].current;
-  }
-  
+  const current = pos.current !== undefined ? pos.current : priceCache[pos.symbol.api];
   if (current === undefined) return 0;
   
   const step = pipStep(pos.symbol.api);
@@ -1003,7 +1893,7 @@ function renderPositions() {
   tbody.innerHTML = '';
   
   if (positions.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:20px">Aucune position ouverte</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" class="empty-state">Aucune position ouverte</td></tr>';
     return;
   }
   
@@ -1011,22 +1901,24 @@ function renderPositions() {
     const current = pos.current !== undefined ? pos.current : priceCache[pos.symbol.api];
     pos.current = current;
     const pnl = computePnl(pos);
-    const cls = pnl >= 0 ? 'positive' : 'negative';
+    const pnlClass = pnl >= 0 ? 'positive' : 'negative';
     
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td>
-        <strong>${pos.symbol.label}</strong>
-        <div class="small-muted">${pos.symbol.tv}</div>
+        <div class="symbol-cell">${pos.symbol.label}</div>
+        <div class="symbol-label">${pos.symbol.tv}</div>
       </td>
-      <td><strong>${pos.side}</strong></td>
+      <td><span class="side-badge ${pos.side.toLowerCase()}">${pos.side}</span></td>
       <td>${formatPrice(pos.entry)}</td>
       <td>${formatPrice(current)}</td>
       <td>${pos.size}</td>
-      <td><span class="${cls}">${formatMoney(pnl)}</span></td>
+      <td><span class="pnl-value ${pnlClass}">${formatMoney(pnl)}</span></td>
       <td>
-        <button class="btn btn-ghost" data-id="${pos.id}" style="padding:6px 10px;font-size:11px">⚙️</button>
-        <button class="btn btn-ghost" data-close="${pos.id}" style="padding:6px 10px;font-size:11px">❌</button>
+        <div class="action-buttons">
+          <button class="btn-action" data-id="${pos.id}" title="Modifier">⚙️</button>
+          <button class="btn-action" data-close="${pos.id}" title="Fermer">❌</button>
+        </div>
       </td>
     `;
     tbody.appendChild(tr);
@@ -1044,17 +1936,16 @@ function renderPositions() {
   if (positions.length > 0) {
     const p = positions[0];
     const pnl = computePnl(p);
+    const pnlClass = pnl >= 0 ? 'positive' : 'negative';
     details.innerHTML = `
-      <strong>${p.symbol.label}</strong> · ${p.side} · 
-      Entry: ${formatPrice(p.entry)} · 
-      Current: ${formatPrice(p.current)} · 
-      ${p.size} lots<br>
-      PNL: <span class="${pnl >= 0 ? 'positive' : 'negative'}">${formatMoney(pnl)}</span>
-      ${p.tp ? `· TP: ${formatPrice(p.tp)}` : ''}
-      ${p.sl ? `· SL: ${formatPrice(p.sl)}` : ''}
+      <strong>${p.symbol.label}</strong> · ${p.side} · ${p.size} lots<br>
+      Entry: ${formatPrice(p.entry)} · Current: ${formatPrice(p.current)}<br>
+      PNL: <span class="pnl-value ${pnlClass}">${formatMoney(pnl)}</span>
+      ${p.tp ? ` · TP: ${formatPrice(p.tp)}` : ''}
+      ${p.sl ? ` · SL: ${formatPrice(p.sl)}` : ''}
     `;
   } else {
-    details.innerText = 'Aucune position sélectionnée';
+    details.innerText = 'Aucune position ouverte';
   }
 }
 
@@ -1063,20 +1954,24 @@ function renderHistory() {
   tbody.innerHTML = '';
   
   if (history.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:20px">Aucun historique</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" class="empty-state">Aucun historique</td></tr>';
     return;
   }
   
   history.slice(0, 50).forEach(h => {
-    const cls = h.pnl >= 0 ? 'positive' : 'negative';
+    const pnlClass = h.pnl >= 0 ? 'positive' : 'negative';
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td>${h.symbol.label}</td>
-      <td><strong>${h.side}</strong></td>
+      <td>
+        <div class="symbol-cell">${h.symbol.label}</div>
+        <div class="symbol-label">${h.symbol.tv}</div>
+      </td>
+      <td><span class="side-badge ${h.side.toLowerCase()}">${h.side}</span></td>
       <td>${formatPrice(h.entry)}</td>
       <td>${formatPrice(h.close)}</td>
-      <td><span class="${cls}">${formatMoney(h.pnl)}</span></td>
-      <td class="small-muted">${formatDateTime(h.closedAt)}</td>
+      <td>${h.lots}</td>
+      <td><span class="pnl-value ${pnlClass}">${formatMoney(h.pnl)}</span></td>
+      <td class="symbol-label">${formatDateTime(h.closedAt)}</td>
     `;
     tbody.appendChild(tr);
   });
@@ -1087,27 +1982,29 @@ function renderOrders() {
   container.innerHTML = '';
   
   if (orders.length === 0) {
-    container.innerHTML = '<div style="text-align:center;color:var(--muted);padding:10px">Aucun ordre en attente</div>';
+    container.innerHTML = '<div class="empty-state">Aucun ordre en attente</div>';
     return;
   }
   
   orders.forEach(o => {
-    const line = document.createElement('div');
-    line.className = 'order-line';
-    line.innerHTML = `
-      <div>
-        <strong>${o.symbol}</strong>
-        <small>${o.side}</small>
+    const card = document.createElement('div');
+    card.className = 'order-card';
+    card.innerHTML = `
+      <div class="order-header">
+        <div class="order-symbol">${o.symbol}</div>
+        <div class="order-side ${o.side.toLowerCase()}">${o.side}</div>
       </div>
-      <div>${formatPrice(o.price)}</div>
-      <div>${o.size}</div>
-      <div>${o.tp ? formatPrice(o.tp) : '—'}</div>
-      <div>${o.sl ? formatPrice(o.sl) : '—'}</div>
+      <div class="order-details">
+        <div class="order-detail">Prix: <span>${formatPrice(o.price)}</span></div>
+        <div class="order-detail">Lots: <span>${o.size}</span></div>
+        <div class="order-detail">TP: <span>${o.tp ? formatPrice(o.tp) : '—'}</span></div>
+        <div class="order-detail">SL: <span>${o.sl ? formatPrice(o.sl) : '—'}</span></div>
+      </div>
       <div class="order-actions">
-        <button data-id="${o.id}" style="padding:4px 8px">❌</button>
+        <button class="btn btn-remove" data-id="${o.id}">Annuler</button>
       </div>
     `;
-    container.appendChild(line);
+    container.appendChild(card);
   });
   
   container.querySelectorAll('button[data-id]').forEach(btn => 
@@ -1119,11 +2016,11 @@ function renderTotals() {
   const total = positions.reduce((sum, p) => sum + computePnl(p), 0);
   const usedMargin = getTotalMarginUsed();
   
-  document.getElementById('totalPnl').innerText = formatMoney(total);
-  document.getElementById('totalPnl').className = total >= 0 ? 'positive' : 'negative';
-  document.getElementById('simBalance').innerText = formatMoney(simBalance);
-  document.getElementById('availableBalance').innerText = formatMoney(availableBalance);
-  document.getElementById('usedMargin').innerText = formatMoney(usedMargin);
+  document.getElementById('totalPnl').innerText = formatMoney(total) + ' USD';
+  document.getElementById('totalPnl').className = 'total-pnl-value ' + (total >= 0 ? 'positive' : 'negative');
+  document.getElementById('simBalance').innerText = formatMoney(simBalance) + ' USD';
+  document.getElementById('availableBalance').innerText = formatMoney(availableBalance) + ' USD';
+  document.getElementById('usedMargin').innerText = formatMoney(usedMargin) + ' USD';
 }
 
 function renderAll() {
@@ -1142,14 +2039,15 @@ const ordSymbol = document.getElementById('ordSymbol');
 WATCHLIST.forEach(w => {
   const item = document.createElement('div');
   item.className = 'wl-item';
+  item.dataset.symbol = w.api;
   item.innerHTML = `
-    <div>
+    <div class="wl-left">
       <div class="wl-symbol">${w.label}</div>
-      <div class="small-muted" style="margin-top:4px">${w.tv}</div>
+      <div class="wl-label">${w.tv}</div>
     </div>
-    <div class="wl-details">
+    <div class="wl-right">
       <div class="wl-price" id="price_${escapeId(w.api)}">—</div>
-      <div class="wl-change small-muted" id="change_${escapeId(w.api)}"></div>
+      <div class="wl-change" id="change_${escapeId(w.api)}"></div>
     </div>
   `;
   item.addEventListener('click', () => selectSymbol(w));
@@ -1194,16 +2092,21 @@ function initTradingView() {
 
 function selectSymbol(sym) {
   currentSymbol = sym;
+  
+  // Update active state in watchlist
+  document.querySelectorAll('.wl-item').forEach(item => {
+    item.classList.toggle('active', item.dataset.symbol === sym.api);
+  });
+  
   document.getElementById('currentSymbolBadge').innerText = sym.tv;
-  document.getElementById('currentSymbolTitle').innerText = sym.label;
   
   const price = priceCache[sym.api];
   if (price !== undefined) {
     const displayPrice = sym.type === 'index' ? 
       Number(price).toFixed(2) : formatPrice(price);
-    document.getElementById('currentPriceMini').innerText = 'Prix: ' + displayPrice;
+    document.getElementById('currentPriceValue').innerText = displayPrice;
   } else {
-    document.getElementById('currentPriceMini').innerText = 'Prix: —';
+    document.getElementById('currentPriceValue').innerText = '—';
   }
   
   refreshLotInfo();
@@ -1315,7 +2218,7 @@ window.removeOrder = removeOrder;
 // ============================================================================
 // INITIALIZATION
 // ============================================================================
-console.log('🚀 Mini Broker - Prop Firm Edition (FOREX + 3 Indices US)');
+console.log('🚀 Mini Broker Pro Edition - Modernized UI');
 console.log('📡 Proxy:', WS_PROXY_URL);
 
 renderAll();
@@ -1326,6 +2229,7 @@ startWebSocket();
 debugLog('=== BROKER INITIALIZED ===');
 debugLog(`Watchlist: ${WATCHLIST.length} symbols (6 FOREX + 3 Indices US)`);
 debugLog(`Starting balance: ${simBalance} USD`);
+debugLog('Price smoothing removed for indices');
 </script>
 </body>
 </html>
