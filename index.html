@@ -2691,18 +2691,38 @@ function updateCustomChart(symbol) {
 }
 
 function initTradingView() {
+  // Ne rien faire si pas de symbole actuel
+  if (!currentSymbol) return;
+  
   try {
+    // Pour les indices, on utilise un iframe Investing.com
+    if (currentSymbol.type === 'index') {
+      const container = document.getElementById('tv_chart_container');
+      
+      // Mapping vers les URLs Investing.com des futures
+      const investingUrls = {
+        'US500': 'https://www.investing.com/indices/us-spx-500-futures-chart',
+        'US30': 'https://www.investing.com/indices/us-30-futures-chart',
+        'US100': 'https://www.investing.com/indices/nq-100-futures-chart'
+      };
+      
+      const url = investingUrls[currentSymbol.api];
+      
+      if (url) {
+        container.innerHTML = `<iframe src="${url}" style="width:100%;height:100%;border:none;"></iframe>`;
+        debugLog(`Loaded Investing.com chart for ${currentSymbol.label}`);
+        return;
+      }
+    }
+    
+    // Pour FOREX et autres, garder TradingView classique
     if (tvWidget && typeof tvWidget.remove === 'function') {
       tvWidget.remove();
       tvWidget = null;
     }
-  } catch (e) {
-    console.warn('TradingView cleanup:', e);
-  }
-  
-  if (typeof TradingView === 'undefined') return;
-  
-  try {
+    
+    if (typeof TradingView === 'undefined') return;
+    
     tvWidget = new TradingView.widget({
       container_id: 'tv_chart_container',
       autosize: true,
@@ -2713,8 +2733,10 @@ function initTradingView() {
       locale: 'fr',
       disabled_features: ['use_localstorage_for_settings']
     });
+    
+    debugLog(`Loaded TradingView chart for ${currentSymbol.label}`);
   } catch (e) {
-    console.error('TradingView init:', e);
+    console.error('Chart init error:', e);
   }
 }
 
