@@ -479,6 +479,38 @@
     flex:1;
   }
   
+  .timeframe-selector{
+    display:flex;
+    gap:6px;
+    padding:0 12px;
+    border-left:1px solid var(--border);
+    border-right:1px solid var(--border);
+  }
+  
+  .timeframe-btn{
+    padding:6px 12px;
+    border-radius:var(--radius-sm);
+    border:1px solid var(--border);
+    background:var(--bg-primary);
+    color:var(--text-secondary);
+    cursor:pointer;
+    font-weight:600;
+    font-size:12px;
+    transition:var(--transition);
+  }
+  
+  .timeframe-btn:hover{
+    background:var(--surface-elevated);
+    border-color:var(--border-light);
+    color:var(--text-primary);
+  }
+  
+  .timeframe-btn.active{
+    background:var(--accent);
+    color:#0a0e1a;
+    border-color:var(--accent);
+  }
+  
   .trade-buttons{
     display:flex;
     gap:12px;
@@ -1143,6 +1175,17 @@
           <input type="number" class="lot-input" id="lotInput" min="0.01" step="0.01" value="1"/>
         </div>
         <div class="lot-info" id="lotValueInfo">1 lot = 100 000 unités · marge 1:20</div>
+        
+        <!-- Timeframe selector (visible only for indices) -->
+        <div class="timeframe-selector" id="timeframeSelector" style="display:none;">
+          <button class="timeframe-btn" data-tf="1">1m</button>
+          <button class="timeframe-btn active" data-tf="5">5m</button>
+          <button class="timeframe-btn" data-tf="15">15m</button>
+          <button class="timeframe-btn" data-tf="60">1h</button>
+          <button class="timeframe-btn" data-tf="240">4h</button>
+          <button class="timeframe-btn" data-tf="1D">1D</button>
+        </div>
+        
         <div class="trade-buttons">
           <button class="btn btn-buy" id="buyBtn">
             <i class="fas fa-arrow-trend-up"></i>
@@ -1371,7 +1414,17 @@ let priceHistory = {
   'US30': [],
   'US100': []
 };
+
+// Stockage des chandeliers OHLC pour chaque timeframe
+let candleData = {
+  'US500': { '1': [], '5': [], '15': [], '60': [], '240': [], '1D': [] },
+  'US30': { '1': [], '5': [], '15': [], '60': [], '240': [], '1D': [] },
+  'US100': { '1': [], '5': [], '15': [], '60': [], '240': [], '1D': [] }
+};
+
+let currentTimeframe = '5'; // Timeframe par défaut: 5 minutes
 const MAX_HISTORY_POINTS = 500; // Garder 500 points max par symbole
+const MAX_CANDLES = 500; // Garder 500 chandeliers max par timeframe
 
 // ============================================================================
 // RESIZE FUNCTIONALITY
@@ -1545,6 +1598,187 @@ function marginRequirement(symbol, lots, price) {
 }
 
 // ============================================================================
+// YAHOO HISTORICAL DATA LOADING
+// ============================================================================
+async function loadYahooHistory(symbol) {
+  const yahooSymbolMap = {
+    'US500': 'ES=F',
+    'US30': 'YM=F',
+    'US100': 'NQ=F'
+  };
+  
+  const yahooSymbol = yahooSymbolMap[symbol];
+  if (!yahooSymbol) return;
+  
+  try {
+    debugLog(`Loading historical data for ${symbol}...`);
+    
+    // Charger les 7 derniers jours avec interval de 1 minute
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${yahooSymbol}?interval=1m&range=7d`;
+    
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      }
+    });
+    
+    if (!response.ok) {
+      console.error(`Failed to load history for ${symbol}: ${response.status}`);
+      return;
+    }
+    
+    const data = await response.json();
+    
+    if (!data.chart || !data.chart.result || !data.chart.result[0]) {
+      console.error(`No historical data for ${symbol}`);
+      return;
+    }
+    
+    const result = data.chart.result[0];
+    const timestamps = result.timestamp;
+    const quotes = result.indicators.quote[0];
+    
+    if (!timestamps || !quotes) {
+      console.error(`Invalid data structure for ${symbol}`);
+      return;
+    }
+    
+    // Construire les chandeliers pour tous les timeframes
+    let pointsLoaded = 0;
+    
+    for (let i = 0; i < timestamps.length; i++) {
+      const timestamp = timestamps[i];
+      const open = quotes.open[i];
+      const high = quotes.high[i];
+      const low = quotes.low[i];
+      const close = quotes.close[i];
+      
+      // Ignorer les données invalides
+      if (!open || !high || !low || !close) continue;
+      
+      // Construire les chandeliers pour tous les timeframes
+      Object.keys(candleData[symbol]).forEach(tf => {
+        const tfSeconds = getTimeframeInSeconds(tf);
+        const candleTime = getCandleTime(timestamp, tfSeconds);
+        
+        const candles = candleData[symbol][tf];
+        const lastCandle = candles[candles.length - 1];
+        
+        if (!lastCandle || lastCandle.time !== candleTime) {
+          // Nouvelle chandelle
+          candles.push({
+            time: candleTime,
+            open: open,
+            high: high,
+            low: low,
+            close: close
+          });
+        } else {
+          // Fusionner avec la chandelle existante
+          lastCandle.high = Math.max(lastCandle.high, high);
+          lastCandle.low = Math.min(lastCandle.low, low);
+          lastCandle.close = close;
+        }
+      });
+      
+      pointsLoaded++;
+    }
+    
+    // Limiter la taille de chaque timeframe
+    Object.keys(candleData[symbol]).forEach(tf => {
+      const candles = candleData[symbol][tf];
+      while (candles.length > MAX_CANDLES) {
+        candles.shift();
+      }
+    });
+    
+    console.log(`✅ Loaded ${pointsLoaded} historical points for ${symbol}`);
+    debugLog(`✅ Loaded ${pointsLoaded} historical points for ${symbol}`);
+    
+    // Si c'est le symbole actuel, rafraîchir le graphique
+    if (currentSymbol.api === symbol && customChartSeries) {
+      const candles = candleData[symbol][currentTimeframe];
+      if (candles.length > 0) {
+        customChartSeries.setData(candles);
+        customChart.timeScale().fitContent();
+        console.log(`📊 Chart updated with ${candles.length} candles`);
+      }
+    }
+    
+    return true;
+  } catch (error) {
+    console.error(`Error loading history for ${symbol}:`, error);
+    debugLog(`Error loading history for ${symbol}: ${error.message}`);
+    return false;
+  }
+}
+
+async function loadAllHistoricalData() {
+  debugLog('🔄 Loading historical data for all indices...');
+  showToast('🔄 Chargement des données historiques...', 'info', 2000);
+  
+  const symbols = ['US500', 'US30', 'US100'];
+  const promises = symbols.map(sym => loadYahooHistory(sym));
+  
+  await Promise.all(promises);
+  
+  showToast('✅ Données historiques chargées', 'success', 2000);
+  debugLog('✅ All historical data loaded');
+}
+
+// ============================================================================
+// CANDLE BUILDING FUNCTIONS
+// ============================================================================
+function getTimeframeInSeconds(tf) {
+  const map = { 
+    '1': 60,        // 1 minute
+    '5': 300,       // 5 minutes
+    '15': 900,      // 15 minutes
+    '60': 3600,     // 1 heure
+    '240': 14400,   // 4 heures
+    '1D': 86400     // 1 jour
+  };
+  return map[tf] || 300;
+}
+
+function getCandleTime(timestamp, timeframeSeconds) {
+  return Math.floor(timestamp / timeframeSeconds) * timeframeSeconds;
+}
+
+function updateCandles(symbol, price, timestamp) {
+  if (!candleData[symbol]) return;
+  
+  Object.keys(candleData[symbol]).forEach(tf => {
+    const tfSeconds = getTimeframeInSeconds(tf);
+    const candleTime = getCandleTime(timestamp, tfSeconds);
+    
+    const candles = candleData[symbol][tf];
+    const lastCandle = candles[candles.length - 1];
+    
+    if (!lastCandle || lastCandle.time !== candleTime) {
+      // Nouvelle chandelle
+      candles.push({
+        time: candleTime,
+        open: price,
+        high: price,
+        low: price,
+        close: price
+      });
+      
+      // Limiter la taille
+      if (candles.length > MAX_CANDLES) {
+        candles.shift();
+      }
+    } else {
+      // Mettre à jour la chandelle actuelle
+      lastCandle.high = Math.max(lastCandle.high, price);
+      lastCandle.low = Math.min(lastCandle.low, price);
+      lastCandle.close = price;
+    }
+  });
+}
+
+// ============================================================================
 // WEBSOCKET
 // ============================================================================
 function setWsStatus(status) {
@@ -1691,6 +1925,9 @@ function handleWsMessage(msg) {
         const timestamp = Math.floor(Date.now() / 1000);
         priceHistory[sym].push({ time: timestamp, value: newPrice });
         
+        // Construire les chandeliers
+        updateCandles(sym, newPrice, timestamp);
+        
         // Limiter la taille de l'historique
         if (priceHistory[sym].length > MAX_HISTORY_POINTS) {
           priceHistory[sym].shift();
@@ -1724,6 +1961,9 @@ function handleWsMessage(msg) {
       if (priceHistory.hasOwnProperty(sym)) {
         const timestamp = Math.floor(Date.now() / 1000);
         priceHistory[sym].push({ time: timestamp, value: newPrice });
+        
+        // Construire les chandeliers
+        updateCandles(sym, newPrice, timestamp);
         
         // Limiter la taille de l'historique
         if (priceHistory[sym].length > MAX_HISTORY_POINTS) {
@@ -2270,38 +2510,50 @@ function initCustomChart() {
     
     console.log('✅ Chart created:', customChart);
     
-    // Ajouter une série de type Area
-    customChartSeries = customChart.addAreaSeries({
-      topColor: 'rgba(0, 217, 184, 0.4)',
-      bottomColor: 'rgba(0, 217, 184, 0.0)',
-      lineColor: '#00d9b8',
-      lineWidth: 2,
+    // Ajouter une série de chandeliers japonais
+    customChartSeries = customChart.addCandlestickSeries({
+      upColor: '#10b981',
+      downColor: '#ef4444',
+      borderUpColor: '#10b981',
+      borderDownColor: '#ef4444',
+      wickUpColor: '#10b981',
+      wickDownColor: '#ef4444',
     });
     
-    console.log('✅ Series added:', customChartSeries);
+    console.log('✅ Candlestick series added:', customChartSeries);
     
     // Si pas d'historique mais qu'on a un prix actuel, initialiser avec
-    if (priceHistory[currentSymbol.api].length === 0 && priceCache[currentSymbol.api]) {
+    if (candleData[currentSymbol.api][currentTimeframe].length === 0 && priceCache[currentSymbol.api]) {
       const timestamp = Math.floor(Date.now() / 1000);
       const currentPrice = priceCache[currentSymbol.api];
-      priceHistory[currentSymbol.api].push({ time: timestamp, value: currentPrice });
+      const tfSeconds = getTimeframeInSeconds(currentTimeframe);
+      const candleTime = getCandleTime(timestamp, tfSeconds);
+      
+      candleData[currentSymbol.api][currentTimeframe].push({
+        time: candleTime,
+        open: currentPrice,
+        high: currentPrice,
+        low: currentPrice,
+        close: currentPrice
+      });
       container.classList.remove('loading');
       console.log(`✅ Initialized with current price: ${currentPrice}`);
     }
     
-    // Charger l'historique du symbole actuel
-    if (priceHistory[currentSymbol.api] && priceHistory[currentSymbol.api].length > 0) {
-      console.log(`📊 Loading ${priceHistory[currentSymbol.api].length} data points`);
-      customChartSeries.setData(priceHistory[currentSymbol.api]);
+    // Charger l'historique de chandeliers du symbole actuel
+    const candles = candleData[currentSymbol.api][currentTimeframe];
+    if (candles && candles.length > 0) {
+      console.log(`📊 Loading ${candles.length} candles for ${currentTimeframe}m timeframe`);
+      customChartSeries.setData(candles);
       container.classList.remove('loading');
-      debugLog(`Loaded ${priceHistory[currentSymbol.api].length} price points for chart`);
+      debugLog(`Loaded ${candles.length} candles for chart`);
       
       // Fit le contenu
       customChart.timeScale().fitContent();
       console.log('✅ Chart fitted');
     } else {
-      console.log('⏳ No data yet, waiting...');
-      debugLog('No price history yet, waiting for data...');
+      console.log('⏳ No candle data yet, waiting...');
+      debugLog('No candle data yet, waiting for data...');
       showToast('⏳ Attendez quelques secondes pour les données...', 'info', 3000);
     }
     
@@ -2331,23 +2583,25 @@ function updateCustomChart(symbol) {
   if (!customChartSeries || currentSymbol.api !== symbol) return;
   
   try {
-    if (priceHistory[symbol] && priceHistory[symbol].length > 0) {
+    const candles = candleData[symbol][currentTimeframe];
+    if (candles && candles.length > 0) {
       // Retirer le message de chargement
       const container = document.getElementById('custom_chart_container');
       container.classList.remove('loading');
       
-      // Mettre à jour seulement le dernier point pour de meilleures performances
-      const lastPoint = priceHistory[symbol][priceHistory[symbol].length - 1];
-      customChartSeries.update(lastPoint);
+      // Mettre à jour seulement le dernier chandelier pour de meilleures performances
+      const lastCandle = candles[candles.length - 1];
+      customChartSeries.update(lastCandle);
       
-      debugLog(`Updated chart with price: ${lastPoint.value} at ${lastPoint.time}`);
+      debugLog(`Updated chart with candle at ${lastCandle.time}: O:${lastCandle.open} H:${lastCandle.high} L:${lastCandle.low} C:${lastCandle.close}`);
     }
   } catch (e) {
     console.error('Custom chart update error:', e);
     // En cas d'erreur, recharger toutes les données
     try {
-      if (priceHistory[symbol] && priceHistory[symbol].length > 0) {
-        customChartSeries.setData(priceHistory[symbol]);
+      const candles = candleData[symbol][currentTimeframe];
+      if (candles && candles.length > 0) {
+        customChartSeries.setData(candles);
       }
     } catch (e2) {
       console.error('Custom chart reload error:', e2);
@@ -2407,11 +2661,13 @@ function selectSymbol(sym) {
   // Basculer entre TradingView et graphique custom
   const tvContainer = document.getElementById('tv_chart_container');
   const customContainer = document.getElementById('custom_chart_container');
+  const timeframeSelector = document.getElementById('timeframeSelector');
   
   if (sym.type === 'index') {
     // Afficher le graphique custom pour les indices
     tvContainer.classList.add('hidden');
     customContainer.classList.add('active');
+    timeframeSelector.style.display = 'flex'; // Afficher le sélecteur de timeframe
     
     // Attendre que le conteneur soit visible avant d'initialiser
     setTimeout(() => {
@@ -2423,11 +2679,30 @@ function selectSymbol(sym) {
     // Afficher TradingView pour FOREX et métaux
     tvContainer.classList.remove('hidden');
     customContainer.classList.remove('active');
+    timeframeSelector.style.display = 'none'; // Masquer le sélecteur de timeframe
     initTradingView();
     debugLog(`Switched to TradingView for ${sym.label}`);
   }
   
   debugLog(`Selected symbol: ${sym.label}`);
+}
+
+function changeTimeframe(newTimeframe) {
+  if (currentTimeframe === newTimeframe) return;
+  
+  currentTimeframe = newTimeframe;
+  
+  // Mettre à jour les boutons actifs
+  document.querySelectorAll('.timeframe-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.tf === newTimeframe);
+  });
+  
+  // Recharger le graphique avec le nouveau timeframe
+  if (currentSymbol.type === 'index') {
+    initCustomChart();
+  }
+  
+  debugLog(`Changed timeframe to ${newTimeframe}`);
 }
 
 // ============================================================================
@@ -2468,7 +2743,26 @@ document.getElementById('addOrderBtn').addEventListener('click', () => {
 });
 
 document.getElementById('refreshPricesBtn').addEventListener('click', () => {
-  if (ws && ws.readyState === WebSocket.OPEN) {
+  if (currentSymbol.type === 'index') {
+    // Pour les indices, recharger l'historique
+    showToast('🔄 Rechargement de l\'historique...', 'info');
+    loadYahooHistory(currentSymbol.api).then(success => {
+      if (success) {
+        showToast('✅ Historique rechargé', 'success');
+        // Rafraîchir le graphique
+        if (customChartSeries) {
+          const candles = candleData[currentSymbol.api][currentTimeframe];
+          if (candles.length > 0) {
+            customChartSeries.setData(candles);
+            customChart.timeScale().fitContent();
+          }
+        }
+      } else {
+        showToast('❌ Erreur de chargement', 'error');
+      }
+    });
+  } else if (ws && ws.readyState === WebSocket.OPEN) {
+    // Pour le FOREX, rafraîchir les souscriptions
     WATCHLIST.forEach(w => {
       try {
         ws.send(JSON.stringify({type: 'subscribe', symbol: w.api}));
@@ -2527,6 +2821,13 @@ document.getElementById('modalSave').addEventListener('click', () => {
   showToast('✅ TP/SL enregistrés', 'success');
 });
 
+// Timeframe selector buttons
+document.querySelectorAll('.timeframe-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    changeTimeframe(btn.dataset.tf);
+  });
+});
+
 // Global functions
 window.closePosition = closePosition;
 window.removeOrder = removeOrder;
@@ -2543,6 +2844,11 @@ selectSymbol(WATCHLIST[0]);
 initTradingView();
 startWebSocket();
 
+// Charger les données historiques pour les indices
+setTimeout(() => {
+  loadAllHistoricalData();
+}, 2000); // Attendre 2 secondes après la connexion WebSocket
+
 debugLog('=== AMABROCKER INITIALIZED ===');
 debugLog(`Watchlist: ${WATCHLIST.length} symbols (6 FOREX + 3 Indices CFD US)`);
 debugLog(`Starting balance: ${simBalance} USD`);
@@ -2551,5 +2857,4 @@ debugLog('Modular & resizable interface ready');
 </script>
 </body>
 </html>
-
 
