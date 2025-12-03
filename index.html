@@ -1580,18 +1580,19 @@ async function calculatePriceOffsets() {
   debugLog('📊 Calculating price offsets between Yahoo and TradingView...');
   
   const symbolMap = {
-    'US500': { yahoo: 'ES=F', tv: 'CAPITALCOM:US500' },
-    'US30': { yahoo: 'YM=F', tv: 'CAPITALCOM:US30' },
-    'US100': { yahoo: 'NQ=F', tv: 'CAPITALCOM:US100' }
+    'US500': { yahoo: 'ES=F', tv: 'CAPITALCOM:US500', spotIndex: '^GSPC' },
+    'US30': { yahoo: 'YM=F', tv: 'CAPITALCOM:US30', spotIndex: '^DJI' },
+    'US100': { yahoo: 'NQ=F', tv: 'CAPITALCOM:US100', spotIndex: '^IXIC' }
   };
   
   for (const [symbol, urls] of Object.entries(symbolMap)) {
     try {
-      // Récupérer le prix TradingView via l'API TradingView (prix du future)
-      const tvResponse = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${urls.yahoo}?interval=1m&range=1d`);
+      // Stratégie : Utiliser l'indice spot comme référence TradingView
+      // Car CAPITALCOM:US500 suit plutôt l'indice spot que le future
+      const tvResponse = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${urls.spotIndex}?interval=1m&range=1d`);
       
       if (!tvResponse.ok) {
-        console.warn(`Failed to fetch TradingView price for ${symbol}`);
+        console.warn(`Failed to fetch spot index price for ${symbol}`);
         continue;
       }
       
@@ -1599,15 +1600,16 @@ async function calculatePriceOffsets() {
       
       if (tvData.chart && tvData.chart.result && tvData.chart.result[0]) {
         const result = tvData.chart.result[0];
-        const tvPrice = result.meta.regularMarketPrice;
+        const spotPrice = result.meta.regularMarketPrice;
         const yahooPrice = priceCache[symbol];
         
-        if (tvPrice && yahooPrice) {
-          const offset = tvPrice - yahooPrice;
+        if (spotPrice && yahooPrice) {
+          // Le prix spot est plus proche du CFD TradingView que le future
+          const offset = spotPrice - yahooPrice;
           priceOffsets[symbol] = offset;
           
-          console.log(`✅ ${symbol}: Yahoo=${yahooPrice.toFixed(2)}, TradingView=${tvPrice.toFixed(2)}, Offset=${offset.toFixed(2)}`);
-          debugLog(`✅ ${symbol}: Offset=${offset.toFixed(2)} (TV: ${tvPrice.toFixed(2)} - Yahoo: ${yahooPrice.toFixed(2)})`);
+          console.log(`✅ ${symbol}: Yahoo Future=${yahooPrice.toFixed(2)}, Spot Index=${spotPrice.toFixed(2)}, Offset=${offset.toFixed(2)}`);
+          debugLog(`✅ ${symbol}: Offset=${offset.toFixed(2)} (Spot: ${spotPrice.toFixed(2)} - Yahoo Future: ${yahooPrice.toFixed(2)})`);
         }
       }
     } catch (error) {
@@ -1625,8 +1627,9 @@ async function calculatePriceOffsets() {
     }
   });
   
-  debugLog('✅ Price offsets calculated and watchlist updated');
-  showToast('✅ Calibration terminée - Prix ajustés', 'success', 2000);
+  const now = new Date().toLocaleTimeString('fr-FR');
+  debugLog(`✅ Price offsets calculated and watchlist updated at ${now}`);
+  showToast('✅ Calibration terminée', 'success', 2000);
 }
 
 // Fonction pour obtenir le prix ajusté (avec offset TradingView)
@@ -2912,6 +2915,12 @@ setTimeout(() => {
   }
 }, 3000);
 
+// Recalibrer automatiquement toutes les heures
+setInterval(() => {
+  debugLog('🔄 Automatic recalibration (hourly)...');
+  calculatePriceOffsets();
+}, 3600000); // 3600000 ms = 1 heure
+
 debugLog('=== AMABROCKER INITIALIZED ===');
 debugLog(`Watchlist: ${WATCHLIST.length} symbols (6 FOREX + 3 Indices CFD US)`);
 debugLog(`Starting balance: ${simBalance} USD`);
@@ -2920,4 +2929,3 @@ debugLog('Modular & resizable interface ready');
 </script>
 </body>
 </html>
-
