@@ -1617,8 +1617,16 @@ async function calculatePriceOffsets() {
   }
   
   offsetsCalculated = true;
-  debugLog('✅ Price offsets calculated');
-  showToast('✅ Calibration des prix terminée', 'success', 2000);
+  
+  // Forcer la mise à jour de l'affichage de la watchlist avec les prix ajustés
+  Object.keys(priceOffsets).forEach(symbol => {
+    if (priceCache[symbol]) {
+      updatePriceUI(symbol, null, priceCache[symbol]);
+    }
+  });
+  
+  debugLog('✅ Price offsets calculated and watchlist updated');
+  showToast('✅ Calibration terminée - Prix ajustés', 'success', 2000);
 }
 
 // Fonction pour obtenir le prix ajusté (avec offset TradingView)
@@ -2028,10 +2036,17 @@ function updatePriceUI(symbol, oldPrice, newPrice) {
   
   if (el) {
     const symbolObj = WATCHLIST.find(w => w.api === symbol);
+    
+    // Pour les indices, afficher le prix ajusté (avec offset TradingView)
+    let displayPrice = newPrice;
+    if (symbolObj && symbolObj.type === 'index' && offsetsCalculated) {
+      displayPrice = getAdjustedPrice(symbol, newPrice);
+    }
+    
     if (symbolObj && symbolObj.type === 'index') {
-      el.innerText = Number(newPrice).toFixed(2);
+      el.innerText = displayPrice.toFixed(2);
     } else {
-      el.innerText = formatPrice(newPrice);
+      el.innerText = formatPrice(displayPrice);
     }
     
     const parentItem = el.closest('.wl-item');
@@ -2042,9 +2057,14 @@ function updatePriceUI(symbol, oldPrice, newPrice) {
   }
   
   if (symbol === currentSymbol.api) {
-    const displayPrice = currentSymbol.type === 'index' ? 
-      Number(newPrice).toFixed(2) : formatPrice(newPrice);
-    document.getElementById('currentPriceValue').innerText = displayPrice;
+    let displayPrice = newPrice;
+    if (currentSymbol.type === 'index' && offsetsCalculated) {
+      displayPrice = getAdjustedPrice(symbol, newPrice);
+    }
+    
+    const formattedPrice = currentSymbol.type === 'index' ? 
+      displayPrice.toFixed(2) : formatPrice(displayPrice);
+    document.getElementById('currentPriceValue').innerText = formattedPrice;
   }
 }
 
@@ -2702,9 +2722,16 @@ function selectSymbol(sym) {
   
   const price = priceCache[sym.api];
   if (price !== undefined) {
-    const displayPrice = sym.type === 'index' ? 
-      Number(price).toFixed(2) : formatPrice(price);
-    document.getElementById('currentPriceValue').innerText = displayPrice;
+    let displayPrice = price;
+    
+    // Appliquer l'offset pour les indices si calculé
+    if (sym.type === 'index' && offsetsCalculated) {
+      displayPrice = getAdjustedPrice(sym.api, price);
+    }
+    
+    const formattedPrice = sym.type === 'index' ? 
+      displayPrice.toFixed(2) : formatPrice(displayPrice);
+    document.getElementById('currentPriceValue').innerText = formattedPrice;
   } else {
     document.getElementById('currentPriceValue').innerText = '—';
   }
