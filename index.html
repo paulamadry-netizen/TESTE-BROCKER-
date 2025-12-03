@@ -548,10 +548,27 @@
     width:100%;
     height:100%;
     display:none;
+    position:relative;
   }
   
   #custom_chart_container.active{
     display:block;
+  }
+  
+  #custom_chart_container.loading::before{
+    content:'📊 Chargement du graphique...';
+    position:absolute;
+    top:50%;
+    left:50%;
+    transform:translate(-50%, -50%);
+    color:var(--text-muted);
+    font-size:16px;
+    font-weight:600;
+    z-index:100;
+    background:var(--surface);
+    padding:20px 40px;
+    border-radius:var(--radius-md);
+    border:1px solid var(--border);
   }
   
   #tv_chart_container.hidden{
@@ -2198,6 +2215,13 @@ function initCustomChart() {
   try {
     const container = document.getElementById('custom_chart_container');
     
+    // Ajouter la classe loading si pas de données
+    if (!priceHistory[currentSymbol.api] || priceHistory[currentSymbol.api].length === 0) {
+      container.classList.add('loading');
+    } else {
+      container.classList.remove('loading');
+    }
+    
     customChart = LightweightCharts.createChart(container, {
       layout: {
         background: { color: '#0f1419' },
@@ -2227,9 +2251,22 @@ function initCustomChart() {
       lineWidth: 2,
     });
     
+    // Si pas d'historique mais qu'on a un prix actuel, initialiser avec
+    if (priceHistory[currentSymbol.api].length === 0 && priceCache[currentSymbol.api]) {
+      const timestamp = Math.floor(Date.now() / 1000);
+      const currentPrice = priceCache[currentSymbol.api];
+      priceHistory[currentSymbol.api].push({ time: timestamp, value: currentPrice });
+      container.classList.remove('loading');
+    }
+    
     // Charger l'historique du symbole actuel
     if (priceHistory[currentSymbol.api] && priceHistory[currentSymbol.api].length > 0) {
       customChartSeries.setData(priceHistory[currentSymbol.api]);
+      container.classList.remove('loading');
+      debugLog(`Loaded ${priceHistory[currentSymbol.api].length} price points for chart`);
+    } else {
+      debugLog('No price history yet, waiting for data...');
+      showToast('⏳ Attendez quelques secondes pour les données...', 'info', 3000);
     }
     
     // Auto-resize
@@ -2252,11 +2289,26 @@ function updateCustomChart(symbol) {
   
   try {
     if (priceHistory[symbol] && priceHistory[symbol].length > 0) {
-      // Mettre à jour avec toutes les données
-      customChartSeries.setData(priceHistory[symbol]);
+      // Retirer le message de chargement
+      const container = document.getElementById('custom_chart_container');
+      container.classList.remove('loading');
+      
+      // Mettre à jour seulement le dernier point pour de meilleures performances
+      const lastPoint = priceHistory[symbol][priceHistory[symbol].length - 1];
+      customChartSeries.update(lastPoint);
+      
+      debugLog(`Updated chart with price: ${lastPoint.value} at ${lastPoint.time}`);
     }
   } catch (e) {
     console.error('Custom chart update error:', e);
+    // En cas d'erreur, recharger toutes les données
+    try {
+      if (priceHistory[symbol] && priceHistory[symbol].length > 0) {
+        customChartSeries.setData(priceHistory[symbol]);
+      }
+    } catch (e2) {
+      console.error('Custom chart reload error:', e2);
+    }
   }
 }
 
@@ -2451,7 +2503,6 @@ debugLog('Modular & resizable interface ready');
 </script>
 </body>
 </html>
-
 
 
 
