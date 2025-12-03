@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>AmABrocker — Pro Trading Platform</title>
 <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
+<script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
@@ -541,6 +542,20 @@
   #tv_chart_container{
     width:100%;
     height:100%;
+  }
+  
+  #custom_chart_container{
+    width:100%;
+    height:100%;
+    display:none;
+  }
+  
+  #custom_chart_container.active{
+    display:block;
+  }
+  
+  #tv_chart_container.hidden{
+    display:none;
   }
   
   /* ORDERS PANEL */
@@ -1123,6 +1138,7 @@
         </div>
       </div>
       <div id="tv_chart_container"></div>
+      <div id="custom_chart_container"></div>
     </div>
 
     <!-- ORDERS PANEL -->
@@ -1326,9 +1342,19 @@ let orders = [];
 let simBalance = 50000.00;
 let availableBalance = 50000.00;
 let tvWidget = null;
+let customChart = null;
+let customChartSeries = null;
 let activeModalId = null;
 let debugMode = false;
 let messageCount = 0;
+
+// Historique des prix pour les indices (pour graphique custom)
+let priceHistory = {
+  'US500': [],
+  'US30': [],
+  'US100': []
+};
+const MAX_HISTORY_POINTS = 500; // Garder 500 points max par symbole
 
 // ============================================================================
 // RESIZE FUNCTIONALITY
@@ -1643,6 +1669,22 @@ function handleWsMessage(msg) {
       priceCache[sym] = newPrice;
       lastPriceUpdate[sym] = Date.now();
       
+      // Stocker l'historique pour les indices
+      if (priceHistory.hasOwnProperty(sym)) {
+        const timestamp = Math.floor(Date.now() / 1000);
+        priceHistory[sym].push({ time: timestamp, value: newPrice });
+        
+        // Limiter la taille de l'historique
+        if (priceHistory[sym].length > MAX_HISTORY_POINTS) {
+          priceHistory[sym].shift();
+        }
+        
+        // Mettre à jour le graphique custom si c'est le symbole actuel
+        if (currentSymbol.api === sym && customChartSeries) {
+          updateCustomChart(sym);
+        }
+      }
+      
       debugLog(`Price update: ${sym} = ${price} (was ${oldPrice})`);
       updatePriceUI(sym, oldPrice, newPrice);
       onPriceUpdate(sym);
@@ -1660,6 +1702,22 @@ function handleWsMessage(msg) {
       
       priceCache[sym] = newPrice;
       lastPriceUpdate[sym] = Date.now();
+      
+      // Stocker l'historique pour les indices
+      if (priceHistory.hasOwnProperty(sym)) {
+        const timestamp = Math.floor(Date.now() / 1000);
+        priceHistory[sym].push({ time: timestamp, value: newPrice });
+        
+        // Limiter la taille de l'historique
+        if (priceHistory[sym].length > MAX_HISTORY_POINTS) {
+          priceHistory[sym].shift();
+        }
+        
+        // Mettre à jour le graphique custom si c'est le symbole actuel
+        if (currentSymbol.api === sym && customChartSeries) {
+          updateCustomChart(sym);
+        }
+      }
       
       debugLog(`Price update: ${sym} = ${price}`);
       updatePriceUI(sym, oldPrice, newPrice);
@@ -2118,8 +2176,90 @@ WATCHLIST.forEach(w => {
 });
 
 // ============================================================================
-// TRADINGVIEW
+// TRADINGVIEW & CUSTOM CHART
 // ============================================================================
+function initCustomChart() {
+  try {
+    // Supprimer l'ancien graphique s'il existe
+    if (customChart) {
+      customChart.remove();
+      customChart = null;
+      customChartSeries = null;
+    }
+  } catch (e) {
+    console.warn('Custom chart cleanup:', e);
+  }
+  
+  if (typeof LightweightCharts === 'undefined') {
+    console.error('LightweightCharts library not loaded');
+    return;
+  }
+  
+  try {
+    const container = document.getElementById('custom_chart_container');
+    
+    customChart = LightweightCharts.createChart(container, {
+      layout: {
+        background: { color: '#0f1419' },
+        textColor: '#9ba3b4',
+      },
+      grid: {
+        vertLines: { color: '#252b3d' },
+        horzLines: { color: '#252b3d' },
+      },
+      crosshair: {
+        mode: LightweightCharts.CrosshairMode.Normal,
+      },
+      rightPriceScale: {
+        borderColor: '#252b3d',
+      },
+      timeScale: {
+        borderColor: '#252b3d',
+        timeVisible: true,
+        secondsVisible: false,
+      },
+    });
+    
+    customChartSeries = customChart.addAreaSeries({
+      topColor: 'rgba(0, 217, 184, 0.4)',
+      bottomColor: 'rgba(0, 217, 184, 0.0)',
+      lineColor: '#00d9b8',
+      lineWidth: 2,
+    });
+    
+    // Charger l'historique du symbole actuel
+    if (priceHistory[currentSymbol.api] && priceHistory[currentSymbol.api].length > 0) {
+      customChartSeries.setData(priceHistory[currentSymbol.api]);
+    }
+    
+    // Auto-resize
+    const resizeObserver = new ResizeObserver(entries => {
+      if (customChart) {
+        const { width, height } = entries[0].contentRect;
+        customChart.applyOptions({ width, height });
+      }
+    });
+    resizeObserver.observe(container);
+    
+    debugLog('Custom chart initialized for ' + currentSymbol.api);
+  } catch (e) {
+    console.error('Custom chart init error:', e);
+  }
+}
+
+function updateCustomChart(symbol) {
+  if (!customChartSeries || currentSymbol.api !== symbol) return;
+  
+  try {
+    if (priceHistory[symbol] && priceHistory[symbol].length > 0) {
+      // Mettre à jour avec toutes les données
+      customChartSeries.setData(priceHistory[symbol]);
+    }
+  } catch (e) {
+    console.error('Custom chart update error:', e);
+  }
+}
+
 function initTradingView() {
   try {
     if (tvWidget && typeof tvWidget.remove === 'function') {
@@ -2168,7 +2308,25 @@ function selectSymbol(sym) {
   }
   
   refreshLotInfo();
-  initTradingView();
+  
+  // Basculer entre TradingView et graphique custom
+  const tvContainer = document.getElementById('tv_chart_container');
+  const customContainer = document.getElementById('custom_chart_container');
+  
+  if (sym.type === 'index') {
+    // Afficher le graphique custom pour les indices
+    tvContainer.classList.add('hidden');
+    customContainer.classList.add('active');
+    initCustomChart();
+    debugLog(`Switched to custom chart for ${sym.label}`);
+  } else {
+    // Afficher TradingView pour FOREX et métaux
+    tvContainer.classList.remove('hidden');
+    customContainer.classList.remove('active');
+    initTradingView();
+    debugLog(`Switched to TradingView for ${sym.label}`);
+  }
+  
   debugLog(`Selected symbol: ${sym.label}`);
 }
 
@@ -2288,6 +2446,7 @@ startWebSocket();
 debugLog('=== AMABROCKER INITIALIZED ===');
 debugLog(`Watchlist: ${WATCHLIST.length} symbols (6 FOREX + 3 Indices CFD US)`);
 debugLog(`Starting balance: ${simBalance} USD`);
+debugLog('Dual chart system: TradingView (FOREX) + Custom Chart (Indices)');
 debugLog('Modular & resizable interface ready');
 </script>
 </body>
