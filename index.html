@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>AmABrocker — Pro Trading Platform</title>
 <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
-<script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
+<script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
@@ -2207,9 +2207,11 @@ function initCustomChart() {
     console.warn('Custom chart cleanup:', e);
   }
   
-  if (typeof LightweightCharts === 'undefined') {
+  // Vérifier que la bibliothèque est chargée
+  if (typeof window.LightweightCharts === 'undefined') {
     console.error('LightweightCharts library not loaded');
     showToast('❌ Erreur: Bibliothèque graphique non chargée', 'error');
+    debugLog('LightweightCharts not found in window object');
     return;
   }
   
@@ -2241,7 +2243,8 @@ function initCustomChart() {
       container.classList.remove('loading');
     }
     
-    customChart = LightweightCharts.createChart(container, {
+    // Créer le graphique avec l'API correcte
+    customChart = window.LightweightCharts.createChart(container, {
       width: containerWidth,
       height: containerHeight,
       layout: {
@@ -2253,7 +2256,7 @@ function initCustomChart() {
         horzLines: { color: '#252b3d' },
       },
       crosshair: {
-        mode: LightweightCharts.CrosshairMode.Normal,
+        mode: window.LightweightCharts.CrosshairMode.Normal,
       },
       rightPriceScale: {
         borderColor: '#252b3d',
@@ -2265,8 +2268,9 @@ function initCustomChart() {
       },
     });
     
-    console.log('✅ Chart created');
+    console.log('✅ Chart created:', customChart);
     
+    // Ajouter une série de type Area
     customChartSeries = customChart.addAreaSeries({
       topColor: 'rgba(0, 217, 184, 0.4)',
       bottomColor: 'rgba(0, 217, 184, 0.0)',
@@ -2274,7 +2278,7 @@ function initCustomChart() {
       lineWidth: 2,
     });
     
-    console.log('✅ Series added');
+    console.log('✅ Series added:', customChartSeries);
     
     // Si pas d'historique mais qu'on a un prix actuel, initialiser avec
     if (priceHistory[currentSymbol.api].length === 0 && priceCache[currentSymbol.api]) {
@@ -2315,6 +2319,7 @@ function initCustomChart() {
     
     console.log('✅ Custom chart fully initialized for ' + currentSymbol.api);
     debugLog('Custom chart initialized for ' + currentSymbol.api);
+    showToast('✅ Graphique initialisé', 'success', 1500);
   } catch (e) {
     console.error('❌ Custom chart init error:', e);
     debugLog(`Chart init error: ${e.message}`);
