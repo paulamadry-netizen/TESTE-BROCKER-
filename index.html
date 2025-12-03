@@ -2209,11 +2209,30 @@ function initCustomChart() {
   
   if (typeof LightweightCharts === 'undefined') {
     console.error('LightweightCharts library not loaded');
+    showToast('❌ Erreur: Bibliothèque graphique non chargée', 'error');
     return;
   }
   
   try {
     const container = document.getElementById('custom_chart_container');
+    
+    if (!container) {
+      console.error('Container not found');
+      return;
+    }
+    
+    // Vérifier les dimensions du conteneur
+    const containerWidth = container.clientWidth;
+    const containerHeight = container.clientHeight;
+    
+    console.log(`📊 Container dimensions: ${containerWidth}x${containerHeight}`);
+    debugLog(`Container dimensions: ${containerWidth}x${containerHeight}`);
+    
+    if (containerWidth === 0 || containerHeight === 0) {
+      console.error('Container has no dimensions!');
+      showToast('❌ Erreur: Conteneur graphique invalide', 'error');
+      return;
+    }
     
     // Ajouter la classe loading si pas de données
     if (!priceHistory[currentSymbol.api] || priceHistory[currentSymbol.api].length === 0) {
@@ -2223,6 +2242,8 @@ function initCustomChart() {
     }
     
     customChart = LightweightCharts.createChart(container, {
+      width: containerWidth,
+      height: containerHeight,
       layout: {
         background: { color: '#0f1419' },
         textColor: '#9ba3b4',
@@ -2244,6 +2265,8 @@ function initCustomChart() {
       },
     });
     
+    console.log('✅ Chart created');
+    
     customChartSeries = customChart.addAreaSeries({
       topColor: 'rgba(0, 217, 184, 0.4)',
       bottomColor: 'rgba(0, 217, 184, 0.0)',
@@ -2251,36 +2274,51 @@ function initCustomChart() {
       lineWidth: 2,
     });
     
+    console.log('✅ Series added');
+    
     // Si pas d'historique mais qu'on a un prix actuel, initialiser avec
     if (priceHistory[currentSymbol.api].length === 0 && priceCache[currentSymbol.api]) {
       const timestamp = Math.floor(Date.now() / 1000);
       const currentPrice = priceCache[currentSymbol.api];
       priceHistory[currentSymbol.api].push({ time: timestamp, value: currentPrice });
       container.classList.remove('loading');
+      console.log(`✅ Initialized with current price: ${currentPrice}`);
     }
     
     // Charger l'historique du symbole actuel
     if (priceHistory[currentSymbol.api] && priceHistory[currentSymbol.api].length > 0) {
+      console.log(`📊 Loading ${priceHistory[currentSymbol.api].length} data points`);
       customChartSeries.setData(priceHistory[currentSymbol.api]);
       container.classList.remove('loading');
       debugLog(`Loaded ${priceHistory[currentSymbol.api].length} price points for chart`);
+      
+      // Fit le contenu
+      customChart.timeScale().fitContent();
+      console.log('✅ Chart fitted');
     } else {
+      console.log('⏳ No data yet, waiting...');
       debugLog('No price history yet, waiting for data...');
       showToast('⏳ Attendez quelques secondes pour les données...', 'info', 3000);
     }
     
     // Auto-resize
     const resizeObserver = new ResizeObserver(entries => {
-      if (customChart) {
+      if (customChart && entries[0]) {
         const { width, height } = entries[0].contentRect;
-        customChart.applyOptions({ width, height });
+        if (width > 0 && height > 0) {
+          customChart.applyOptions({ width, height });
+          console.log(`📐 Resized to ${width}x${height}`);
+        }
       }
     });
     resizeObserver.observe(container);
     
+    console.log('✅ Custom chart fully initialized for ' + currentSymbol.api);
     debugLog('Custom chart initialized for ' + currentSymbol.api);
   } catch (e) {
-    console.error('Custom chart init error:', e);
+    console.error('❌ Custom chart init error:', e);
+    debugLog(`Chart init error: ${e.message}`);
+    showToast('❌ Erreur initialisation graphique: ' + e.message, 'error');
   }
 }
 
@@ -2369,7 +2407,12 @@ function selectSymbol(sym) {
     // Afficher le graphique custom pour les indices
     tvContainer.classList.add('hidden');
     customContainer.classList.add('active');
-    initCustomChart();
+    
+    // Attendre que le conteneur soit visible avant d'initialiser
+    setTimeout(() => {
+      initCustomChart();
+    }, 100);
+    
     debugLog(`Switched to custom chart for ${sym.label}`);
   } else {
     // Afficher TradingView pour FOREX et métaux
@@ -2503,6 +2546,5 @@ debugLog('Modular & resizable interface ready');
 </script>
 </body>
 </html>
-
 
 
