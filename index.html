@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>Mini Broker — Pro Edition</title>
 <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
   
@@ -49,16 +50,13 @@
   }
   
   .app{
-    display:grid;
-    grid-template-columns:320px 1fr 380px;
-    grid-template-rows:auto 1fr auto;
+    display:flex;
+    flex-direction:column;
     height:100vh;
-    gap:0;
   }
   
   /* HEADER */
   .header{
-    grid-column:1/-1;
     background:var(--surface);
     border-bottom:1px solid var(--border);
     padding:16px 24px;
@@ -66,6 +64,7 @@
     align-items:center;
     justify-content:space-between;
     backdrop-filter:blur(20px);
+    flex-shrink:0;
   }
   
   .header-left{
@@ -91,7 +90,7 @@
     display:flex;
     align-items:center;
     justify-content:center;
-    font-size:20px;
+    font-size:18px;
   }
   
   .header-symbol{
@@ -187,7 +186,7 @@
     align-items:center;
     justify-content:center;
     transition:var(--transition);
-    font-size:18px;
+    font-size:16px;
   }
   
   .icon-btn:hover{
@@ -197,37 +196,122 @@
     transform:translateY(-2px);
   }
   
-  /* SIDEBAR LEFT - WATCHLIST */
-  .sidebar-left{
-    grid-column:1/2;
-    grid-row:2/3;
+  /* WORKSPACE - RESIZABLE PANELS */
+  .workspace{
+    flex:1;
+    display:flex;
+    overflow:hidden;
+    position:relative;
+  }
+  
+  .resizable-panel{
+    position:relative;
     background:var(--surface);
-    border-right:1px solid var(--border);
+    border:1px solid var(--border);
     display:flex;
     flex-direction:column;
     overflow:hidden;
+    min-width:250px;
+    min-height:200px;
   }
   
-  .sidebar-header{
-    padding:20px;
+  .panel-header{
+    padding:14px 16px;
     border-bottom:1px solid var(--border);
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    cursor:move;
+    user-select:none;
+    background:var(--bg-tertiary);
   }
   
-  .sidebar-title{
-    font-size:14px;
+  .panel-header:active{
+    cursor:grabbing;
+  }
+  
+  .panel-title{
+    font-size:13px;
     font-weight:700;
     text-transform:uppercase;
-    letter-spacing:1px;
+    letter-spacing:0.5px;
     color:var(--text-secondary);
     display:flex;
     align-items:center;
     gap:8px;
   }
   
-  .watchlist{
+  .panel-controls{
+    display:flex;
+    gap:6px;
+  }
+  
+  .panel-btn{
+    width:24px;
+    height:24px;
+    border-radius:6px;
+    border:none;
+    background:transparent;
+    color:var(--text-muted);
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    transition:var(--transition);
+    font-size:12px;
+  }
+  
+  .panel-btn:hover{
+    background:var(--surface-elevated);
+    color:var(--text-primary);
+  }
+  
+  .panel-content{
     flex:1;
-    overflow-y:auto;
+    overflow:auto;
     padding:12px;
+  }
+  
+  .resize-handle{
+    position:absolute;
+    background:transparent;
+    z-index:10;
+  }
+  
+  .resize-handle-right{
+    right:0;
+    top:0;
+    bottom:0;
+    width:4px;
+    cursor:ew-resize;
+  }
+  
+  .resize-handle-bottom{
+    left:0;
+    right:0;
+    bottom:0;
+    height:4px;
+    cursor:ns-resize;
+  }
+  
+  .resize-handle-corner{
+    right:0;
+    bottom:0;
+    width:12px;
+    height:12px;
+    cursor:nwse-resize;
+  }
+  
+  .resize-handle:hover,
+  .resize-handle.resizing{
+    background:var(--accent);
+    opacity:0.5;
+  }
+  
+  /* WATCHLIST */
+  .watchlist-panel{
+    width:320px;
+    border-right:1px solid var(--border);
   }
   
   .wl-item{
@@ -296,23 +380,19 @@
   .wl-change.positive{color:var(--success)}
   .wl-change.negative{color:var(--danger)}
   
-  /* MAIN CHART */
-  .main-chart{
-    grid-column:2/3;
-    grid-row:2/3;
-    background:var(--bg-secondary);
-    display:flex;
-    flex-direction:column;
-    position:relative;
+  /* CHART PANEL */
+  .chart-panel{
+    flex:1;
+    min-width:400px;
   }
   
   .chart-toolbar{
-    padding:16px 24px;
+    padding:12px 16px;
     border-bottom:1px solid var(--border);
     display:flex;
     align-items:center;
     gap:16px;
-    background:var(--surface);
+    background:var(--bg-tertiary);
   }
   
   .lot-selector{
@@ -331,10 +411,10 @@
   
   .lot-input{
     width:100px;
-    padding:10px 14px;
+    padding:8px 12px;
     border-radius:var(--radius-md);
     border:1px solid var(--border);
-    background:var(--bg-tertiary);
+    background:var(--bg-primary);
     color:var(--text-primary);
     font-weight:600;
     font-size:14px;
@@ -360,12 +440,12 @@
   }
   
   .btn{
-    padding:12px 24px;
+    padding:10px 20px;
     border-radius:var(--radius-md);
     border:none;
     cursor:pointer;
     font-weight:700;
-    font-size:14px;
+    font-size:13px;
     text-transform:uppercase;
     letter-spacing:0.5px;
     transition:var(--transition);
@@ -414,41 +494,21 @@
   }
   
   #tv_chart_container{
-    flex:1;
-    position:relative;
+    width:100%;
+    height:100%;
   }
   
-  /* SIDEBAR RIGHT - ORDERS */
-  .sidebar-right{
-    grid-column:3/4;
-    grid-row:2/3;
-    background:var(--surface);
-    border-left:1px solid var(--border);
-    display:flex;
-    flex-direction:column;
-    overflow:hidden;
-  }
-  
+  /* ORDERS PANEL */
   .orders-panel{
-    padding:20px;
-    border-bottom:1px solid var(--border);
-  }
-  
-  .panel-title{
-    font-size:13px;
-    font-weight:700;
-    text-transform:uppercase;
-    letter-spacing:0.5px;
-    color:var(--text-secondary);
-    margin-bottom:16px;
-    display:flex;
-    align-items:center;
-    gap:8px;
+    width:380px;
+    border-left:1px solid var(--border);
   }
   
   .order-form{
     display:grid;
     gap:12px;
+    padding:16px;
+    border-bottom:1px solid var(--border);
   }
   
   .form-group{
@@ -470,7 +530,7 @@
     padding:10px 12px;
     border-radius:var(--radius-md);
     border:1px solid var(--border);
-    background:var(--bg-tertiary);
+    background:var(--bg-primary);
     color:var(--text-primary);
     font-size:13px;
     transition:var(--transition);
@@ -499,8 +559,6 @@
   }
   
   .orders-list{
-    flex:1;
-    overflow-y:auto;
     padding:12px;
   }
   
@@ -582,28 +640,24 @@
   
   /* BOTTOM PANEL */
   .bottom-panel{
-    grid-column:1/-1;
-    grid-row:3/4;
-    background:var(--surface);
+    height:280px;
     border-top:1px solid var(--border);
-    display:grid;
-    grid-template-columns:1fr 380px;
-    max-height:320px;
+    display:flex;
+    background:var(--surface);
   }
   
-  .positions-section{
-    display:flex;
-    flex-direction:column;
-    overflow:hidden;
+  .positions-panel{
+    flex:1;
     border-right:1px solid var(--border);
   }
   
   .section-header{
-    padding:16px 24px;
+    padding:12px 16px;
     border-bottom:1px solid var(--border);
     display:flex;
     justify-content:space-between;
     align-items:center;
+    background:var(--bg-tertiary);
   }
   
   .tabs{
@@ -620,10 +674,11 @@
     color:var(--text-secondary);
     transition:var(--transition);
     background:transparent;
+    border:none;
   }
   
   .tab:hover{
-    background:var(--bg-tertiary);
+    background:var(--surface);
     color:var(--text-primary);
   }
   
@@ -638,8 +693,8 @@
   }
   
   .table-container{
-    flex:1;
     overflow-y:auto;
+    height:calc(100% - 50px);
   }
   
   .data-table{
@@ -757,11 +812,15 @@
     font-size:13px;
   }
   
-  /* ACCOUNT SECTION */
-  .account-section{
+  /* ACCOUNT PANEL */
+  .account-panel{
+    width:380px;
+  }
+  
+  .account-content{
+    padding:16px;
     display:flex;
     flex-direction:column;
-    padding:20px;
     gap:16px;
   }
   
@@ -777,7 +836,7 @@
     text-transform:uppercase;
     letter-spacing:0.5px;
     color:var(--text-secondary);
-    margin-bottom:8px;
+    margin-bottom:12px;
   }
   
   .balance-item{
@@ -990,46 +1049,16 @@
   
   /* RESPONSIVE */
   @media (max-width:1400px){
-    .app{
-      grid-template-columns:280px 1fr 340px;
-    }
+    .watchlist-panel{width:280px}
+    .orders-panel{width:340px}
+    .account-panel{width:340px}
   }
   
   @media (max-width:1100px){
-    .app{
-      grid-template-columns:1fr;
-      grid-template-rows:auto auto 1fr auto;
-    }
-    
-    .sidebar-left{
-      grid-column:1/-1;
-      grid-row:2/3;
-      max-height:200px;
-      border-right:none;
-      border-bottom:1px solid var(--border);
-    }
-    
-    .watchlist{
-      display:grid;
-      grid-template-columns:repeat(auto-fill,minmax(200px,1fr));
-      gap:8px;
-    }
-    
-    .main-chart{
-      grid-row:3/4;
-    }
-    
-    .sidebar-right{
-      display:none;
-    }
-    
-    .bottom-panel{
-      grid-template-columns:1fr;
-    }
-    
-    .account-section{
-      display:none;
-    }
+    .workspace{flex-direction:column}
+    .watchlist-panel,.orders-panel{width:100%;border:none;border-bottom:1px solid var(--border)}
+    .bottom-panel{flex-direction:column;height:auto}
+    .account-panel{width:100%;border-top:1px solid var(--border)}
   }
 </style>
 </head>
@@ -1040,7 +1069,9 @@
   <header class="header">
     <div class="header-left">
       <div class="logo">
-        <div class="logo-icon">💹</div>
+        <div class="logo-icon">
+          <i class="fas fa-chart-line"></i>
+        </div>
         <span>Mini Broker Pro</span>
       </div>
       <div class="header-symbol">
@@ -1056,94 +1087,128 @@
         <div class="status-dot"></div>
         <span>Déconnecté</span>
       </div>
-      <button class="icon-btn" id="debugToggle" title="Debug">🐛</button>
-      <button class="icon-btn" id="refreshPricesBtn" title="Rafraîchir">↻</button>
+      <button class="icon-btn" id="debugToggle" title="Debug">
+        <i class="fas fa-bug"></i>
+      </button>
+      <button class="icon-btn" id="refreshPricesBtn" title="Rafraîchir">
+        <i class="fas fa-sync-alt"></i>
+      </button>
     </div>
   </header>
 
-  <!-- SIDEBAR LEFT - WATCHLIST -->
-  <aside class="sidebar-left">
-    <div class="sidebar-header">
-      <div class="sidebar-title">
-        📊 Watchlist
+  <!-- WORKSPACE -->
+  <div class="workspace">
+    <!-- WATCHLIST PANEL -->
+    <div class="resizable-panel watchlist-panel" id="watchlistPanel">
+      <div class="panel-header">
+        <div class="panel-title">
+          <i class="fas fa-list-ul"></i>
+          Watchlist
+        </div>
+        <div class="panel-controls">
+          <button class="panel-btn" title="Réduire">
+            <i class="fas fa-minus"></i>
+          </button>
+        </div>
       </div>
+      <div class="panel-content" id="wlList"></div>
+      <div class="resize-handle resize-handle-right"></div>
     </div>
-    <div class="watchlist" id="wlList"></div>
-  </aside>
 
-  <!-- MAIN CHART -->
-  <main class="main-chart">
-    <div class="chart-toolbar">
-      <div class="lot-selector">
-        <label>Lots</label>
-        <input type="number" class="lot-input" id="lotInput" min="0.01" step="0.01" value="1"/>
+    <!-- CHART PANEL -->
+    <div class="resizable-panel chart-panel" id="chartPanel">
+      <div class="panel-header">
+        <div class="panel-title">
+          <i class="fas fa-chart-area"></i>
+          Graphique
+        </div>
       </div>
-      <div class="lot-info" id="lotValueInfo">1 lot = 100 000 unités · marge 1:20</div>
-      <div class="trade-buttons">
-        <button class="btn btn-buy" id="buyBtn">
-          <span>📈</span>
-          <span>BUY</span>
-        </button>
-        <button class="btn btn-sell" id="sellBtn">
-          <span>📉</span>
-          <span>SELL</span>
-        </button>
+      <div class="chart-toolbar">
+        <div class="lot-selector">
+          <label><i class="fas fa-layer-group"></i> Lots</label>
+          <input type="number" class="lot-input" id="lotInput" min="0.01" step="0.01" value="1"/>
+        </div>
+        <div class="lot-info" id="lotValueInfo">1 lot = 100 000 unités · marge 1:20</div>
+        <div class="trade-buttons">
+          <button class="btn btn-buy" id="buyBtn">
+            <i class="fas fa-arrow-trend-up"></i>
+            <span>BUY</span>
+          </button>
+          <button class="btn btn-sell" id="sellBtn">
+            <i class="fas fa-arrow-trend-down"></i>
+            <span>SELL</span>
+          </button>
+        </div>
       </div>
+      <div id="tv_chart_container"></div>
     </div>
-    <div id="tv_chart_container"></div>
-  </main>
 
-  <!-- SIDEBAR RIGHT - ORDERS -->
-  <aside class="sidebar-right">
-    <div class="orders-panel">
-      <div class="panel-title">⏱️ Ordres Limites</div>
+    <!-- ORDERS PANEL -->
+    <div class="resizable-panel orders-panel" id="ordersPanel">
+      <div class="panel-header">
+        <div class="panel-title">
+          <i class="fas fa-clock"></i>
+          Ordres Limites
+        </div>
+        <div class="panel-controls">
+          <button class="panel-btn" title="Réduire">
+            <i class="fas fa-minus"></i>
+          </button>
+        </div>
+      </div>
       <form class="order-form" onsubmit="return false;">
         <div class="form-group">
-          <label class="form-label">Symbole</label>
+          <label class="form-label"><i class="fas fa-coins"></i> Symbole</label>
           <select id="ordSymbol" class="form-select"></select>
         </div>
         <div class="form-row">
           <div class="form-group">
-            <label class="form-label">Type</label>
+            <label class="form-label"><i class="fas fa-exchange-alt"></i> Type</label>
             <select id="ordSide" class="form-select">
               <option value="BUY">BUY</option>
               <option value="SELL">SELL</option>
             </select>
           </div>
           <div class="form-group">
-            <label class="form-label">Lots</label>
+            <label class="form-label"><i class="fas fa-layer-group"></i> Lots</label>
             <input id="ordSize" class="form-input" type="number" step="0.01" value="1"/>
           </div>
         </div>
         <div class="form-group">
-          <label class="form-label">Prix cible</label>
+          <label class="form-label"><i class="fas fa-bullseye"></i> Prix cible</label>
           <input id="ordPrice" class="form-input" type="number" step="0.00001" placeholder="0.00000"/>
         </div>
         <div class="form-row">
           <div class="form-group">
-            <label class="form-label">Take Profit</label>
+            <label class="form-label"><i class="fas fa-check-circle"></i> Take Profit</label>
             <input id="ordTp" class="form-input" type="number" step="0.00001" placeholder="Optionnel"/>
           </div>
           <div class="form-group">
-            <label class="form-label">Stop Loss</label>
+            <label class="form-label"><i class="fas fa-times-circle"></i> Stop Loss</label>
             <input id="ordSl" class="form-input" type="number" step="0.00001" placeholder="Optionnel"/>
           </div>
         </div>
         <button class="btn btn-add-order" id="addOrderBtn">
-          ➕ Ajouter l'ordre
+          <i class="fas fa-plus-circle"></i>
+          Ajouter l'ordre
         </button>
       </form>
+      <div class="orders-list" id="ordersBody"></div>
+      <div class="resize-handle resize-handle-left"></div>
     </div>
-    <div class="orders-list" id="ordersBody"></div>
-  </aside>
+  </div>
 
   <!-- BOTTOM PANEL -->
-  <div class="bottom-panel">
-    <div class="positions-section">
+  <div class="resizable-panel bottom-panel">
+    <div class="resizable-panel positions-panel">
       <div class="section-header">
         <div class="tabs">
-          <button class="tab active" id="tabPositions">📈 Positions</button>
-          <button class="tab" id="tabHistory">📜 Historique</button>
+          <button class="tab active" id="tabPositions">
+            <i class="fas fa-briefcase"></i> Positions
+          </button>
+          <button class="tab" id="tabHistory">
+            <i class="fas fa-history"></i> Historique
+          </button>
         </div>
         <div class="info-text">Simulé · Proxy WS · Effet 1:20</div>
       </div>
@@ -1181,34 +1246,45 @@
           </table>
         </div>
       </div>
+      <div class="resize-handle resize-handle-top"></div>
     </div>
 
-    <div class="account-section">
-      <div class="account-header">
-        <div class="account-info">
-          <h3>💰 Compte Démo</h3>
-          <div class="balance-item">
-            <span class="balance-label">Balance</span>
-            <span class="balance-value" id="simBalance">50000.00 USD</span>
-          </div>
-          <div class="balance-item">
-            <span class="balance-label">Disponible</span>
-            <span class="balance-value" id="availableBalance">50000.00 USD</span>
-          </div>
-          <div class="balance-item">
-            <span class="balance-label">Marge utilisée</span>
-            <span class="balance-value" id="usedMargin">0.00 USD</span>
-          </div>
-        </div>
-        <div class="total-pnl">
-          <div class="total-pnl-label">PnL Total</div>
-          <div class="total-pnl-value" id="totalPnl">0.00</div>
+    <div class="resizable-panel account-panel">
+      <div class="panel-header">
+        <div class="panel-title">
+          <i class="fas fa-wallet"></i>
+          Compte Démo
         </div>
       </div>
-      <div class="position-details">
-        <div class="position-details-header">📍 Position sélectionnée</div>
-        <div class="position-details-content" id="posDetails">
-          Aucune position ouverte
+      <div class="account-content">
+        <div class="account-header">
+          <div class="account-info">
+            <h3><i class="fas fa-money-bill-wave"></i> Balance</h3>
+            <div class="balance-item">
+              <span class="balance-label">Balance totale</span>
+              <span class="balance-value" id="simBalance">50000.00 USD</span>
+            </div>
+            <div class="balance-item">
+              <span class="balance-label">Disponible</span>
+              <span class="balance-value" id="availableBalance">50000.00 USD</span>
+            </div>
+            <div class="balance-item">
+              <span class="balance-label">Marge utilisée</span>
+              <span class="balance-value" id="usedMargin">0.00 USD</span>
+            </div>
+          </div>
+          <div class="total-pnl">
+            <div class="total-pnl-label">PnL Total</div>
+            <div class="total-pnl-value" id="totalPnl">0.00</div>
+          </div>
+        </div>
+        <div class="position-details">
+          <div class="position-details-header">
+            <i class="fas fa-map-marker-alt"></i> Position sélectionnée
+          </div>
+          <div class="position-details-content" id="posDetails">
+            Aucune position ouverte
+          </div>
         </div>
       </div>
     </div>
@@ -1218,7 +1294,10 @@
 <!-- MODAL -->
 <div class="modal" id="positionModal" style="display:none">
   <div class="modal-content">
-    <div class="modal-header">⚙️ Modifier la position</div>
+    <div class="modal-header">
+      <i class="fas fa-cog"></i>
+      Modifier la position
+    </div>
     <div class="modal-body">
       <div class="modal-info">
         <div class="modal-info-label">Symbole</div>
@@ -1229,21 +1308,27 @@
         <div class="modal-info-value" id="modalLots">—</div>
       </div>
       <div class="form-group">
-        <label class="form-label">Take Profit (prix)</label>
+        <label class="form-label"><i class="fas fa-check-circle"></i> Take Profit (prix)</label>
         <input type="number" class="form-input" id="modalTp" step="0.00001" placeholder="Laisser vide pour aucun"/>
       </div>
       <div class="form-group">
-        <label class="form-label">Stop Loss (prix)</label>
+        <label class="form-label"><i class="fas fa-times-circle"></i> Stop Loss (prix)</label>
         <input type="number" class="form-input" id="modalSl" step="0.00001" placeholder="Laisser vide pour aucun"/>
       </div>
       <div class="form-group">
-        <label class="form-label">Lots à clôturer</label>
+        <label class="form-label"><i class="fas fa-sign-out-alt"></i> Lots à clôturer</label>
         <input type="number" class="form-input" id="modalSellLots" min="0" step="0.01" value="0" placeholder="0 = garder ouvert"/>
       </div>
     </div>
     <div class="modal-actions">
-      <button class="btn btn-ghost" id="modalCancel">Annuler</button>
-      <button class="btn btn-add-order" id="modalSave">💾 Sauvegarder</button>
+      <button class="btn btn-ghost" id="modalCancel">
+        <i class="fas fa-times"></i>
+        Annuler
+      </button>
+      <button class="btn btn-add-order" id="modalSave">
+        <i class="fas fa-save"></i>
+        Sauvegarder
+      </button>
     </div>
   </div>
 </div>
@@ -1302,6 +1387,45 @@ let tvWidget = null;
 let activeModalId = null;
 let debugMode = false;
 let messageCount = 0;
+
+// ============================================================================
+// RESIZE FUNCTIONALITY
+// ============================================================================
+function initResizable() {
+  const watchlistPanel = document.getElementById('watchlistPanel');
+  const ordersPanel = document.getElementById('ordersPanel');
+  
+  // Watchlist resize (width)
+  const watchlistHandle = watchlistPanel.querySelector('.resize-handle-right');
+  let isResizingWatchlist = false;
+  let watchlistStartX = 0;
+  let watchlistStartWidth = 0;
+  
+  if (watchlistHandle) {
+    watchlistHandle.addEventListener('mousedown', e => {
+      isResizingWatchlist = true;
+      watchlistStartX = e.clientX;
+      watchlistStartWidth = watchlistPanel.offsetWidth;
+      watchlistHandle.classList.add('resizing');
+      e.preventDefault();
+    });
+  }
+  
+  document.addEventListener('mousemove', e => {
+    if (isResizingWatchlist) {
+      const diff = e.clientX - watchlistStartX;
+      const newWidth = Math.max(250, Math.min(600, watchlistStartWidth + diff));
+      watchlistPanel.style.width = newWidth + 'px';
+    }
+  });
+  
+  document.addEventListener('mouseup', () => {
+    if (isResizingWatchlist) {
+      isResizingWatchlist = false;
+      if (watchlistHandle) watchlistHandle.classList.remove('resizing');
+    }
+  });
+}
 
 // ============================================================================
 // DEBUG & LOGGING
@@ -1916,8 +2040,12 @@ function renderPositions() {
       <td><span class="pnl-value ${pnlClass}">${formatMoney(pnl)}</span></td>
       <td>
         <div class="action-buttons">
-          <button class="btn-action" data-id="${pos.id}" title="Modifier">⚙️</button>
-          <button class="btn-action" data-close="${pos.id}" title="Fermer">❌</button>
+          <button class="btn-action" data-id="${pos.id}" title="Modifier">
+            <i class="fas fa-cog"></i>
+          </button>
+          <button class="btn-action" data-close="${pos.id}" title="Fermer">
+            <i class="fas fa-times"></i>
+          </button>
         </div>
       </td>
     `;
@@ -2001,7 +2129,10 @@ function renderOrders() {
         <div class="order-detail">SL: <span>${o.sl ? formatPrice(o.sl) : '—'}</span></div>
       </div>
       <div class="order-actions">
-        <button class="btn btn-remove" data-id="${o.id}">Annuler</button>
+        <button class="btn btn-remove" data-id="${o.id}">
+          <i class="fas fa-trash-alt"></i>
+          Annuler
+        </button>
       </div>
     `;
     container.appendChild(card);
@@ -2218,9 +2349,10 @@ window.removeOrder = removeOrder;
 // ============================================================================
 // INITIALIZATION
 // ============================================================================
-console.log('🚀 Mini Broker Pro Edition - Modernized UI');
+console.log('🚀 Mini Broker Pro Edition - Modern & Modular UI');
 console.log('📡 Proxy:', WS_PROXY_URL);
 
+initResizable();
 renderAll();
 selectSymbol(WATCHLIST[0]);
 initTradingView();
@@ -2229,12 +2361,10 @@ startWebSocket();
 debugLog('=== BROKER INITIALIZED ===');
 debugLog(`Watchlist: ${WATCHLIST.length} symbols (6 FOREX + 3 Indices US)`);
 debugLog(`Starting balance: ${simBalance} USD`);
-debugLog('Price smoothing removed for indices');
+debugLog('Modular & resizable interface ready');
 </script>
 </body>
 </html>
-
-
 
 
 
