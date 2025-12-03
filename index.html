@@ -1344,9 +1344,9 @@ const WATCHLIST = [
   {tv:'OANDA:XAUUSD', label:'Gold / USD', api:'OANDA:XAU_USD', type:'metal'},
   
   // Indices CFD US (cotation 23h/24 - 5j/7)
-  {tv:'CME:ES1!', label:'US500 (S&P 500)', api:'US500', type:'index'},
-  {tv:'CBOT:YM1!', label:'US30 (Dow Jones)', api:'US30', type:'index'},
-  {tv:'CME:NQ1!', label:'US100 (Nasdaq 100)', api:'US100', type:'index'}
+  {tv:'CAPITALCOM:US500', label:'US500 (S&P 500)', api:'US500', type:'index'},
+  {tv:'CAPITALCOM:US30', label:'US30 (Dow Jones)', api:'US30', type:'index'},
+  {tv:'CAPITALCOM:US100', label:'US100 (Nasdaq 100)', api:'US100', type:'index'}
 ];
 
 const PIP_STEPS = {default: 0.0001, jpy: 0.01, xau: 0.1, index: 1};
@@ -1580,9 +1580,9 @@ async function calculatePriceOffsets() {
   debugLog('📊 Calculating price offsets between Yahoo and TradingView...');
   
   const symbolMap = {
-    'US500': { yahoo: 'ES=F', tv: 'CME:ES1!' },
-    'US30': { yahoo: 'YM=F', tv: 'CBOT:YM1!' },
-    'US100': { yahoo: 'NQ=F', tv: 'CME:NQ1!' }
+    'US500': { yahoo: 'ES=F', tv: 'CAPITALCOM:US500' },
+    'US30': { yahoo: 'YM=F', tv: 'CAPITALCOM:US30' },
+    'US100': { yahoo: 'NQ=F', tv: 'CAPITALCOM:US100' }
   };
   
   for (const [symbol, urls] of Object.entries(symbolMap)) {
