@@ -1289,7 +1289,7 @@ const RECONNECT_MAX_DELAY = 30000;
 const BASE_LOT_SIZE = 100000;
 const LEVERAGE = 20;
 
-// Watchlist - FOREX + 3 Futures Indices US (trade 23h/24)
+// Watchlist - FOREX + 3 Indices CFD US (trade 23h/24)
 const WATCHLIST = [
   // FOREX
   {tv:'OANDA:EURUSD', label:'EUR / USD', api:'OANDA:EUR_USD', type:'forex'},
@@ -1299,10 +1299,10 @@ const WATCHLIST = [
   {tv:'OANDA:AUDUSD', label:'AUD / USD', api:'OANDA:AUD_USD', type:'forex'},
   {tv:'OANDA:XAUUSD', label:'Gold / USD', api:'OANDA:XAU_USD', type:'metal'},
   
-  // FUTURES Indices US (cotation 23h/24 - 5j/7)
-  {tv:'CME:ES1!', label:'S&P 500 Future', api:'INDEXSP:.INX', type:'index'},
-  {tv:'CBOT:YM1!', label:'Dow Jones Future', api:'INDEXDJX:.DJI', type:'index'},
-  {tv:'CME:NQ1!', label:'Nasdaq 100 Future', api:'INDEXNASDAQ:.NDX', type:'index'}
+  // Indices CFD US (cotation 23h/24 - 5j/7)
+  {tv:'CME:ES1!', label:'US500 (S&P 500)', api:'US500', type:'index'},
+  {tv:'CBOT:YM1!', label:'US30 (Dow Jones)', api:'US30', type:'index'},
+  {tv:'CME:NQ1!', label:'US100 (Nasdaq 100)', api:'US100', type:'index'}
 ];
 
 const PIP_STEPS = {default: 0.0001, jpy: 0.01, xau: 0.1, index: 1};
@@ -2286,14 +2286,12 @@ initTradingView();
 startWebSocket();
 
 debugLog('=== AMABROCKER INITIALIZED ===');
-debugLog(`Watchlist: ${WATCHLIST.length} symbols (6 FOREX + 3 Indices US)`);
+debugLog(`Watchlist: ${WATCHLIST.length} symbols (6 FOREX + 3 Indices CFD US)`);
 debugLog(`Starting balance: ${simBalance} USD`);
 debugLog('Modular & resizable interface ready');
 </script>
 </body>
 </html>
-
-
 
 
 
