@@ -336,16 +336,19 @@ const aggregateCandles=(candles,targetTF)=>{
 
 const loadHistoricalData=async(symbol,timeframe)=>{
   const symObj=WATCHLIST.find(w=>w.api===symbol);
-  if(!symObj||!symObj.yahoo){
-    debugLog(`No Yahoo symbol for ${symbol}`);
+  if(!symObj||symObj.type!=='index'){
+    debugLog(`Not an index symbol: ${symbol}`);
     return null;
   }
   
   const interval=getYahooInterval(timeframe);
   const range=getYahooRange(timeframe);
-  const url=`https://query1.finance.yahoo.com/v8/finance/chart/${symObj.yahoo}?interval=${interval}&range=${range}`;
   
-  debugLog(`📥 Loading history: ${symObj.yahoo} (${interval}/${range})`);
+  // Construire l'URL du proxy
+  const proxyUrl=CFG.ws.replace('wss://','https://').replace('ws://','http://');
+  const url=`${proxyUrl}/api/history/${symbol}?interval=${interval}&range=${range}`;
+  
+  debugLog(`📥 Loading history from proxy: ${symbol} (${interval}/${range})`);
   
   try{
     const resp=await fetch(url);
@@ -355,37 +358,16 @@ const loadHistoricalData=async(symbol,timeframe)=>{
     }
     
     const data=await resp.json();
-    if(!data.chart?.result?.[0]){
-      debugLog('No chart data in response');
+    
+    if(!data.candles||data.candles.length===0){
+      debugLog('No candles in response');
       return null;
     }
     
-    const result=data.chart.result[0];
-    const timestamps=result.timestamp;
-    const quotes=result.indicators.quote[0];
-    
-    if(!timestamps||!quotes){
-      debugLog('Missing timestamps or quotes');
-      return null;
-    }
-    
-    const candles=[];
-    for(let i=0;i<timestamps.length;i++){
-      if(quotes.open[i]!==null&&quotes.close[i]!==null){
-        candles.push({
-          time:timestamps[i],
-          open:quotes.open[i],
-          high:quotes.high[i],
-          low:quotes.low[i],
-          close:quotes.close[i]
-        });
-      }
-    }
-    
-    debugLog(`✅ Loaded ${candles.length} candles`);
+    debugLog(`✅ Loaded ${data.candles.length} candles from proxy`);
     
     // Aggregate if needed
-    const aggregated=aggregateCandles(candles,timeframe);
+    const aggregated=aggregateCandles(data.candles,timeframe);
     debugLog(`✅ Aggregated to ${aggregated.length} candles for TF ${timeframe}`);
     
     return aggregated;
