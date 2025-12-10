@@ -38,8 +38,11 @@ html,body{height:100%;background:linear-gradient(135deg,var(--bg-primary) 0%,var
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}
 .icon-btn{width:40px;height:40px;border-radius:var(--radius-md);border:1px solid var(--border);background:var(--bg-tertiary);color:var(--text-secondary);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:var(--transition);font-size:16px}
 .icon-btn:hover{background:var(--surface-elevated);border-color:var(--border-light);color:var(--text-primary);transform:translateY(-2px)}
+.icon-btn.active{background:var(--accent);color:#0a0e1a;border-color:var(--accent)}
+.view-controls{display:flex;gap:6px;padding-left:12px;border-left:1px solid var(--border)}
 .workspace{flex:1;display:flex;overflow:hidden;position:relative}
-.resizable-panel{position:relative;background:var(--surface);border:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;min-width:250px;min-height:200px}
+.resizable-panel{position:relative;background:var(--surface);border:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;min-width:250px;min-height:200px;transition:width 0.3s ease,height 0.3s ease}
+.resizable-panel.hidden{display:none}
 .panel-header{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;cursor:move;user-select:none;background:var(--bg-tertiary)}
 .panel-header:active{cursor:grabbing}
 .panel-title{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-secondary);display:flex;align-items:center;gap:8px}
@@ -179,6 +182,11 @@ html,body{height:100%;background:linear-gradient(135deg,var(--bg-primary) 0%,var
 </div>
 </div>
 <div class="header-right">
+<div class="view-controls">
+<button class="icon-btn active" id="toggleWatchlist" title="Watchlist"><i class="fas fa-list-ul"></i></button>
+<button class="icon-btn active" id="toggleOrders" title="Ordres"><i class="fas fa-clock"></i></button>
+<button class="icon-btn active" id="togglePositions" title="Positions"><i class="fas fa-briefcase"></i></button>
+</div>
 <div class="status-badge disconnected" id="wsStatus"><div class="status-dot"></div><span>Déconnecté</span></div>
 <button class="icon-btn" id="debugToggle" title="Debug"><i class="fas fa-bug"></i></button>
 <button class="icon-btn" id="refreshPricesBtn" title="Rafraîchir"><i class="fas fa-sync-alt"></i></button>
@@ -186,7 +194,7 @@ html,body{height:100%;background:linear-gradient(135deg,var(--bg-primary) 0%,var
 </header>
 <div class="workspace">
 <div class="resizable-panel watchlist-panel" id="watchlistPanel">
-<div class="panel-header"><div class="panel-title"><i class="fas fa-list-ul"></i>Watchlist</div><div class="panel-controls"><button class="panel-btn" title="Réduire"><i class="fas fa-minus"></i></button></div></div>
+<div class="panel-header"><div class="panel-title"><i class="fas fa-list-ul"></i>Watchlist</div><div class="panel-controls"><button class="panel-btn" id="closeWatchlist" title="Fermer"><i class="fas fa-times"></i></button></div></div>
 <div class="panel-content" id="wlList"></div>
 <div class="resize-handle resize-handle-right"></div>
 </div>
@@ -212,7 +220,7 @@ html,body{height:100%;background:linear-gradient(135deg,var(--bg-primary) 0%,var
 <div id="lw_chart_container"></div>
 </div>
 <div class="resizable-panel orders-panel" id="ordersPanel">
-<div class="panel-header"><div class="panel-title"><i class="fas fa-clock"></i>Ordres Limites</div><div class="panel-controls"><button class="panel-btn" title="Réduire"><i class="fas fa-minus"></i></button></div></div>
+<div class="panel-header"><div class="panel-title"><i class="fas fa-clock"></i>Ordres Limites</div><div class="panel-controls"><button class="panel-btn" id="closeOrders" title="Fermer"><i class="fas fa-times"></i></button></div></div>
 <form class="order-form" onsubmit="return false;">
 <div class="form-group"><label class="form-label"><i class="fas fa-coins"></i> Symbole</label><select id="ordSymbol" class="form-select"></select></div>
 <div class="form-row">
@@ -230,14 +238,17 @@ html,body{height:100%;background:linear-gradient(135deg,var(--bg-primary) 0%,var
 <div class="resize-handle resize-handle-left"></div>
 </div>
 </div>
-<div class="resizable-panel bottom-panel">
+<div class="resizable-panel bottom-panel" id="bottomPanel">
 <div class="resizable-panel positions-panel">
 <div class="section-header">
 <div class="tabs">
 <button class="tab active" id="tabPositions"><i class="fas fa-briefcase"></i> Positions</button>
 <button class="tab" id="tabHistory"><i class="fas fa-history"></i> Historique</button>
 </div>
+<div style="display:flex;align-items:center;gap:12px">
 <div class="info-text">Simulé · Alpaca + Finnhub · Effet 1:20</div>
+<button class="panel-btn" id="closePositions" title="Fermer"><i class="fas fa-times"></i></button>
+</div>
 </div>
 <div class="table-container">
 <div id="positionsPane"><table class="data-table"><thead><tr><th>Symbole</th><th>Type</th><th>Entry</th><th>Actuel</th><th>Lots</th><th>PNL</th><th>Actions</th></tr></thead><tbody id="positionsBody"></tbody></table></div>
@@ -313,6 +324,14 @@ const loadHistoricalData=async(symbol,timeframe)=>{const symObj=WATCHLIST.find(w
 const initLightweightChart=async()=>{const container=$('lw_chart_container');if(!container)return;if(lwChart){try{lwChart.remove()}catch(e){}lwChart=null;lwSeries=null}container.innerHTML='';lwChart=LightweightCharts.createChart(container,{layout:{background:{color:'#0f1419'},textColor:'#9ba3b4'},grid:{vertLines:{color:'#1a1f2e'},horzLines:{color:'#1a1f2e'}},crosshair:{mode:LightweightCharts.CrosshairMode.Normal},rightPriceScale:{borderColor:'#252b3d'},timeScale:{borderColor:'#252b3d',timeVisible:true,secondsVisible:false}});lwSeries=lwChart.addCandlestickSeries({upColor:'#10b981',downColor:'#ef4444',borderUpColor:'#10b981',borderDownColor:'#ef4444',wickUpColor:'#10b981',wickDownColor:'#ef4444'});const histData=await loadHistoricalData(currentSymbol.api,currentTimeframe);if(histData&&histData.length>0){chartHistoryData[currentSymbol.api]=histData;lwSeries.setData(histData);debugLog(`Chart: ${histData.length} candles`)}else debugLog('No data');const resizeObserver=new ResizeObserver(()=>{if(lwChart)lwChart.applyOptions({width:container.clientWidth,height:container.clientHeight})});resizeObserver.observe(container)};
 const updateLightweightChart=(price)=>{if(!lwSeries||!price)return;const now=Math.floor(Date.now()/1000),tfMinutes={'1':1,'5':5,'15':15,'60':60,'240':240,'1D':1440}[currentTimeframe]||15,candleTime=Math.floor(now/(tfMinutes*60))*tfMinutes*60,currentData=chartHistoryData[currentSymbol.api]||[],lastCandle=currentData[currentData.length-1];if(!lastCandle||lastCandle.time<candleTime){const newCandle={time:candleTime,open:price,high:price,low:price,close:price};currentData.push(newCandle);chartHistoryData[currentSymbol.api]=currentData;lwSeries.update(newCandle);debugLog(`New candle: ${price.toFixed(2)}`)}else{lastCandle.high=Math.max(lastCandle.high,price);lastCandle.low=Math.min(lastCandle.low,price);lastCandle.close=price;lwSeries.update(lastCandle)}};
 const switchTimeframe=(tf)=>{currentTimeframe=tf;document.querySelectorAll('.timeframe-btn').forEach(btn=>btn.classList.toggle('active',btn.dataset.tf===tf));if(currentSymbol.type==='etf')initLightweightChart()};
+
+const togglePanel=(panelId,btnId)=>{const panel=$(panelId),btn=$(btnId);const isHidden=panel.classList.contains('hidden');panel.classList.toggle('hidden',!isHidden);btn.classList.toggle('active',!isHidden);if(tvWidget)setTimeout(()=>tvWidget.activeChart&&tvWidget.activeChart().resetData(),100);if(lwChart)setTimeout(()=>{const container=$('lw_chart_container');if(lwChart&&container)lwChart.applyOptions({width:container.clientWidth,height:container.clientHeight})},100)};
+$('toggleWatchlist').onclick=()=>togglePanel('watchlistPanel','toggleWatchlist');
+$('toggleOrders').onclick=()=>togglePanel('ordersPanel','toggleOrders');
+$('togglePositions').onclick=()=>togglePanel('bottomPanel','togglePositions');
+$('closeWatchlist').onclick=()=>togglePanel('watchlistPanel','toggleWatchlist');
+$('closeOrders').onclick=()=>togglePanel('ordersPanel','toggleOrders');
+$('closePositions').onclick=()=>togglePanel('bottomPanel','togglePositions');
 
 const setWsStatus=(status)=>{const el=$('wsStatus');wsConnected=status==='connected';if(status==='connected'){el.className='status-badge connected';el.innerHTML='<div class="status-dot"></div><span>Connecté</span>'}else if(status==='connecting'){el.className='status-badge connecting';el.innerHTML='<div class="status-dot"></div><span>Connexion...</span>'}else{el.className='status-badge disconnected';el.innerHTML='<div class="status-dot"></div><span>Déconnecté</span>'}};
 const startKeepalive=()=>{stopKeepalive();keepaliveTimer=setInterval(()=>{if(ws&&ws.readyState===WebSocket.OPEN){try{ws.send(JSON.stringify({type:'ping'}));debugLog('Ping')}catch(e){debugLog(`Keepalive error: ${e.message}`)}}},CFG.keepalive)},stopKeepalive=()=>{if(keepaliveTimer){clearInterval(keepaliveTimer);keepaliveTimer=null}};
