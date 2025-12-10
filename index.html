@@ -278,7 +278,7 @@ const WATCHLIST=[
 {tv:'NASDAQ:DIA',label:'DIA (Dow Jones ETF)',api:'DIA',type:'etf',yahoo:'DIA'},
 {tv:'NASDAQ:QQQ',label:'QQQ (Nasdaq 100 ETF)',api:'QQQ',type:'etf',yahoo:'QQQ'}
 ];
-const PIP_STEPS={default:0.0001,jpy:0.01,xau:0.1,etf:0.01},PNL_BOOST=4.5;
+const PIP_STEPS={default:0.0001,jpy:0.01,xau:0.1,etf:0.01};
 let ws,wsConnected=false,reconDelay=CFG.reconBase,reconAttempts=0,reconTimer,keepaliveTimer,currentSymbol=WATCHLIST[0],priceCache={},lastPriceUpdate={},positions=[],history=[],orders=[],simBalance=50000,availableBalance=50000,tvWidget,lwChart,lwSeries,activeModalId,debugMode=false,msgCount=0;
 let currentTimeframe='15',chartHistoryData={};
 const $=(id)=>document.getElementById(id),debugLog=(msg)=>{if(!debugMode)return;const t=new Date().toLocaleTimeString();debugPanel.innerHTML+=`[${t}] ${msg}\n`;debugPanel.scrollTop=debugPanel.scrollHeight;console.log(`[DEBUG] ${msg}`)};
@@ -287,7 +287,19 @@ const toastEl=$('toast');let toastTimer;
 const showToast=(msg,type='info',dur=2500)=>{if(toastTimer)clearTimeout(toastTimer);toastEl.textContent=msg;toastEl.className=`toast visible ${type}`;toastTimer=setTimeout(()=>toastEl.classList.remove('visible'),dur);debugLog(`Toast: ${msg}`)};
 const escapeId=(v)=>String(v).replace(/[^\w]/g,'_'),formatPrice=(v)=>{if(v===undefined||v===null)return'—';const n=Number(v);return currentSymbol&&currentSymbol.type==='etf'?n.toFixed(2):n.toFixed(5).replace(/\.?0+$/,'')},formatMoney=(v)=>v===undefined||v===null?'0.00':Number(v).toFixed(2),formatDateTime=(t)=>new Date(t).toLocaleString('fr-FR');
 const lotUnits=(s)=>{const o=WATCHLIST.find(w=>w.api===s);if(o&&o.type==='etf')return 1;return s.includes('XAU')?100:CFG.baseLot},isQuoteUsd=(s)=>s.endsWith('USD'),isBaseUsd=(s)=>s.startsWith('USD'),isETF=(s)=>{const o=WATCHLIST.find(w=>w.api===s);return o&&o.type==='etf'},pipStep=(s)=>isETF(s)?PIP_STEPS.etf:s.includes('JPY')?PIP_STEPS.jpy:s.includes('XAU')?PIP_STEPS.xau:PIP_STEPS.default;
-const pipValuePerLot=(s,p)=>{const step=pipStep(s),units=lotUnits(s);let base;if(isETF(s))return step*units;if(s.includes('XAU'))base=step*units;else if(isQuoteUsd(s))base=step*units;else if(isBaseUsd(s))base=units;else base=p>0?(step*units)/p:step*units;return s.includes('XAU')?base:base*PNL_BOOST},describePip=(s,p)=>{const perLot=pipValuePerLot(s,p||priceCache[s]||1);return isETF(s)?`1 lot ≈ ${formatMoney(perLot)} USD/point`:`1 lot ≈ ${formatMoney(perLot)} USD/pip`};
+const pipValuePerLot=(s,p)=>{
+const step=pipStep(s),units=lotUnits(s);
+if(isETF(s))return step*units;
+if(s.includes('JPY')){
+const price=Number(p)||150;
+return(step*units)/price;
+}
+if(s.includes('XAU'))return step*units;
+if(isQuoteUsd(s))return step*units;
+if(isBaseUsd(s))return units;
+return p>0?(step*units)/p:step*units;
+};
+const describePip=(s,p)=>{const perLot=pipValuePerLot(s,p||priceCache[s]||1);return isETF(s)?`1 lot ≈ ${formatMoney(perLot)} USD/point`:`1 lot ≈ ${formatMoney(perLot)} USD/pip`};
 const marginRequirement=(s,lots,p)=>{const l=Number(lots);if(!l)return 0;if(isETF(s)){const price=Number(p)||0,exp=price*l;return exp/CFG.leverage}if(isBaseUsd(s))return(lotUnits(s)*l)/CFG.leverage;const price=Number(p)||0,units=lotUnits(s),exp=price?price*units*l:units*l;return exp/CFG.leverage};
 
 const getYahooInterval=(tf)=>{if(tf==='1')return '1m';if(tf==='5')return '5m';if(tf==='15')return '15m';if(tf==='60')return '1h';if(tf==='240')return '1h';if(tf==='1D')return '1d';return '15m'};
