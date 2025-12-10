@@ -294,6 +294,10 @@ if(s.includes('JPY')){
 const price=Number(p)||150;
 return(step*units)/price;
 }
+if(s.includes('CHF')&&isBaseUsd(s)){
+const price=Number(p)||0.9;
+return(step*units)/price;
+}
 if(s.includes('XAU'))return step*units;
 if(isQuoteUsd(s))return step*units;
 if(isBaseUsd(s))return units;
