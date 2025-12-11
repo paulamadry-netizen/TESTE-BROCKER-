@@ -9,14 +9,19 @@ const admin = require('firebase-admin');
 // Initialiser Firebase Admin
 admin.initializeApp();
 
-// Initialiser Stripe avec la config Firebase
-const stripe = require('stripe')(functions.config().stripe.secret_key);
+// Initialiser Stripe (sera chargé au runtime avec la config)
+let stripe;
 
 /**
  * Webhook Stripe - Écoute les événements de paiement
  * URL du webhook : https://us-central1-teste-brocker.cloudfunctions.net/stripeWebhook
  */
 exports.stripeWebhook = functions.https.onRequest(async (req, res) => {
+  // Initialiser Stripe si pas encore fait
+  if (!stripe) {
+    stripe = require('stripe')(functions.config().stripe.secret_key);
+  }
+
   // Vérification de la signature Stripe (sécurité)
   const sig = req.headers['stripe-signature'];
   const webhookSecret = functions.config().stripe.webhook_secret;
