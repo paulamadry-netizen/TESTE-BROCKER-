@@ -10,6 +10,9 @@ import {
   Settings,
   LogOut,
   BarChart3,
+  DollarSign,
+  PlusCircle,
+  ExternalLink,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -38,6 +41,11 @@ const navigation = [
     name: "Analytics",
     href: "/analytics",
     icon: BarChart3,
+  },
+  {
+    name: "Payout",
+    href: "/payout",
+    icon: DollarSign,
   },
   {
     name: "Settings",
@@ -78,6 +86,20 @@ export function Sidebar() {
             </Link>
           );
         })}
+
+        {/* New Challenge Button */}
+        <div className="pt-4 mt-4 border-t">
+          <a
+            href="https://amafirm.framer.website"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+          >
+            <PlusCircle className="h-5 w-5" />
+            New Challenge
+            <ExternalLink className="h-3 w-3 ml-auto" />
+          </a>
+        </div>
       </nav>
 
       {/* User section */}

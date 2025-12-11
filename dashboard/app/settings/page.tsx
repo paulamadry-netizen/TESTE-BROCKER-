@@ -1,9 +1,43 @@
+"use client";
+
 import { User, Bell, Shield, Palette } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { useState } from "react";
 
 export default function SettingsPage() {
+  const [notifications, setNotifications] = useState({
+    tradeAlerts: true,
+    challengeUpdates: true,
+    riskWarnings: true,
+    marketingEmails: false,
+  });
+
+  const handleChangePassword = () => {
+    alert("Changement de mot de passe - Cette fonctionnalité sera connectée à Firebase");
+  };
+
+  const handleEnable2FA = () => {
+    alert("Activation 2FA - Cette fonctionnalité sera connectée à Firebase");
+  };
+
+  const handleManageSessions = () => {
+    alert("Gestion des sessions - Cette fonctionnalité sera connectée à Firebase");
+  };
+
+  const handleEditProfile = () => {
+    alert("Édition du profil - Cette fonctionnalité sera connectée à Firebase");
+  };
+
+  const handleUpdatePreferences = () => {
+    alert("Préférences mises à jour avec succès !");
+  };
+
+  const toggleNotification = (key: keyof typeof notifications) => {
+    setNotifications((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
   return (
     <div className="flex flex-col gap-6 p-8">
       {/* Header */}
@@ -45,7 +79,7 @@ export default function SettingsPage() {
             </div>
           </div>
           <div className="pt-4">
-            <Button>Edit Profile</Button>
+            <Button onClick={handleEditProfile}>Edit Profile</Button>
           </div>
         </CardContent>
       </Card>
@@ -69,7 +103,13 @@ export default function SettingsPage() {
                 Get notified when trades are opened or closed
               </p>
             </div>
-            <Badge variant="success">Enabled</Badge>
+            <Button
+              variant={notifications.tradeAlerts ? "default" : "outline"}
+              size="sm"
+              onClick={() => toggleNotification("tradeAlerts")}
+            >
+              {notifications.tradeAlerts ? "Enabled" : "Disabled"}
+            </Button>
           </div>
           <div className="flex items-center justify-between py-3 border-b">
             <div>
@@ -78,7 +118,13 @@ export default function SettingsPage() {
                 Receive updates about your challenge progress
               </p>
             </div>
-            <Badge variant="success">Enabled</Badge>
+            <Button
+              variant={notifications.challengeUpdates ? "default" : "outline"}
+              size="sm"
+              onClick={() => toggleNotification("challengeUpdates")}
+            >
+              {notifications.challengeUpdates ? "Enabled" : "Disabled"}
+            </Button>
           </div>
           <div className="flex items-center justify-between py-3 border-b">
             <div>
@@ -87,7 +133,13 @@ export default function SettingsPage() {
                 Get alerts when approaching drawdown limits
               </p>
             </div>
-            <Badge variant="success">Enabled</Badge>
+            <Button
+              variant={notifications.riskWarnings ? "default" : "outline"}
+              size="sm"
+              onClick={() => toggleNotification("riskWarnings")}
+            >
+              {notifications.riskWarnings ? "Enabled" : "Disabled"}
+            </Button>
           </div>
           <div className="flex items-center justify-between py-3">
             <div>
@@ -96,10 +148,16 @@ export default function SettingsPage() {
                 Receive news and promotional offers
               </p>
             </div>
-            <Badge variant="secondary">Disabled</Badge>
+            <Button
+              variant={notifications.marketingEmails ? "default" : "outline"}
+              size="sm"
+              onClick={() => toggleNotification("marketingEmails")}
+            >
+              {notifications.marketingEmails ? "Enabled" : "Disabled"}
+            </Button>
           </div>
           <div className="pt-4">
-            <Button>Update Preferences</Button>
+            <Button onClick={handleUpdatePreferences}>Update Preferences</Button>
           </div>
         </CardContent>
       </Card>
@@ -123,7 +181,7 @@ export default function SettingsPage() {
                 Last changed 30 days ago
               </p>
             </div>
-            <Button variant="outline">Change Password</Button>
+            <Button variant="outline" onClick={handleChangePassword}>Change Password</Button>
           </div>
           <div className="flex items-center justify-between py-3 border-b">
             <div>
@@ -132,7 +190,7 @@ export default function SettingsPage() {
                 Add an extra layer of security to your account
               </p>
             </div>
-            <Button variant="outline">Enable 2FA</Button>
+            <Button variant="outline" onClick={handleEnable2FA}>Enable 2FA</Button>
           </div>
           <div className="flex items-center justify-between py-3">
             <div>
@@ -141,7 +199,7 @@ export default function SettingsPage() {
                 View and manage your active sessions
               </p>
             </div>
-            <Button variant="outline">Manage Sessions</Button>
+            <Button variant="outline" onClick={handleManageSessions}>Manage Sessions</Button>
           </div>
         </CardContent>
       </Card>
