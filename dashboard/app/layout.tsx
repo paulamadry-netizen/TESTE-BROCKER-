@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { Sidebar } from "@/components/dashboard/Sidebar";
+import { ClientLayout } from "./ClientLayout";
 
 export const metadata: Metadata = {
   title: "PropFirm Dashboard - Trading Challenge & Funded Accounts",
@@ -15,12 +15,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body className="font-sans antialiased">
-        <div className="flex min-h-screen bg-background">
-          <Sidebar />
-          <main className="flex-1 overflow-y-auto">
-            {children}
-          </main>
-        </div>
+        <ClientLayout>{children}</ClientLayout>
       </body>
     </html>
   );

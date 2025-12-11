@@ -15,6 +15,7 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/context/AuthContext";
 
 const navigation = [
   {
@@ -56,6 +57,15 @@ const navigation = [
 
 export function Sidebar() {
   const pathname = usePathname();
+  const { user, signOut } = useAuth();
+
+  const handleLogout = async () => {
+    try {
+      await signOut();
+    } catch (error) {
+      console.error("Logout error:", error);
+    }
+  };
 
   return (
     <div className="flex h-screen w-64 flex-col bg-card border-r">
@@ -106,14 +116,21 @@ export function Sidebar() {
       <div className="border-t p-4">
         <div className="flex items-center gap-3 rounded-lg px-3 py-2">
           <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-r from-blue-500 to-purple-600">
-            <span className="text-sm font-semibold text-white">JT</span>
+            <span className="text-sm font-semibold text-white">
+              {user?.email?.[0].toUpperCase() || "U"}
+            </span>
           </div>
           <div className="flex-1">
-            <p className="text-sm font-medium">John Trader</p>
-            <p className="text-xs text-muted-foreground">john@propfirm.com</p>
+            <p className="text-sm font-medium">Trader</p>
+            <p className="text-xs text-muted-foreground truncate">
+              {user?.email || "user@propfirm.com"}
+            </p>
           </div>
         </div>
-        <button className="mt-2 flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground">
+        <button
+          onClick={handleLogout}
+          className="mt-2 flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+        >
           <LogOut className="h-5 w-5" />
           Logout
         </button>
