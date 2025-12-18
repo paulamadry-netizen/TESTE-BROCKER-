@@ -7,6 +7,88 @@
 <script src="https://s3.tradingview.com/tv.js"></script>
 <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<!-- Firebase SDK -->
+<script type="module">
+  import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+  import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+  import { getFirestore, collection, addDoc, updateDoc, doc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyBCAeaaJMMw3_Egf-6-4i63IhAUy4EyzBc",
+    authDomain: "teste-brocker.firebaseapp.com",
+    projectId: "teste-brocker",
+    storageBucket: "teste-brocker.firebasestorage.app",
+    messagingSenderId: "44407447466",
+    appId: "1:44407447466:web:ce5fde6a8104a1b82bd5d3",
+    measurementId: "G-MHKNE6H1ZS"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+
+  // Make available globally
+  window.firebaseAuth = auth;
+  window.firebaseDb = db;
+  window.firebaseUser = null;
+
+  // Listen for auth state changes
+  onAuthStateChanged(auth, (user) => {
+    window.firebaseUser = user;
+    if (user) {
+      console.log('🔐 User authenticated:', user.uid);
+    } else {
+      console.log('⚠️ No user authenticated');
+      // Redirect to login if needed
+      if (window.location.pathname !== '/login.html') {
+        alert('Please log in to use the broker');
+        window.location.href = '/dashboard';
+      }
+    }
+  });
+
+  // Firebase sync functions - available globally
+  window.saveTrade = async (tradeData) => {
+    if (!window.firebaseUser) {
+      console.warn('No user authenticated - trade not saved');
+      return null;
+    }
+
+    try {
+      const tradesRef = collection(db, 'trades');
+      const docRef = await addDoc(tradesRef, {
+        ...tradeData,
+        userId: window.firebaseUser.uid,
+        createdAt: new Date().toISOString()
+      });
+      console.log('✅ Trade saved to Firestore:', docRef.id);
+      return docRef.id;
+    } catch (error) {
+      console.error('❌ Error saving trade:', error);
+      return null;
+    }
+  };
+
+  window.updateTrade = async (tradeId, updateData) => {
+    if (!window.firebaseUser || !tradeId) {
+      console.warn('No user or trade ID - update skipped');
+      return false;
+    }
+
+    try {
+      const tradeRef = doc(db, 'trades', tradeId);
+      await updateDoc(tradeRef, {
+        ...updateData,
+        updatedAt: new Date().toISOString()
+      });
+      console.log('✅ Trade updated in Firestore:', tradeId);
+      return true;
+    } catch (error) {
+      console.error('❌ Error updating trade:', error);
+      return false;
+    }
+  };
+</script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 :root{--bg-primary:#0a0e1a;--bg-secondary:#0f1419;--bg-tertiary:#141925;--surface:#1a1f2e;--surface-elevated:#1f2433;--border:#252b3d;--border-light:#2d3548;--text-primary:#e8edf4;--text-secondary:#9ba3b4;--text-muted:#6b7280;--accent:#00d9b8;--accent-hover:#00f0cc;--accent-dark:#00b397;--success:#10b981;--success-bg:rgba(16,185,129,0.1);--danger:#ef4444;--danger-bg:rgba(239,68,68,0.1);--warning:#f59e0b;--warning-bg:rgba(245,158,11,0.1);--shadow-sm:0 2px 8px rgba(0,0,0,0.3);--shadow-md:0 4px 16px rgba(0,0,0,0.4);--shadow-lg:0 8px 32px rgba(0,0,0,0.5);--shadow-xl:0 20px 60px rgba(0,0,0,0.6);--radius-sm:8px;--radius-md:12px;--radius-lg:16px;--transition:all 0.2s cubic-bezier(0.4,0,0.2,1);font-family:'Inter',system-ui,-apple-system,sans-serif}
@@ -345,8 +427,8 @@ const checkPositionTargets=(symbol)=>{const price=priceCache[symbol];if(price===
 const checkOrdersForSymbol=(symbol)=>{const price=priceCache[symbol];if(price===undefined)return;const matches=orders.filter(o=>o.symbol===symbol&&((o.side==='BUY'&&price<=o.price)||(o.side==='SELL'&&price>=o.price)));matches.forEach(async m=>{const symObj=WATCHLIST.find(w=>w.api===m.symbol)||{label:m.symbol,tv:m.symbol,api:m.symbol,type:'forex'};debugLog(`Exec order: ${m.side} ${m.symbol}`);await openPosition(symObj,m.side,m.size,price,m.tp,m.sl);removeOrder(m.id)})};
 const computePnl=(pos)=>{const current=pos.current!==undefined?pos.current:priceCache[pos.symbol.api];if(current===undefined)return 0;const step=pipStep(pos.symbol.api),pipDiff=(current-pos.entry)/step,pipValue=pipValuePerLot(pos.symbol.api,current),pnlPerLot=pipDiff*pipValue*pos.size;return pos.side==='BUY'?pnlPerLot:-pnlPerLot};
 const getTotalMarginUsed=()=>positions.reduce((sum,pos)=>{const price=pos.current||priceCache[pos.symbol.api]||pos.entry;return sum+marginRequirement(pos.symbol.api,pos.size,price)},0)+orders.reduce((sum,ord)=>sum+ord.margin,0);
-const openPosition=async(symObj,side,lots=1,forcedEntry=null,tp=null,sl=null)=>{const resolvedLots=Number(lots);if(!resolvedLots||resolvedLots<=0){showToast('❌ Lots invalide','error');return false}let price=forcedEntry!==null?Number(forcedEntry):Number(priceCache[symObj.api]);if(!price||Number.isNaN(price)){showToast('❌ Prix indisponible','error');return false}const required=marginRequirement(symObj.api,resolvedLots,price);if(required>availableBalance){showToast('❌ Solde insuffisant','error');return false}availableBalance-=required;const pos={id:'pos_'+Date.now()+'_'+Math.random().toString(36).slice(2,7),symbol:symObj,side,entry:price,size:resolvedLots,current:price,tp:tp?Number(tp):null,sl:sl?Number(sl):null,openedAt:Date.now()};positions.unshift(pos);renderPositions();renderTotals();const displayPrice=symObj.type==='etf'?price.toFixed(2):formatPrice(price);showToast(`✅ ${side}: ${symObj.label} @ ${displayPrice}`,'success');debugLog(`Opened: ${JSON.stringify(pos)}`);return true};
-const closePosition=(id,lotsToSell=null)=>{const idx=positions.findIndex(p=>p.id===id);if(idx===-1)return;const pos=positions[idx],sellLots=lotsToSell!==null?Math.min(Number(lotsToSell),pos.size):pos.size;if(sellLots<=0)return;const closePrice=priceCache[pos.symbol.api]||pos.current,pnl=computePnl({...pos,size:sellLots,current:closePrice}),released=marginRequirement(pos.symbol.api,sellLots,closePrice);availableBalance+=released;availableBalance+=pnl;history.unshift({symbol:pos.symbol,side:pos.side,entry:pos.entry,close:closePrice,pnl,lots:sellLots,closedAt:Date.now()});if(sellLots<pos.size)pos.size-=sellLots;else positions.splice(idx,1);renderPositions();renderHistory();renderTotals();showToast(`✅ Fermé: ${formatMoney(pnl)} USD`,pnl>=0?'success':'error');debugLog(`Closed ${id}: ${pnl}`)};
+const openPosition=async(symObj,side,lots=1,forcedEntry=null,tp=null,sl=null)=>{const resolvedLots=Number(lots);if(!resolvedLots||resolvedLots<=0){showToast('❌ Lots invalide','error');return false}let price=forcedEntry!==null?Number(forcedEntry):Number(priceCache[symObj.api]);if(!price||Number.isNaN(price)){showToast('❌ Prix indisponible','error');return false}const required=marginRequirement(symObj.api,resolvedLots,price);if(required>availableBalance){showToast('❌ Solde insuffisant','error');return false}availableBalance-=required;const pos={id:'pos_'+Date.now()+'_'+Math.random().toString(36).slice(2,7),symbol:symObj,side,entry:price,size:resolvedLots,current:price,tp:tp?Number(tp):null,sl:sl?Number(sl):null,openedAt:Date.now(),firestoreId:null};positions.unshift(pos);renderPositions();renderTotals();const displayPrice=symObj.type==='etf'?price.toFixed(2):formatPrice(price);showToast(`✅ ${side}: ${symObj.label} @ ${displayPrice}`,'success');debugLog(`Opened: ${JSON.stringify(pos)}`);if(window.saveTrade){const tradeData={symbol:symObj.label,symbolApi:symObj.api,side,entryPrice:price,currentPrice:price,lots:resolvedLots,takeProfit:pos.tp,stopLoss:pos.sl,status:'open',openedAt:new Date(pos.openedAt).toISOString()};const firestoreId=await window.saveTrade(tradeData);if(firestoreId){pos.firestoreId=firestoreId;debugLog(`Trade synced: ${firestoreId}`)}}return true};
+const closePosition=async(id,lotsToSell=null)=>{const idx=positions.findIndex(p=>p.id===id);if(idx===-1)return;const pos=positions[idx],sellLots=lotsToSell!==null?Math.min(Number(lotsToSell),pos.size):pos.size;if(sellLots<=0)return;const closePrice=priceCache[pos.symbol.api]||pos.current,pnl=computePnl({...pos,size:sellLots,current:closePrice}),released=marginRequirement(pos.symbol.api,sellLots,closePrice);availableBalance+=released;availableBalance+=pnl;history.unshift({symbol:pos.symbol,side:pos.side,entry:pos.entry,close:closePrice,pnl,lots:sellLots,closedAt:Date.now()});if(pos.firestoreId&&window.updateTrade){const updateData={closePrice,pnl,status:'closed',closedAt:new Date().toISOString()};await window.updateTrade(pos.firestoreId,updateData);debugLog(`Trade updated in Firestore: ${pos.firestoreId}`)}if(sellLots<pos.size)pos.size-=sellLots;else positions.splice(idx,1);renderPositions();renderHistory();renderTotals();showToast(`✅ Fermé: ${formatMoney(pnl)} USD`,pnl>=0?'success':'error');debugLog(`Closed ${id}: ${pnl}`)};
 const addLimitOrder=(symbol,side,price,lots,tp,sl)=>{const resolvedLots=Number(lots),resolvedPrice=Number(price);if(!resolvedLots||!resolvedPrice){showToast('❌ Prix et lots requis','error');return}const required=marginRequirement(symbol,resolvedLots,resolvedPrice);if(required>availableBalance){showToast('❌ Solde insuffisant','error');return}availableBalance-=required;orders.push({id:'ord_'+Date.now()+'_'+Math.random().toString(36).slice(2,7),symbol,side,price:resolvedPrice,size:resolvedLots,tp:tp?Number(tp):null,sl:sl?Number(sl):null,margin:required,createdAt:Date.now()});renderOrders();renderTotals();showToast('✅ Ordre ajouté','success');debugLog(`Order: ${side} ${symbol}`)};
 const removeOrder=(id)=>{const order=orders.find(o=>o.id===id);if(order)availableBalance+=order.margin;orders=orders.filter(o=>o.id!==id);renderOrders();renderTotals();showToast('✅ Ordre annulé','info');debugLog(`Removed: ${id}`)};
 const renderPositions=()=>{const tbody=$('positionsBody');tbody.innerHTML='';if(positions.length===0){tbody.innerHTML='<tr><td colspan="7" class="empty-state">Aucune position</td></tr>';return}positions.forEach(pos=>{const current=pos.current!==undefined?pos.current:priceCache[pos.symbol.api];pos.current=current;const pnl=computePnl(pos),pnlClass=pnl>=0?'positive':'negative',tr=document.createElement('tr');tr.innerHTML=`<td><div class="symbol-cell">${pos.symbol.label}</div><div class="symbol-label">${pos.symbol.tv}</div></td><td><span class="side-badge ${pos.side.toLowerCase()}">${pos.side}</span></td><td>${formatPrice(pos.entry)}</td><td>${formatPrice(current)}</td><td>${pos.size}</td><td><span class="pnl-value ${pnlClass}">${formatMoney(pnl)}</span></td><td><div class="action-buttons"><button class="btn-action" data-id="${pos.id}"><i class="fas fa-cog"></i></button><button class="btn-action" data-close="${pos.id}"><i class="fas fa-times"></i></button></div></td>`;tbody.appendChild(tr)});tbody.querySelectorAll('button[data-id]').forEach(btn=>btn.onclick=()=>openPositionModal(btn.dataset.id));tbody.querySelectorAll('button[data-close]').forEach(btn=>btn.onclick=()=>closePosition(btn.dataset.close))};

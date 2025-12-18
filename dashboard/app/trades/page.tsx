@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { doc, getDoc } from "firebase/firestore";
+import { collection, query, where, getDocs, orderBy } from "firebase/firestore";
 import { db } from "@/lib/firebase/config";
 import { useAuth } from "@/context/AuthContext";
 import { History, TrendingUp, TrendingDown, DollarSign, Loader2 } from "lucide-react";
@@ -9,40 +9,67 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency } from "@/lib/utils";
 
-interface UserData {
-  email: string;
-  accountBalance: number;
-  accountStatus: string;
+interface Trade {
+  id: string;
+  symbol: string;
+  side: "BUY" | "SELL";
+  entryPrice: number;
+  closePrice?: number;
+  lots: number;
+  pnl?: number;
+  status: "open" | "closed";
+  openedAt: string;
+  closedAt?: string;
 }
 
 export default function TradesPage() {
   const { user, loading: authLoading } = useAuth();
-  const [userData, setUserData] = useState<UserData | null>(null);
+  const [trades, setTrades] = useState<Trade[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    async function loadUserData() {
+    async function loadTrades() {
       if (!user) {
         setLoading(false);
         return;
       }
 
       try {
-        const userDocRef = doc(db, "users", user.uid);
-        const userDocSnap = await getDoc(userDocRef);
+        const tradesRef = collection(db, "trades");
+        const q = query(
+          tradesRef,
+          where("userId", "==", user.uid),
+          orderBy("createdAt", "desc")
+        );
+        const querySnapshot = await getDocs(q);
 
-        if (userDocSnap.exists()) {
-          setUserData(userDocSnap.data() as UserData);
-        }
+        const loadedTrades: Trade[] = [];
+        querySnapshot.forEach((doc) => {
+          const data = doc.data();
+          loadedTrades.push({
+            id: doc.id,
+            symbol: data.symbol,
+            side: data.side,
+            entryPrice: data.entryPrice,
+            closePrice: data.closePrice,
+            lots: data.lots,
+            pnl: data.pnl,
+            status: data.status,
+            openedAt: data.openedAt,
+            closedAt: data.closedAt,
+          });
+        });
+
+        setTrades(loadedTrades);
       } catch (error) {
-        console.error("Error loading user data:", error);
+        console.error("Error loading trades:", error);
       } finally {
         setLoading(false);
       }
     }
 
     if (!authLoading) {
-      loadUserData();
+      loadTrades();
     }
   }, [user, authLoading]);
 
@@ -54,22 +81,22 @@ export default function TradesPage() {
     );
   }
 
-  if (!userData) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <p className="text-muted-foreground">No account data found</p>
-      </div>
-    );
-  }
+  // Calculate statistics from real trades
+  const closedTrades = trades.filter(t => t.status === "closed");
+  const totalTrades = closedTrades.length;
+  const winningTrades = closedTrades.filter(t => (t.pnl || 0) > 0).length;
+  const losingTrades = closedTrades.filter(t => (t.pnl || 0) < 0).length;
+  const winRate = totalTrades > 0 ? ((winningTrades / totalTrades) * 100).toFixed(1) : 0;
+  const totalProfit = closedTrades.reduce((sum, t) => sum + (t.pnl || 0), 0);
 
-  // TODO: Load real trades from Firestore
-  const trades: any[] = [];
-  const totalTrades = 0;
-  const winningTrades = 0;
-  const losingTrades = 0;
-  const winRate = 0;
-  const totalProfit = 0;
-  const profitFactor = 0;
+  const grossWins = closedTrades.filter(t => (t.pnl || 0) > 0).reduce((sum, t) => sum + (t.pnl || 0), 0);
+  const grossLosses = Math.abs(closedTrades.filter(t => (t.pnl || 0) < 0).reduce((sum, t) => sum + (t.pnl || 0), 0));
+  const profitFactor = grossLosses > 0 ? (grossWins / grossLosses).toFixed(2) : "N/A";
+
+  const avgWin = winningTrades > 0 ? grossWins / winningTrades : 0;
+  const avgLoss = losingTrades > 0 ? grossLosses / losingTrades : 0;
+  const bestTrade = closedTrades.length > 0 ? Math.max(...closedTrades.map(t => t.pnl || 0)) : 0;
+  const worstTrade = closedTrades.length > 0 ? Math.min(...closedTrades.map(t => t.pnl || 0)) : 0;
 
   return (
     <div className="flex flex-col gap-6 p-8">
@@ -188,41 +215,41 @@ export default function TradesPage() {
                         </td>
                         <td className="p-4 align-middle">
                           <Badge
-                            variant={trade.type === "BUY" ? "success" : "destructive"}
+                            variant={trade.side === "BUY" ? "success" : "destructive"}
                           >
-                            {trade.type}
+                            {trade.side}
                           </Badge>
                         </td>
                         <td className="p-4 align-middle text-sm text-muted-foreground">
-                          {new Date(trade.openTime).toLocaleString()}
+                          {new Date(trade.openedAt).toLocaleString()}
                         </td>
                         <td className="p-4 align-middle text-sm text-muted-foreground">
-                          {trade.closeTime ? new Date(trade.closeTime).toLocaleString() : "-"}
+                          {trade.closedAt ? new Date(trade.closedAt).toLocaleString() : "-"}
                         </td>
                         <td className="p-4 align-middle text-right text-sm">
-                          {trade.openPrice}
+                          {trade.entryPrice.toFixed(5)}
                         </td>
                         <td className="p-4 align-middle text-right text-sm">
-                          {trade.closePrice || "-"}
+                          {trade.closePrice ? trade.closePrice.toFixed(5) : "-"}
                         </td>
                         <td className="p-4 align-middle text-right text-sm">
-                          {trade.volume}
+                          {trade.lots}
                         </td>
                         <td className="p-4 align-middle text-right">
                           <span
                             className={`font-semibold ${
-                              trade.profit >= 0 ? "text-green-500" : "text-red-500"
+                              (trade.pnl || 0) >= 0 ? "text-green-500" : "text-red-500"
                             }`}
                           >
-                            {trade.profit >= 0 ? "+" : ""}
-                            {formatCurrency(trade.profit)}
+                            {(trade.pnl || 0) >= 0 ? "+" : ""}
+                            {formatCurrency(trade.pnl || 0)}
                           </span>
                         </td>
                         <td className="p-4 align-middle text-center">
                           <Badge
-                            variant={trade.status === "CLOSED" ? "secondary" : "outline"}
+                            variant={trade.status === "closed" ? "secondary" : "outline"}
                           >
-                            {trade.status}
+                            {trade.status.toUpperCase()}
                           </Badge>
                         </td>
                       </tr>
@@ -257,13 +284,13 @@ export default function TradesPage() {
             <div className="flex justify-between">
               <span className="text-muted-foreground">Average Win:</span>
               <span className="font-semibold text-green-500">
-                {formatCurrency(0)}
+                {formatCurrency(avgWin)}
               </span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Best Trade:</span>
               <span className="font-semibold text-green-500">
-                {formatCurrency(0)}
+                {formatCurrency(bestTrade)}
               </span>
             </div>
           </CardContent>
@@ -281,13 +308,13 @@ export default function TradesPage() {
             <div className="flex justify-between">
               <span className="text-muted-foreground">Average Loss:</span>
               <span className="font-semibold text-red-500">
-                {formatCurrency(0)}
+                {formatCurrency(avgLoss)}
               </span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Worst Trade:</span>
               <span className="font-semibold text-red-500">
-                {formatCurrency(0)}
+                {formatCurrency(worstTrade)}
               </span>
             </div>
           </CardContent>
