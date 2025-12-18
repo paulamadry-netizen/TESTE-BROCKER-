@@ -155,14 +155,8 @@ async function handleCheckoutCompleted(
 
     console.log('✅ Document Firestore créé');
 
-    // Générer un lien de réinitialisation de mot de passe
-    const resetLink: string = await admin.auth().generatePasswordResetLink(customerEmail);
-
-    console.log('🔗 Lien de réinitialisation généré');
-    console.log('   Link:', resetLink);
-
-    // Envoyer un email de bienvenue au client avec le lien
-    await sendWelcomeEmail(customerEmail, resetLink, session);
+    // Envoyer un email de bienvenue au client avec le mot de passe
+    await sendWelcomeEmail(customerEmail, randomPassword, session);
 
     console.log('✅ Traitement terminé avec succès pour:', customerEmail);
 
@@ -287,16 +281,16 @@ function generateSecurePassword(): string {
 /**
  * Envoyer un email de bienvenue
  * @param email - Email du destinataire
- * @param resetLink - Lien de réinitialisation du mot de passe
+ * @param password - Mot de passe généré automatiquement
  * @param session - Session de checkout Stripe
  */
 async function sendWelcomeEmail(
   email: string,
-  resetLink: string,
+  password: string,
   session: StripeCheckoutSession
 ): Promise<void> {
   console.log('📧 Email de bienvenue à envoyer à:', email);
-  console.log('   - Lien de réinitialisation:', resetLink);
+  console.log('   - Mot de passe:', password);
   console.log('   - Challenge type:', session.metadata?.challengeType);
   console.log('   - Dashboard: https://dash-board-claude-ia.onrender.com/login');
 
@@ -308,7 +302,7 @@ async function sendWelcomeEmail(
         name: 'welcome',
         data: {
           email,
-          resetLink,
+          password,
           dashboardUrl: 'https://dash-board-claude-ia.onrender.com/login',
           challengeType: session.metadata?.challengeType || 'standard',
         }

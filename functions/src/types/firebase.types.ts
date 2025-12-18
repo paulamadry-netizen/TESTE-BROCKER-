@@ -44,7 +44,7 @@ export interface EmailTemplate {
     name: string;
     data: {
       email: string;
-      resetLink: string;
+      password: string;
       dashboardUrl: string;
       challengeType: string;
     };

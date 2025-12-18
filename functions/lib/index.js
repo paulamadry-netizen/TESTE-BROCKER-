@@ -156,12 +156,8 @@ async function handleCheckoutCompleted(session, stripeInstance) {
         };
         await admin.firestore().collection('users').doc(userRecord.uid).set(userData);
         console.log('✅ Document Firestore créé');
-        // Générer un lien de réinitialisation de mot de passe
-        const resetLink = await admin.auth().generatePasswordResetLink(customerEmail);
-        console.log('🔗 Lien de réinitialisation généré');
-        console.log('   Link:', resetLink);
-        // Envoyer un email de bienvenue au client avec le lien
-        await sendWelcomeEmail(customerEmail, resetLink, session);
+        // Envoyer un email de bienvenue au client avec le mot de passe
+        await sendWelcomeEmail(customerEmail, randomPassword, session);
         console.log('✅ Traitement terminé avec succès pour:', customerEmail);
     }
     catch (error) {
@@ -262,13 +258,13 @@ function generateSecurePassword() {
 /**
  * Envoyer un email de bienvenue
  * @param email - Email du destinataire
- * @param resetLink - Lien de réinitialisation du mot de passe
+ * @param password - Mot de passe généré automatiquement
  * @param session - Session de checkout Stripe
  */
-async function sendWelcomeEmail(email, resetLink, session) {
+async function sendWelcomeEmail(email, password, session) {
     var _a, _b;
     console.log('📧 Email de bienvenue à envoyer à:', email);
-    console.log('   - Lien de réinitialisation:', resetLink);
+    console.log('   - Mot de passe:', password);
     console.log('   - Challenge type:', (_a = session.metadata) === null || _a === void 0 ? void 0 : _a.challengeType);
     console.log('   - Dashboard: https://dash-board-claude-ia.onrender.com/login');
     // Ajouter à la collection 'mail' pour déclencher une extension email
@@ -279,7 +275,7 @@ async function sendWelcomeEmail(email, resetLink, session) {
                 name: 'welcome',
                 data: {
                     email,
-                    resetLink,
+                    password,
                     dashboardUrl: 'https://dash-board-claude-ia.onrender.com/login',
                     challengeType: ((_b = session.metadata) === null || _b === void 0 ? void 0 : _b.challengeType) || 'standard',
                 }
