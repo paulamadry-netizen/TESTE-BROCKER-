@@ -18,13 +18,13 @@ const stripeSecretKey = defineSecret('STRIPE_SECRET_KEY');
 const stripeWebhookSecret = defineSecret('STRIPE_WEBHOOK_SECRET');
 
 /**
- * Webhook Stripe - Écoute les événements de paiement
+ * Webhook Stripe - Écoute les événements de paiement (v2 with Secrets)
  * URL du webhook : https://us-central1-teste-brocker.cloudfunctions.net/stripeWebhook
  */
 export const stripeWebhook = onRequest(
   { secrets: [stripeSecretKey, stripeWebhookSecret] },
   async (req, res): Promise<void> => {
-    console.log('🔍 Webhook Stripe appelé');
+    console.log('🔍 Webhook Stripe appelé (v2 with secrets)');
 
     // Initialiser Stripe avec le secret
     const stripe = new Stripe(stripeSecretKey.value(), {
