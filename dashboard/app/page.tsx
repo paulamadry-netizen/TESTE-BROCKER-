@@ -94,7 +94,7 @@ export default function DashboardPage() {
 
   // Performance data - flat line at initial balance for new accounts
   const performanceData = [
-    { date: new Date().toLocaleDateString(), balance: initialBalance }
+    { date: new Date().toLocaleDateString(), balance: initialBalance, profit: 0 }
   ];
 
   return (
