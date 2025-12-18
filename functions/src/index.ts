@@ -134,6 +134,13 @@ async function handleCheckoutCompleted(
     // Créer le document utilisateur dans Firestore
     const customerId = typeof session.customer === 'string' ? session.customer : '';
     const amountTotal = session.amount_total || 0;
+    const amountInEuros = amountTotal / 100; // Stripe utilise les centimes
+
+    // Déterminer le capital de trading en fonction du montant payé
+    const tradingCapital = determineTradingCapital(amountInEuros);
+
+    console.log(`💰 Montant payé: ${amountInEuros}€ → Capital de trading: ${tradingCapital}€`);
+
     const profitTarget = session.metadata?.profitTarget ? parseFloat(session.metadata.profitTarget) : 10;
     const maxDrawdown = session.metadata?.maxDrawdown ? parseFloat(session.metadata.maxDrawdown) : 5;
 
@@ -142,7 +149,7 @@ async function handleCheckoutCompleted(
       stripeCustomerId: customerId,
       stripeSessionId: session.id,
       challengeType: session.metadata?.challengeType || 'standard',
-      accountBalance: amountTotal / 100,
+      accountBalance: tradingCapital,
       accountStatus: 'active',
       profitTarget,
       maxDrawdown,
@@ -259,6 +266,24 @@ async function handleSubscriptionDeleted(
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     console.error('❌ Erreur désactivation compte:', errorMessage);
   }
+}
+/**
+ * Déterminer le capital de trading en fonction du montant payé
+ * @param amountInEuros - Montant payé en euros
+ * @returns Capital de trading (25000, 50000 ou 100000)
+ */
+function determineTradingCapital(amountInEuros: number): number {
+  if (amountInEuros >= 150 && amountInEuros <= 230) {
+    return 25000;
+  } else if (amountInEuros > 230 && amountInEuros <= 330) {
+    return 50000;
+  } else if (amountInEuros >= 450 && amountInEuros <= 650) {
+    return 100000;
+  }
+
+  // Par défaut, si le montant ne correspond à aucune tranche, utiliser 25000
+  console.warn(`⚠️ Montant ${amountInEuros}€ ne correspond à aucune tranche connue. Capital par défaut: 25000€`);
+  return 25000;
 }
 
 /**

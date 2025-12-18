@@ -139,6 +139,10 @@ async function handleCheckoutCompleted(session, stripeInstance) {
         // Créer le document utilisateur dans Firestore
         const customerId = typeof session.customer === 'string' ? session.customer : '';
         const amountTotal = session.amount_total || 0;
+        const amountInEuros = amountTotal / 100; // Stripe utilise les centimes
+        // Déterminer le capital de trading en fonction du montant payé
+        const tradingCapital = determineTradingCapital(amountInEuros);
+        console.log(`💰 Montant payé: ${amountInEuros}€ → Capital de trading: ${tradingCapital}€`);
         const profitTarget = ((_c = session.metadata) === null || _c === void 0 ? void 0 : _c.profitTarget) ? parseFloat(session.metadata.profitTarget) : 10;
         const maxDrawdown = ((_d = session.metadata) === null || _d === void 0 ? void 0 : _d.maxDrawdown) ? parseFloat(session.metadata.maxDrawdown) : 5;
         const userData = {
@@ -146,7 +150,7 @@ async function handleCheckoutCompleted(session, stripeInstance) {
             stripeCustomerId: customerId,
             stripeSessionId: session.id,
             challengeType: ((_e = session.metadata) === null || _e === void 0 ? void 0 : _e.challengeType) || 'standard',
-            accountBalance: amountTotal / 100,
+            accountBalance: tradingCapital,
             accountStatus: 'active',
             profitTarget,
             maxDrawdown,
@@ -240,6 +244,25 @@ async function handleSubscriptionDeleted(subscription, stripeInstance) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         console.error('❌ Erreur désactivation compte:', errorMessage);
     }
+}
+/**
+ * Déterminer le capital de trading en fonction du montant payé
+ * @param amountInEuros - Montant payé en euros
+ * @returns Capital de trading (25000, 50000 ou 100000)
+ */
+function determineTradingCapital(amountInEuros) {
+    if (amountInEuros >= 150 && amountInEuros <= 230) {
+        return 25000;
+    }
+    else if (amountInEuros > 230 && amountInEuros <= 330) {
+        return 50000;
+    }
+    else if (amountInEuros >= 450 && amountInEuros <= 650) {
+        return 100000;
+    }
+    // Par défaut, si le montant ne correspond à aucune tranche, utiliser 25000
+    console.warn(`⚠️ Montant ${amountInEuros}€ ne correspond à aucune tranche connue. Capital par défaut: 25000€`);
+    return 25000;
 }
 /**
  * Générer un mot de passe aléatoire sécurisé
