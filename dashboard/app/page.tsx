@@ -1,3 +1,9 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { doc, getDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase/config";
+import { useAuth } from "@/context/AuthContext";
 import {
   DollarSign,
   TrendingUp,
@@ -5,25 +11,87 @@ import {
   Activity,
   Target,
   Calendar,
+  Loader2,
 } from "lucide-react";
 import { StatCard } from "@/components/dashboard/StatCard";
 import { PerformanceChart } from "@/components/charts/PerformanceChart";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
-  mockAccounts,
   mockTrades,
   mockPerformanceData,
   mockStatistics,
 } from "@/data/mockData";
 import { formatCurrency, formatPercentage } from "@/lib/utils";
 
+interface UserData {
+  email: string;
+  accountBalance: number;
+  accountStatus: string;
+  challengeType: string;
+  profitTarget: number;
+  maxDrawdown: number;
+  tradingDays: number;
+  stripeCustomerId: string;
+  stripeSessionId?: string;
+}
+
 export default function DashboardPage() {
-  const activeAccount = mockAccounts[0];
+  const { user, loading: authLoading } = useAuth();
+  const [userData, setUserData] = useState<UserData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadUserData() {
+      if (!user) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const userDocRef = doc(db, "users", user.uid);
+        const userDocSnap = await getDoc(userDocRef);
+
+        if (userDocSnap.exists()) {
+          setUserData(userDocSnap.data() as UserData);
+        } else {
+          console.error("No user document found in Firestore");
+        }
+      } catch (error) {
+        console.error("Error loading user data:", error);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    if (!authLoading) {
+      loadUserData();
+    }
+  }, [user, authLoading]);
+
+  if (loading || authLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
+
+  if (!userData) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <p className="text-muted-foreground">No account data found</p>
+      </div>
+    );
+  }
+
   const recentTrades = mockTrades.slice(0, 5);
-  const profitLoss = activeAccount.balance - activeAccount.initialBalance;
-  const profitLossPercentage =
-    ((profitLoss / activeAccount.initialBalance) * 100).toFixed(2);
+  const initialBalance = userData.accountBalance;
+  const currentBalance = userData.accountBalance; // TODO: Update with real-time balance from trades
+  const profitLoss = currentBalance - initialBalance;
+  const profitLossPercentage = ((profitLoss / initialBalance) * 100).toFixed(2);
+  const profitTargetAmount = (initialBalance * userData.profitTarget) / 100;
+  const maxDrawdownAmount = (initialBalance * userData.maxDrawdown) / 100;
 
   return (
     <div className="flex flex-col gap-6 p-8">
@@ -39,7 +107,7 @@ export default function DashboardPage() {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <StatCard
           title="Account Balance"
-          value={formatCurrency(activeAccount.balance)}
+          value={formatCurrency(currentBalance)}
           change={`${formatPercentage(parseFloat(profitLossPercentage))} from start`}
           changeType={profitLoss >= 0 ? "positive" : "negative"}
           icon={DollarSign}
@@ -47,19 +115,15 @@ export default function DashboardPage() {
         <StatCard
           title="Total Profit"
           value={formatCurrency(profitLoss)}
-          change={`Target: ${formatCurrency(activeAccount.profitTarget)}`}
+          change={`Target: ${formatCurrency(profitTargetAmount)}`}
           changeType={profitLoss >= 0 ? "positive" : "negative"}
           icon={TrendingUp}
         />
         <StatCard
           title="Current Drawdown"
-          value={formatCurrency(activeAccount.currentDrawdown)}
-          change={`Max: ${formatCurrency(activeAccount.maxDrawdown)}`}
-          changeType={
-            activeAccount.currentDrawdown < activeAccount.maxDrawdown / 2
-              ? "positive"
-              : "negative"
-          }
+          value={formatCurrency(0)}
+          change={`Max: ${formatCurrency(maxDrawdownAmount)}`}
+          changeType="positive"
           icon={TrendingDown}
         />
         <StatCard
@@ -84,14 +148,14 @@ export default function DashboardPage() {
             <div className="flex items-center justify-between text-sm">
               <span className="text-muted-foreground">Profit Target</span>
               <span className="font-semibold">
-                {formatCurrency(profitLoss)} / {formatCurrency(activeAccount.profitTarget)}
+                {formatCurrency(profitLoss)} / {formatCurrency(profitTargetAmount)}
               </span>
             </div>
             <div className="h-2 bg-secondary rounded-full overflow-hidden">
               <div
                 className="h-full bg-green-500 transition-all"
                 style={{
-                  width: `${Math.min((profitLoss / activeAccount.profitTarget) * 100, 100)}%`,
+                  width: `${Math.min((profitLoss / profitTargetAmount) * 100, 100)}%`,
                 }}
               />
             </div>
@@ -101,22 +165,22 @@ export default function DashboardPage() {
             <div>
               <p className="text-sm text-muted-foreground">Trading Days</p>
               <p className="text-2xl font-bold">
-                {activeAccount.daysTraded}/{activeAccount.totalDays}
+                {userData.tradingDays}/30
               </p>
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Account Type</p>
               <Badge variant="secondary" className="mt-1">
-                {activeAccount.type}
+                {userData.challengeType.toUpperCase()}
               </Badge>
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Status</p>
               <Badge
-                variant={activeAccount.status === "ACTIVE" ? "success" : "destructive"}
+                variant={userData.accountStatus === "active" ? "success" : "destructive"}
                 className="mt-1"
               >
-                {activeAccount.status}
+                {userData.accountStatus.toUpperCase()}
               </Badge>
             </div>
           </div>
@@ -133,36 +197,42 @@ export default function DashboardPage() {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {recentTrades.map((trade) => (
-              <div
-                key={trade.id}
-                className="flex items-center justify-between py-3 border-b last:border-0"
-              >
-                <div className="flex items-center gap-4">
-                  <Badge variant={trade.type === "BUY" ? "success" : "destructive"}>
-                    {trade.type}
-                  </Badge>
-                  <div>
-                    <p className="font-semibold">{trade.symbol}</p>
+            {recentTrades.length > 0 ? (
+              recentTrades.map((trade) => (
+                <div
+                  key={trade.id}
+                  className="flex items-center justify-between py-3 border-b last:border-0"
+                >
+                  <div className="flex items-center gap-4">
+                    <Badge variant={trade.type === "BUY" ? "success" : "destructive"}>
+                      {trade.type}
+                    </Badge>
+                    <div>
+                      <p className="font-semibold">{trade.symbol}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {new Date(trade.openTime).toLocaleString()}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p
+                      className={`font-semibold ${
+                        trade.profit >= 0 ? "text-green-500" : "text-red-500"
+                      }`}
+                    >
+                      {formatCurrency(trade.profit)}
+                    </p>
                     <p className="text-sm text-muted-foreground">
-                      {new Date(trade.openTime).toLocaleString()}
+                      Vol: {trade.volume}
                     </p>
                   </div>
                 </div>
-                <div className="text-right">
-                  <p
-                    className={`font-semibold ${
-                      trade.profit >= 0 ? "text-green-500" : "text-red-500"
-                    }`}
-                  >
-                    {formatCurrency(trade.profit)}
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    Vol: {trade.volume}
-                  </p>
-                </div>
-              </div>
-            ))}
+              ))
+            ) : (
+              <p className="text-center text-muted-foreground py-8">
+                No trades yet. Start trading to see your activity here.
+              </p>
+            )}
           </div>
         </CardContent>
       </Card>
