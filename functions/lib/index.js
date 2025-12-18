@@ -1,7 +1,7 @@
 "use strict";
 /**
  * Cloud Function Firebase pour gérer les webhooks Stripe
- * Version TypeScript avec typage strict
+ * Version TypeScript avec Firebase Functions v2 et Secrets
  */
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
     if (k2 === undefined) k2 = k;
@@ -41,56 +41,29 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.stripeWebhook = void 0;
-const functions = __importStar(require("firebase-functions"));
+const https_1 = require("firebase-functions/v2/https");
+const params_1 = require("firebase-functions/params");
 const admin = __importStar(require("firebase-admin"));
 const stripe_1 = __importDefault(require("stripe"));
 // Initialiser Firebase Admin
 admin.initializeApp();
-// Initialiser Stripe avec gestion d'erreur améliorée
-let stripe = null;
+// Définir les secrets
+const stripeSecretKey = (0, params_1.defineSecret)('STRIPE_SECRET_KEY');
+const stripeWebhookSecret = (0, params_1.defineSecret)('STRIPE_WEBHOOK_SECRET');
 /**
  * Webhook Stripe - Écoute les événements de paiement
  * URL du webhook : https://us-central1-teste-brocker.cloudfunctions.net/stripeWebhook
  */
-exports.stripeWebhook = functions.https.onRequest(async (req, res) => {
-    var _a;
-    // Initialiser Stripe si pas encore fait
-    if (!stripe) {
-        try {
-            const config = functions.config();
-            // Debug : afficher la config disponible
-            console.log('🔍 Vérification config...');
-            console.log('Config keys:', Object.keys(config));
-            if (!config.stripe) {
-                console.error('❌ config.stripe est undefined');
-                console.error('Config disponible:', JSON.stringify(config));
-                res.status(500).send('Configuration Stripe manquante - stripe object not found');
-                return;
-            }
-            if (!config.stripe.secret_key) {
-                console.error('❌ config.stripe.secret_key est undefined');
-                console.error('Stripe config:', JSON.stringify(config.stripe));
-                res.status(500).send('Configuration Stripe manquante - secret_key not found');
-                return;
-            }
-            const secretKey = config.stripe.secret_key;
-            console.log('✅ Clé Stripe trouvée (premiers chars):', secretKey.substring(0, 10) + '...');
-            stripe = new stripe_1.default(secretKey, {
-                apiVersion: '2023-10-16'
-            });
-            console.log('✅ Stripe initialisé avec succès');
-        }
-        catch (error) {
-            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-            console.error('❌ Erreur initialisation Stripe:', errorMessage);
-            res.status(500).send('Erreur initialisation Stripe: ' + errorMessage);
-            return;
-        }
-    }
+exports.stripeWebhook = (0, https_1.onRequest)({ secrets: [stripeSecretKey, stripeWebhookSecret] }, async (req, res) => {
+    console.log('🔍 Webhook Stripe appelé');
+    // Initialiser Stripe avec le secret
+    const stripe = new stripe_1.default(stripeSecretKey.value(), {
+        apiVersion: '2023-10-16'
+    });
+    console.log('✅ Stripe initialisé avec secret');
     // Vérification de la signature Stripe (sécurité)
     const sig = req.headers['stripe-signature'];
-    const config = functions.config();
-    const webhookSecret = (_a = config.stripe) === null || _a === void 0 ? void 0 : _a.webhook_secret;
+    const webhookSecretValue = stripeWebhookSecret.value();
     if (!sig || typeof sig !== 'string') {
         res.status(400).send('Missing stripe-signature header');
         return;
@@ -98,14 +71,8 @@ exports.stripeWebhook = functions.https.onRequest(async (req, res) => {
     let event;
     try {
         // Vérifier que la requête vient bien de Stripe
-        if (webhookSecret) {
-            event = stripe.webhooks.constructEvent(req.rawBody, sig, webhookSecret);
-            console.log('✅ Signature webhook vérifiée');
-        }
-        else {
-            console.warn('⚠️ Pas de webhook secret configuré, signature non vérifiée');
-            event = req.body;
-        }
+        event = stripe.webhooks.constructEvent(req.rawBody, sig, webhookSecretValue);
+        console.log('✅ Signature webhook vérifiée');
     }
     catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'Unknown error';

@@ -1,9 +1,10 @@
 /**
  * Cloud Function Firebase pour gérer les webhooks Stripe
- * Version TypeScript avec typage strict
+ * Version TypeScript avec Firebase Functions v2 et Secrets
  */
 
-import * as functions from 'firebase-functions';
+import { onRequest } from 'firebase-functions/v2/https';
+import { defineSecret } from 'firebase-functions/params';
 import * as admin from 'firebase-admin';
 import Stripe from 'stripe';
 import { StripeCheckoutSession, StripeSubscription } from './types/stripe.types';
@@ -12,110 +13,82 @@ import { UserDocument, EmailTemplate } from './types/firebase.types';
 // Initialiser Firebase Admin
 admin.initializeApp();
 
-// Initialiser Stripe avec gestion d'erreur améliorée
-let stripe: Stripe | null = null;
+// Définir les secrets
+const stripeSecretKey = defineSecret('STRIPE_SECRET_KEY');
+const stripeWebhookSecret = defineSecret('STRIPE_WEBHOOK_SECRET');
 
 /**
  * Webhook Stripe - Écoute les événements de paiement
  * URL du webhook : https://us-central1-teste-brocker.cloudfunctions.net/stripeWebhook
  */
-export const stripeWebhook = functions.https.onRequest(async (req, res): Promise<void> => {
-  // Initialiser Stripe si pas encore fait
-  if (!stripe) {
-    try {
-      const config = functions.config();
+export const stripeWebhook = onRequest(
+  { secrets: [stripeSecretKey, stripeWebhookSecret] },
+  async (req, res): Promise<void> => {
+    console.log('🔍 Webhook Stripe appelé');
 
-      // Debug : afficher la config disponible
-      console.log('🔍 Vérification config...');
-      console.log('Config keys:', Object.keys(config));
+    // Initialiser Stripe avec le secret
+    const stripe = new Stripe(stripeSecretKey.value(), {
+      apiVersion: '2023-10-16'
+    });
 
-      if (!config.stripe) {
-        console.error('❌ config.stripe est undefined');
-        console.error('Config disponible:', JSON.stringify(config));
-        res.status(500).send('Configuration Stripe manquante - stripe object not found');
-        return;
-      }
+    console.log('✅ Stripe initialisé avec secret');
 
-      if (!config.stripe.secret_key) {
-        console.error('❌ config.stripe.secret_key est undefined');
-        console.error('Stripe config:', JSON.stringify(config.stripe));
-        res.status(500).send('Configuration Stripe manquante - secret_key not found');
-        return;
-      }
+    // Vérification de la signature Stripe (sécurité)
+    const sig = req.headers['stripe-signature'];
+    const webhookSecretValue = stripeWebhookSecret.value();
 
-      const secretKey: string = config.stripe.secret_key;
-      console.log('✅ Clé Stripe trouvée (premiers chars):', secretKey.substring(0, 10) + '...');
-
-      stripe = new Stripe(secretKey, {
-        apiVersion: '2023-10-16'
-      });
-      console.log('✅ Stripe initialisé avec succès');
-
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      console.error('❌ Erreur initialisation Stripe:', errorMessage);
-      res.status(500).send('Erreur initialisation Stripe: ' + errorMessage);
+    if (!sig || typeof sig !== 'string') {
+      res.status(400).send('Missing stripe-signature header');
       return;
     }
-  }
 
-  // Vérification de la signature Stripe (sécurité)
-  const sig = req.headers['stripe-signature'];
-  const config = functions.config();
-  const webhookSecret: string | undefined = config.stripe?.webhook_secret;
+    let event: Stripe.Event;
 
-  if (!sig || typeof sig !== 'string') {
-    res.status(400).send('Missing stripe-signature header');
-    return;
-  }
-
-  let event: Stripe.Event;
-
-  try {
-    // Vérifier que la requête vient bien de Stripe
-    if (webhookSecret) {
-      event = stripe!.webhooks.constructEvent(req.rawBody, sig, webhookSecret);
+    try {
+      // Vérifier que la requête vient bien de Stripe
+      event = stripe.webhooks.constructEvent(
+        req.rawBody as Buffer,
+        sig,
+        webhookSecretValue
+      );
       console.log('✅ Signature webhook vérifiée');
-    } else {
-      console.warn('⚠️ Pas de webhook secret configuré, signature non vérifiée');
-      event = req.body as Stripe.Event;
-    }
-  } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-    console.error('❌ Erreur de vérification webhook:', errorMessage);
-    res.status(400).send(`Webhook Error: ${errorMessage}`);
-    return;
-  }
-
-  console.log('✅ Événement Stripe reçu:', event.type);
-
-  // Gérer les différents types d'événements
-  try {
-    switch (event.type) {
-      case 'checkout.session.completed':
-        await handleCheckoutCompleted(event.data.object as StripeCheckoutSession, stripe!);
-        break;
-
-      case 'customer.subscription.created':
-      case 'customer.subscription.updated':
-        await handleSubscriptionChange(event.data.object as StripeSubscription, stripe!);
-        break;
-
-      case 'customer.subscription.deleted':
-        await handleSubscriptionDeleted(event.data.object as StripeSubscription, stripe!);
-        break;
-
-      default:
-        console.log(`ℹ️ Événement non géré: ${event.type}`);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+      console.error('❌ Erreur de vérification webhook:', errorMessage);
+      res.status(400).send(`Webhook Error: ${errorMessage}`);
+      return;
     }
 
-    res.json({ received: true });
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    console.error('❌ Erreur traitement webhook:', errorMessage);
-    res.status(500).json({ error: errorMessage });
+    console.log('✅ Événement Stripe reçu:', event.type);
+
+    // Gérer les différents types d'événements
+    try {
+      switch (event.type) {
+        case 'checkout.session.completed':
+          await handleCheckoutCompleted(event.data.object as StripeCheckoutSession, stripe);
+          break;
+
+        case 'customer.subscription.created':
+        case 'customer.subscription.updated':
+          await handleSubscriptionChange(event.data.object as StripeSubscription, stripe);
+          break;
+
+        case 'customer.subscription.deleted':
+          await handleSubscriptionDeleted(event.data.object as StripeSubscription, stripe);
+          break;
+
+        default:
+          console.log(`ℹ️ Événement non géré: ${event.type}`);
+      }
+
+      res.json({ received: true });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error('❌ Erreur traitement webhook:', errorMessage);
+      res.status(500).json({ error: errorMessage });
+    }
   }
-});
+);
 
 /**
  * Gérer la complétion d'un paiement Stripe
