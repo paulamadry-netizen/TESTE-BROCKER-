@@ -40,7 +40,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.stripeWebhook = void 0;
+exports.stripeWebhookV2 = void 0;
 const https_1 = require("firebase-functions/v2/https");
 const params_1 = require("firebase-functions/params");
 const admin = __importStar(require("firebase-admin"));
@@ -52,9 +52,9 @@ const stripeSecretKey = (0, params_1.defineSecret)('STRIPE_SECRET_KEY');
 const stripeWebhookSecret = (0, params_1.defineSecret)('STRIPE_WEBHOOK_SECRET');
 /**
  * Webhook Stripe - Écoute les événements de paiement (v2 with Secrets)
- * URL du webhook : https://us-central1-teste-brocker.cloudfunctions.net/stripeWebhook
+ * URL du webhook : https://us-central1-teste-brocker.cloudfunctions.net/stripeWebhookV2
  */
-exports.stripeWebhook = (0, https_1.onRequest)({ secrets: [stripeSecretKey, stripeWebhookSecret] }, async (req, res) => {
+exports.stripeWebhookV2 = (0, https_1.onRequest)({ secrets: [stripeSecretKey, stripeWebhookSecret] }, async (req, res) => {
     console.log('🔍 Webhook Stripe appelé (v2 with secrets)');
     // Initialiser Stripe avec le secret
     const stripe = new stripe_1.default(stripeSecretKey.value(), {
