@@ -10,18 +10,12 @@ import {
   TrendingDown,
   Activity,
   Target,
-  Calendar,
   Loader2,
 } from "lucide-react";
 import { StatCard } from "@/components/dashboard/StatCard";
 import { PerformanceChart } from "@/components/charts/PerformanceChart";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import {
-  mockTrades,
-  mockPerformanceData,
-  mockStatistics,
-} from "@/data/mockData";
 import { formatCurrency, formatPercentage } from "@/lib/utils";
 
 interface UserData {
@@ -85,13 +79,23 @@ export default function DashboardPage() {
     );
   }
 
-  const recentTrades = mockTrades.slice(0, 5);
+  // TODO: Load real trades from Firestore
+  const recentTrades: any[] = []; // Empty for new accounts
+  const totalTrades = 0;
+  const winningTrades = 0;
+  const winRate = totalTrades > 0 ? Math.round((winningTrades / totalTrades) * 100) : 0;
+
   const initialBalance = userData.accountBalance;
   const currentBalance = userData.accountBalance; // TODO: Update with real-time balance from trades
   const profitLoss = currentBalance - initialBalance;
   const profitLossPercentage = ((profitLoss / initialBalance) * 100).toFixed(2);
   const profitTargetAmount = (initialBalance * userData.profitTarget) / 100;
   const maxDrawdownAmount = (initialBalance * userData.maxDrawdown) / 100;
+
+  // Performance data - flat line at initial balance for new accounts
+  const performanceData = [
+    { date: new Date().toLocaleDateString(), balance: initialBalance }
+  ];
 
   return (
     <div className="flex flex-col gap-6 p-8">
@@ -128,9 +132,9 @@ export default function DashboardPage() {
         />
         <StatCard
           title="Win Rate"
-          value={`${mockStatistics.winRate}%`}
-          change={`${mockStatistics.winningTrades}/${mockStatistics.totalTrades} trades`}
-          changeType={mockStatistics.winRate >= 60 ? "positive" : "negative"}
+          value={totalTrades > 0 ? `${winRate}%` : "N/A"}
+          change={`${winningTrades}/${totalTrades} trades`}
+          changeType={winRate >= 60 ? "positive" : "negative"}
           icon={Activity}
         />
       </div>
@@ -188,7 +192,7 @@ export default function DashboardPage() {
       </Card>
 
       {/* Performance Chart */}
-      <PerformanceChart data={mockPerformanceData} />
+      <PerformanceChart data={performanceData} />
 
       {/* Recent Trades */}
       <Card>
@@ -244,7 +248,7 @@ export default function DashboardPage() {
             <CardTitle className="text-sm font-medium">Profit Factor</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{mockStatistics.profitFactor}</div>
+            <div className="text-2xl font-bold">N/A</div>
             <p className="text-xs text-muted-foreground mt-1">
               Ratio of gross profit to gross loss
             </p>
@@ -257,7 +261,7 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-green-500">
-              {formatCurrency(mockStatistics.averageWin)}
+              {formatCurrency(0)}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
               Per winning trade
@@ -271,7 +275,7 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-red-500">
-              {formatCurrency(mockStatistics.averageLoss)}
+              {formatCurrency(0)}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
               Per losing trade
