@@ -2,10 +2,10 @@
 
 import { useEffect } from "react";
 
-export default function LoginRedirect() {
+export default function BrokerRedirect() {
   useEffect(() => {
-    // Redirect to login.html in public folder
-    window.location.href = "/login.html";
+    // Redirect to index.html (broker) in public folder
+    window.location.href = "/index.html";
   }, []);
 
   return (
@@ -17,7 +17,7 @@ export default function LoginRedirect() {
       background: "linear-gradient(135deg, #0a0e1a 0%, #0f1419 100%)",
       color: "#e8edf4"
     }}>
-      <p>Redirecting to login...</p>
+      <p>Redirecting to broker...</p>
     </div>
   );
 }
