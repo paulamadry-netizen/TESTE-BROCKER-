@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { Loader2 } from "lucide-react";
@@ -9,14 +9,20 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    if (!loading && !user && pathname !== "/login") {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (mounted && !loading && !user && pathname !== "/login") {
       router.push("/login");
     }
-  }, [user, loading, router, pathname]);
+  }, [mounted, user, loading, router, pathname]);
 
-  if (loading) {
+  // Prevent hydration mismatch by showing nothing until mounted
+  if (!mounted || loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="text-center">
