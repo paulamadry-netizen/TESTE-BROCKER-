@@ -107,6 +107,27 @@ export default function DashboardPage() {
         </p>
       </div>
 
+      {/* Trading Platform Link */}
+      <Card className="bg-gradient-to-r from-green-500/10 to-blue-500/10 border-green-500/20">
+        <CardContent className="flex items-center justify-between p-6">
+          <div>
+            <h3 className="text-xl font-bold mb-1">Ready to Trade?</h3>
+            <p className="text-sm text-muted-foreground">
+              Access your trading platform and start executing trades
+            </p>
+          </div>
+          <a
+            href="/index.html"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none ring-offset-background bg-primary text-primary-foreground hover:bg-primary/90 h-10 py-2 px-6"
+          >
+            <Activity className="mr-2 h-4 w-4" />
+            Launch Broker
+          </a>
+        </CardContent>
+      </Card>
+
       {/* Stats Grid */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <StatCard

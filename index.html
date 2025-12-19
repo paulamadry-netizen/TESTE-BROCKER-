@@ -10,8 +10,8 @@
 <!-- Firebase SDK -->
 <script type="module">
   import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-  import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
-  import { getFirestore, collection, addDoc, updateDoc, doc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+  import { getAuth, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+  import { getFirestore, collection, addDoc, updateDoc, doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
   const firebaseConfig = {
     apiKey: "AIzaSyBCAeaaJMMw3_Egf-6-4i63IhAUy4EyzBc",
@@ -31,19 +31,88 @@
   window.firebaseAuth = auth;
   window.firebaseDb = db;
   window.firebaseUser = null;
+  window.userData = null;
+
+  // Load user data from Firestore
+  window.loadUserData = async (userId) => {
+    try {
+      const userDocRef = doc(db, 'users', userId);
+      const userDocSnap = await getDoc(userDocRef);
+
+      if (userDocSnap.exists()) {
+        window.userData = userDocSnap.data();
+        console.log('✅ User data loaded:', window.userData);
+
+        // Update broker balance with real account balance
+        if (window.updateBrokerBalance) {
+          window.updateBrokerBalance(window.userData.accountBalance);
+        }
+
+        // Update user email in header
+        if (window.updateUserEmail) {
+          window.updateUserEmail(window.userData.email);
+        }
+
+        return window.userData;
+      } else {
+        console.error('❌ User document not found');
+        return null;
+      }
+    } catch (error) {
+      console.error('❌ Error loading user data:', error);
+      return null;
+    }
+  };
+
+  // Update user balance in Firestore
+  window.updateUserBalance = async (newBalance) => {
+    if (!window.firebaseUser) {
+      console.warn('No user authenticated');
+      return false;
+    }
+
+    try {
+      const userDocRef = doc(db, 'users', window.firebaseUser.uid);
+      await updateDoc(userDocRef, {
+        accountBalance: newBalance,
+        updatedAt: new Date().toISOString()
+      });
+      console.log('✅ Balance updated in Firestore:', newBalance);
+
+      // Update local userData
+      if (window.userData) {
+        window.userData.accountBalance = newBalance;
+      }
+
+      return true;
+    } catch (error) {
+      console.error('❌ Error updating balance:', error);
+      return false;
+    }
+  };
+
+  // Logout function
+  window.logoutBroker = async () => {
+    try {
+      await signOut(auth);
+      console.log('✅ Logged out');
+      window.location.href = '/login.html';
+    } catch (error) {
+      console.error('❌ Logout error:', error);
+    }
+  };
 
   // Listen for auth state changes
-  onAuthStateChanged(auth, (user) => {
+  onAuthStateChanged(auth, async (user) => {
     window.firebaseUser = user;
     if (user) {
       console.log('🔐 User authenticated:', user.uid);
+      // Load user data from Firestore
+      await window.loadUserData(user.uid);
     } else {
       console.log('⚠️ No user authenticated');
-      // Redirect to login if needed
-      if (window.location.pathname !== '/login.html') {
-        alert('Please log in to use the broker');
-        window.location.href = '/dashboard';
-      }
+      // Redirect to login
+      window.location.href = '/login.html';
     }
   });
 
@@ -270,8 +339,10 @@ html,body{height:100%;background:linear-gradient(135deg,var(--bg-primary) 0%,var
 <button class="icon-btn active" id="togglePositions" title="Positions"><i class="fas fa-briefcase"></i></button>
 </div>
 <div class="status-badge disconnected" id="wsStatus"><div class="status-dot"></div><span>Déconnecté</span></div>
+<div class="account-stat"><div class="stat-label"><i class="fas fa-user"></i> User</div><div class="stat-value" id="userEmail" style="font-size:12px;max-width:150px;overflow:hidden;text-overflow:ellipsis;">Loading...</div></div>
 <button class="icon-btn" id="debugToggle" title="Debug"><i class="fas fa-bug"></i></button>
 <button class="icon-btn" id="refreshPricesBtn" title="Rafraîchir"><i class="fas fa-sync-alt"></i></button>
+<button class="icon-btn" onclick="window.logoutBroker()" title="Déconnexion"><i class="fas fa-sign-out-alt"></i></button>
 </div>
 </header>
 <div class="workspace">
@@ -372,7 +443,7 @@ const WATCHLIST=[
 {tv:'NASDAQ:QQQ',label:'QQQ (Nasdaq 100 ETF)',api:'QQQ',type:'etf',yahoo:'QQQ'}
 ];
 const PIP_STEPS={default:0.0001,jpy:0.01,xau:0.1,etf:0.01};
-let ws,wsConnected=false,reconDelay=CFG.reconBase,reconAttempts=0,reconTimer,keepaliveTimer,currentSymbol=WATCHLIST[0],priceCache={},lastPriceUpdate={},positions=[],history=[],orders=[],simBalance=50000,availableBalance=50000,tvWidget,lwChart,lwSeries,activeModalId,debugMode=false,msgCount=0;
+let ws,wsConnected=false,reconDelay=CFG.reconBase,reconAttempts=0,reconTimer,keepaliveTimer,currentSymbol=WATCHLIST[0],priceCache={},lastPriceUpdate={},positions=[],history=[],orders=[],simBalance=0,availableBalance=0,tvWidget,lwChart,lwSeries,activeModalId,debugMode=false,msgCount=0;
 let currentTimeframe='15',chartHistoryData={};
 const $=(id)=>document.getElementById(id),debugLog=(msg)=>{if(!debugMode)return;const t=new Date().toLocaleTimeString();debugPanel.innerHTML+=`[${t}] ${msg}\n`;debugPanel.scrollTop=debugPanel.scrollHeight;console.log(`[DEBUG] ${msg}`)};
 $('debugToggle').onclick=()=>{debugMode=!debugMode;debugPanel.classList.toggle('active');debugPanel.innerHTML=debugMode?'=== DEBUG MODE ACTIVATED ===\n':''};
@@ -428,7 +499,7 @@ const checkOrdersForSymbol=(symbol)=>{const price=priceCache[symbol];if(price===
 const computePnl=(pos)=>{const current=pos.current!==undefined?pos.current:priceCache[pos.symbol.api];if(current===undefined)return 0;const step=pipStep(pos.symbol.api),pipDiff=(current-pos.entry)/step,pipValue=pipValuePerLot(pos.symbol.api,current),pnlPerLot=pipDiff*pipValue*pos.size;return pos.side==='BUY'?pnlPerLot:-pnlPerLot};
 const getTotalMarginUsed=()=>positions.reduce((sum,pos)=>{const price=pos.current||priceCache[pos.symbol.api]||pos.entry;return sum+marginRequirement(pos.symbol.api,pos.size,price)},0)+orders.reduce((sum,ord)=>sum+ord.margin,0);
 const openPosition=async(symObj,side,lots=1,forcedEntry=null,tp=null,sl=null)=>{const resolvedLots=Number(lots);if(!resolvedLots||resolvedLots<=0){showToast('❌ Lots invalide','error');return false}let price=forcedEntry!==null?Number(forcedEntry):Number(priceCache[symObj.api]);if(!price||Number.isNaN(price)){showToast('❌ Prix indisponible','error');return false}const required=marginRequirement(symObj.api,resolvedLots,price);if(required>availableBalance){showToast('❌ Solde insuffisant','error');return false}availableBalance-=required;const pos={id:'pos_'+Date.now()+'_'+Math.random().toString(36).slice(2,7),symbol:symObj,side,entry:price,size:resolvedLots,current:price,tp:tp?Number(tp):null,sl:sl?Number(sl):null,openedAt:Date.now(),firestoreId:null};positions.unshift(pos);renderPositions();renderTotals();const displayPrice=symObj.type==='etf'?price.toFixed(2):formatPrice(price);showToast(`✅ ${side}: ${symObj.label} @ ${displayPrice}`,'success');debugLog(`Opened: ${JSON.stringify(pos)}`);if(window.saveTrade){const tradeData={symbol:symObj.label,symbolApi:symObj.api,side,entryPrice:price,currentPrice:price,lots:resolvedLots,takeProfit:pos.tp,stopLoss:pos.sl,status:'open',openedAt:new Date(pos.openedAt).toISOString()};const firestoreId=await window.saveTrade(tradeData);if(firestoreId){pos.firestoreId=firestoreId;debugLog(`Trade synced: ${firestoreId}`)}}return true};
-const closePosition=async(id,lotsToSell=null)=>{const idx=positions.findIndex(p=>p.id===id);if(idx===-1)return;const pos=positions[idx],sellLots=lotsToSell!==null?Math.min(Number(lotsToSell),pos.size):pos.size;if(sellLots<=0)return;const closePrice=priceCache[pos.symbol.api]||pos.current,pnl=computePnl({...pos,size:sellLots,current:closePrice}),released=marginRequirement(pos.symbol.api,sellLots,closePrice);availableBalance+=released;availableBalance+=pnl;history.unshift({symbol:pos.symbol,side:pos.side,entry:pos.entry,close:closePrice,pnl,lots:sellLots,closedAt:Date.now()});if(pos.firestoreId&&window.updateTrade){const updateData={closePrice,pnl,status:'closed',closedAt:new Date().toISOString()};await window.updateTrade(pos.firestoreId,updateData);debugLog(`Trade updated in Firestore: ${pos.firestoreId}`)}if(sellLots<pos.size)pos.size-=sellLots;else positions.splice(idx,1);renderPositions();renderHistory();renderTotals();showToast(`✅ Fermé: ${formatMoney(pnl)} USD`,pnl>=0?'success':'error');debugLog(`Closed ${id}: ${pnl}`)};
+const closePosition=async(id,lotsToSell=null)=>{const idx=positions.findIndex(p=>p.id===id);if(idx===-1)return;const pos=positions[idx],sellLots=lotsToSell!==null?Math.min(Number(lotsToSell),pos.size):pos.size;if(sellLots<=0)return;const closePrice=priceCache[pos.symbol.api]||pos.current,pnl=computePnl({...pos,size:sellLots,current:closePrice}),released=marginRequirement(pos.symbol.api,sellLots,closePrice);availableBalance+=released;availableBalance+=pnl;simBalance+=pnl;history.unshift({symbol:pos.symbol,side:pos.side,entry:pos.entry,close:closePrice,pnl,lots:sellLots,closedAt:Date.now()});if(pos.firestoreId&&window.updateTrade){const updateData={closePrice,pnl,status:'closed',closedAt:new Date().toISOString()};await window.updateTrade(pos.firestoreId,updateData);debugLog(`Trade updated in Firestore: ${pos.firestoreId}`)}if(window.updateUserBalance){await window.updateUserBalance(simBalance);debugLog(`User balance updated in Firestore: ${simBalance}`)}if(sellLots<pos.size)pos.size-=sellLots;else positions.splice(idx,1);renderPositions();renderHistory();renderTotals();showToast(`✅ Fermé: ${formatMoney(pnl)} USD`,pnl>=0?'success':'error');debugLog(`Closed ${id}: ${pnl}`)};
 const addLimitOrder=(symbol,side,price,lots,tp,sl)=>{const resolvedLots=Number(lots),resolvedPrice=Number(price);if(!resolvedLots||!resolvedPrice){showToast('❌ Prix et lots requis','error');return}const required=marginRequirement(symbol,resolvedLots,resolvedPrice);if(required>availableBalance){showToast('❌ Solde insuffisant','error');return}availableBalance-=required;orders.push({id:'ord_'+Date.now()+'_'+Math.random().toString(36).slice(2,7),symbol,side,price:resolvedPrice,size:resolvedLots,tp:tp?Number(tp):null,sl:sl?Number(sl):null,margin:required,createdAt:Date.now()});renderOrders();renderTotals();showToast('✅ Ordre ajouté','success');debugLog(`Order: ${side} ${symbol}`)};
 const removeOrder=(id)=>{const order=orders.find(o=>o.id===id);if(order)availableBalance+=order.margin;orders=orders.filter(o=>o.id!==id);renderOrders();renderTotals();showToast('✅ Ordre annulé','info');debugLog(`Removed: ${id}`)};
 const renderPositions=()=>{const tbody=$('positionsBody');tbody.innerHTML='';if(positions.length===0){tbody.innerHTML='<tr><td colspan="7" class="empty-state">Aucune position</td></tr>';return}positions.forEach(pos=>{const current=pos.current!==undefined?pos.current:priceCache[pos.symbol.api];pos.current=current;const pnl=computePnl(pos),pnlClass=pnl>=0?'positive':'negative',tr=document.createElement('tr');tr.innerHTML=`<td><div class="symbol-cell">${pos.symbol.label}</div><div class="symbol-label">${pos.symbol.tv}</div></td><td><span class="side-badge ${pos.side.toLowerCase()}">${pos.side}</span></td><td>${formatPrice(pos.entry)}</td><td>${formatPrice(current)}</td><td>${pos.size}</td><td><span class="pnl-value ${pnlClass}">${formatMoney(pnl)}</span></td><td><div class="action-buttons"><button class="btn-action" data-id="${pos.id}"><i class="fas fa-cog"></i></button><button class="btn-action" data-close="${pos.id}"><i class="fas fa-times"></i></button></div></td>`;tbody.appendChild(tr)});tbody.querySelectorAll('button[data-id]').forEach(btn=>btn.onclick=()=>openPositionModal(btn.dataset.id));tbody.querySelectorAll('button[data-close]').forEach(btn=>btn.onclick=()=>closePosition(btn.dataset.close))};
@@ -436,6 +507,8 @@ const renderHistory=()=>{const tbody=$('historyBody');tbody.innerHTML='';if(hist
 const renderOrders=()=>{const container=$('ordersBody');container.innerHTML='';if(orders.length===0){container.innerHTML='<div class="empty-state">Aucun ordre</div>';return}orders.forEach(o=>{const card=document.createElement('div');card.className='order-card';card.innerHTML=`<div class="order-header"><div class="order-symbol">${o.symbol}</div><div class="order-side ${o.side.toLowerCase()}">${o.side}</div></div><div class="order-details"><div class="order-detail">Prix: <span>${formatPrice(o.price)}</span></div><div class="order-detail">Lots: <span>${o.size}</span></div><div class="order-detail">TP: <span>${o.tp?formatPrice(o.tp):'—'}</span></div><div class="order-detail">SL: <span>${o.sl?formatPrice(o.sl):'—'}</span></div></div><div class="order-actions"><button class="btn btn-remove" data-id="${o.id}"><i class="fas fa-trash-alt"></i>Annuler</button></div>`;container.appendChild(card)});container.querySelectorAll('button[data-id]').forEach(btn=>btn.onclick=()=>removeOrder(btn.dataset.id))};
 const renderTotals=()=>{const total=positions.reduce((sum,p)=>sum+computePnl(p),0),usedMargin=getTotalMarginUsed();$('totalPnl').innerText=formatMoney(total)+' USD';$('totalPnl').className='stat-value total-pnl-value '+(total>=0?'positive':'negative');$('simBalance').innerText=formatMoney(simBalance)+' USD';$('availableBalance').innerText=formatMoney(availableBalance)+' USD';$('usedMargin').innerText=formatMoney(usedMargin)+' USD'};
 const renderAll=()=>{renderPositions();renderHistory();renderOrders();renderTotals()};
+window.updateBrokerBalance=(balance)=>{simBalance=Number(balance);availableBalance=Number(balance);console.log('✅ Broker balance updated:',simBalance);renderTotals()};
+window.updateUserEmail=(email)=>{const emailEl=document.getElementById('userEmail');if(emailEl)emailEl.innerText=email};
 const wlList=$('wlList'),ordSymbol=$('ordSymbol');
 WATCHLIST.forEach(w=>{const item=document.createElement('div');item.className='wl-item';item.dataset.symbol=w.api;item.innerHTML=`<div class="wl-left"><div class="wl-symbol">${w.label}</div><div class="wl-label">${w.tv}</div></div><div class="wl-right"><div class="wl-price" id="price_${escapeId(w.api)}">—</div></div>`;item.addEventListener('click',()=>selectSymbol(w));wlList.appendChild(item);const opt=document.createElement('option');opt.value=w.api;opt.text=w.label;ordSymbol.appendChild(opt)});
 const initTradingView=()=>{if(!currentSymbol)return;try{const container=$('tv_chart_container');if(tvWidget){try{tvWidget.remove()}catch(e){}tvWidget=null}container.innerHTML='';if(typeof TradingView==='undefined'){debugLog('TV not loaded');return}setTimeout(()=>{tvWidget=new TradingView.widget({container_id:'tv_chart_container',autosize:true,symbol:currentSymbol.tv,interval:'15',timezone:'Etc/UTC',theme:'dark',locale:'fr',disabled_features:['use_localstorage_for_settings']});debugLog(`TV: ${currentSymbol.label}`)},100)}catch(e){console.error('Chart error:',e);debugLog(`Chart error: ${e.message}`)}};
