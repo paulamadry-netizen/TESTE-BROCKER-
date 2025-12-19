@@ -36,10 +36,10 @@ export default function TradesPage() {
 
       try {
         const tradesRef = collection(db, "trades");
+        // Simplified query without orderBy to avoid index requirement
         const q = query(
           tradesRef,
-          where("userId", "==", user.uid),
-          orderBy("createdAt", "desc")
+          where("userId", "==", user.uid)
         );
         const querySnapshot = await getDocs(q);
 
@@ -60,7 +60,11 @@ export default function TradesPage() {
           });
         });
 
+        // Sort in JavaScript instead of Firestore
+        loadedTrades.sort((a, b) => new Date(b.openedAt).getTime() - new Date(a.openedAt).getTime());
+
         setTrades(loadedTrades);
+        console.log('✅ Trades loaded:', loadedTrades.length);
       } catch (error) {
         console.error("Error loading trades:", error);
       } finally {

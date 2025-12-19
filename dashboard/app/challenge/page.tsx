@@ -75,28 +75,59 @@ export default function ChallengePage() {
   const maxDrawdownAmount = (initialBalance * userData.maxDrawdown) / 100;
   const progressPercentage = profitTargetAmount > 0 ? (profitLoss / profitTargetAmount) * 100 : 0;
 
+  // Calculate daily loss limit (3% of initial balance)
+  const dailyLossLimit = initialBalance * 0.03;
+  const totalLossLimit = initialBalance * 0.08;
+
   // Challenge rules based on real data
   const challengeRules = [
     {
-      name: "Profit Target",
-      description: `Reach ${userData.profitTarget}% profit (${formatCurrency(profitTargetAmount)})`,
+      name: "Objectif Profit",
+      description: `Atteindre ${userData.profitTarget}% de profit (${formatCurrency(profitTargetAmount)})`,
       status: profitLoss >= profitTargetAmount ? "PASSED" : profitLoss > 0 ? "IN_PROGRESS" : "PENDING",
       current: profitLoss,
       target: profitTargetAmount,
+      critical: false,
     },
     {
-      name: "Maximum Drawdown",
-      description: `Stay within ${userData.maxDrawdown}% drawdown limit`,
-      status: "PASSED", // TODO: Track actual drawdown
+      name: "Perte Journalière Maximum",
+      description: `Maximum 3% de perte par jour (${formatCurrency(dailyLossLimit)})`,
+      status: "PASSED",
       current: 0,
-      target: maxDrawdownAmount,
+      target: dailyLossLimit,
+      critical: true,
     },
     {
-      name: "Minimum Trading Days",
-      description: "Trade at least 5 days",
-      status: userData.tradingDays >= 5 ? "PASSED" : userData.tradingDays > 0 ? "IN_PROGRESS" : "PENDING",
+      name: "Perte Totale Maximum",
+      description: `Maximum ${userData.maxDrawdown}% de perte totale (${formatCurrency(totalLossLimit)})`,
+      status: "PASSED",
+      current: Math.abs(Math.min(profitLoss, 0)),
+      target: totalLossLimit,
+      critical: true,
+    },
+    {
+      name: "Jours de Trading Minimum",
+      description: "Trader au moins 3 jours",
+      status: userData.tradingDays >= 3 ? "PASSED" : userData.tradingDays > 0 ? "IN_PROGRESS" : "PENDING",
       current: userData.tradingDays,
-      target: 5,
+      target: 3,
+      critical: false,
+    },
+    {
+      name: "Positions de Nuit",
+      description: "Autorisées SAUF entre 22h et 00h",
+      status: "PASSED",
+      current: 0,
+      target: 0,
+      critical: true,
+    },
+    {
+      name: "Positions Week-end",
+      description: "Interdites (samedi et dimanche)",
+      status: "PASSED",
+      current: 0,
+      target: 0,
+      critical: true,
     },
   ];
 
@@ -199,10 +230,20 @@ export default function ChallengePage() {
                         {isInProgress && <Clock className="h-5 w-5 text-blue-500" />}
                         {rule.status === "PENDING" && <Clock className="h-5 w-5 text-muted-foreground" />}
                         <h3 className="font-semibold text-lg">{rule.name}</h3>
+                        {rule.critical && (
+                          <Badge variant="destructive" className="ml-2 text-xs">
+                            CRITIQUE
+                          </Badge>
+                        )}
                       </div>
                       <p className="text-sm text-muted-foreground mb-4">
                         {rule.description}
                       </p>
+                      {rule.critical && (
+                        <p className="text-xs text-orange-500 mb-3">
+                          ⚠️ La violation de cette règle entraîne la suspension immédiate du compte
+                        </p>
+                      )}
 
                       {/* Progress Bar */}
                       <div className="space-y-2">

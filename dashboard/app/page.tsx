@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, collection, query, where, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase/config";
 import { useAuth } from "@/context/AuthContext";
 import {
@@ -33,6 +33,7 @@ interface UserData {
 export default function DashboardPage() {
   const { user, loading: authLoading } = useAuth();
   const [userData, setUserData] = useState<UserData | null>(null);
+  const [trades, setTrades] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -51,6 +52,20 @@ export default function DashboardPage() {
         } else {
           console.error("No user document found in Firestore");
         }
+
+        // Load trades for performance chart
+        const tradesRef = collection(db, "trades");
+        const q = query(tradesRef, where("userId", "==", user.uid));
+        const querySnapshot = await getDocs(q);
+
+        const loadedTrades: any[] = [];
+        querySnapshot.forEach((doc) => {
+          loadedTrades.push({ id: doc.id, ...doc.data() });
+        });
+
+        // Sort by openedAt
+        loadedTrades.sort((a, b) => new Date(a.openedAt).getTime() - new Date(b.openedAt).getTime());
+        setTrades(loadedTrades);
       } catch (error) {
         console.error("Error loading user data:", error);
       } finally {
@@ -79,23 +94,51 @@ export default function DashboardPage() {
     );
   }
 
-  // TODO: Load real trades from Firestore
-  const recentTrades: any[] = []; // Empty for new accounts
-  const totalTrades = 0;
-  const winningTrades = 0;
+  // Calculate stats from real trades
+  const closedTrades = trades.filter(t => t.status === 'closed');
+  const recentTrades = closedTrades.slice(-5).reverse(); // Last 5 trades
+  const totalTrades = closedTrades.length;
+  const winningTrades = closedTrades.filter(t => t.pnl > 0).length;
   const winRate = totalTrades > 0 ? Math.round((winningTrades / totalTrades) * 100) : 0;
 
-  const initialBalance = userData.accountBalance;
-  const currentBalance = userData.accountBalance; // TODO: Update with real-time balance from trades
+  // Calculate initial balance (before first trade) and current balance
+  const totalPnl = closedTrades.reduce((sum, t) => sum + (t.pnl || 0), 0);
+  const initialBalance = userData.accountBalance - totalPnl; // Reconstruct initial balance
+  const currentBalance = userData.accountBalance;
   const profitLoss = currentBalance - initialBalance;
   const profitLossPercentage = ((profitLoss / initialBalance) * 100).toFixed(2);
   const profitTargetAmount = (initialBalance * userData.profitTarget) / 100;
   const maxDrawdownAmount = (initialBalance * userData.maxDrawdown) / 100;
 
-  // Performance data - flat line at initial balance for new accounts
-  const performanceData = [
-    { date: new Date().toLocaleDateString(), balance: initialBalance, profit: 0 }
-  ];
+  // Build performance chart data from trades
+  const performanceData: { date: string; balance: number; profit: number }[] = [];
+
+  // Start with initial balance
+  let runningBalance = initialBalance;
+  performanceData.push({
+    date: new Date(userData.stripeSessionId ? '2024-01-01' : Date.now()).toLocaleDateString('fr-FR'),
+    balance: initialBalance,
+    profit: 0
+  });
+
+  // Add each closed trade to build the curve
+  closedTrades.forEach((trade) => {
+    runningBalance += trade.pnl || 0;
+    performanceData.push({
+      date: new Date(trade.closedAt || trade.openedAt).toLocaleDateString('fr-FR'),
+      balance: runningBalance,
+      profit: trade.pnl || 0
+    });
+  });
+
+  // If no trades, add current date with initial balance
+  if (performanceData.length === 1) {
+    performanceData.push({
+      date: new Date().toLocaleDateString('fr-FR'),
+      balance: initialBalance,
+      profit: 0
+    });
+  }
 
   return (
     <div className="flex flex-col gap-6 p-8">
@@ -229,26 +272,27 @@ export default function DashboardPage() {
                   className="flex items-center justify-between py-3 border-b last:border-0"
                 >
                   <div className="flex items-center gap-4">
-                    <Badge variant={trade.type === "BUY" ? "success" : "destructive"}>
-                      {trade.type}
+                    <Badge variant={trade.side === "BUY" ? "success" : "destructive"}>
+                      {trade.side}
                     </Badge>
                     <div>
                       <p className="font-semibold">{trade.symbol}</p>
                       <p className="text-sm text-muted-foreground">
-                        {new Date(trade.openTime).toLocaleString()}
+                        {new Date(trade.closedAt || trade.openedAt).toLocaleString()}
                       </p>
                     </div>
                   </div>
                   <div className="text-right">
                     <p
                       className={`font-semibold ${
-                        trade.profit >= 0 ? "text-green-500" : "text-red-500"
+                        (trade.pnl || 0) >= 0 ? "text-green-500" : "text-red-500"
                       }`}
                     >
-                      {formatCurrency(trade.profit)}
+                      {(trade.pnl || 0) >= 0 ? "+" : ""}
+                      {formatCurrency(trade.pnl || 0)}
                     </p>
                     <p className="text-sm text-muted-foreground">
-                      Vol: {trade.volume}
+                      {trade.lots} lot{trade.lots > 1 ? 's' : ''}
                     </p>
                   </div>
                 </div>
