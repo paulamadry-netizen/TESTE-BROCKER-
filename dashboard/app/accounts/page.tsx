@@ -14,6 +14,8 @@ interface UserData {
   accountBalance: number;
   accountStatus: string;
   challengeType: string;
+  suspensionReason?: string;
+  suspendedAt?: string;
 }
 
 export default function AccountsPage() {
@@ -72,12 +74,45 @@ export default function AccountsPage() {
         </p>
       </div>
 
+      {userData.accountStatus === "suspended" && (
+        <Card className="border-red-500 bg-red-500/10">
+          <CardContent className="p-6">
+            <div className="flex items-start gap-4">
+              <div className="rounded-full bg-red-500 p-2">
+                <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+              <div className="flex-1">
+                <h3 className="text-lg font-semibold text-red-500">Compte Suspendu</h3>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Votre compte a été désactivé pour violation des règles de trading.
+                </p>
+                {userData.suspensionReason && (
+                  <p className="mt-2 text-sm font-medium">
+                    Raison: {userData.suspensionReason}
+                  </p>
+                )}
+                {userData.suspendedAt && (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Suspendu le: {new Date(userData.suspendedAt).toLocaleString()}
+                  </p>
+                )}
+                <p className="mt-3 text-sm text-muted-foreground">
+                  Veuillez contacter le support pour plus d'informations.
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle>Your Active Account</CardTitle>
-            <Badge variant={userData.accountStatus === "active" ? "success" : "secondary"}>
-              {userData.accountStatus.toUpperCase()}
+            <Badge variant={userData.accountStatus === "active" ? "success" : "destructive"}>
+              {userData.accountStatus === "suspended" ? "INACTIF - RÈGLE ENFREINTE" : userData.accountStatus.toUpperCase()}
             </Badge>
           </div>
         </CardHeader>
@@ -97,7 +132,9 @@ export default function AccountsPage() {
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Status</p>
-              <Badge variant="success" className="mt-2">{userData.accountStatus.toUpperCase()}</Badge>
+              <Badge variant={userData.accountStatus === "active" ? "success" : "destructive"} className="mt-2">
+                {userData.accountStatus === "suspended" ? "INACTIF" : userData.accountStatus.toUpperCase()}
+              </Badge>
             </div>
           </div>
         </CardContent>
