@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase/config";
 import { useAuth } from "@/context/AuthContext";
+import { useLanguage } from "@/context/LanguageContext";
 import { CheckCircle2, XCircle, Clock, Target, TrendingUp, AlertTriangle, Loader2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -23,6 +24,7 @@ interface UserData {
 
 export default function ChallengePage() {
   const { user, loading: authLoading } = useAuth();
+  const { t } = useLanguage();
   const [userData, setUserData] = useState<UserData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -63,7 +65,7 @@ export default function ChallengePage() {
   if (!userData) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <p className="text-muted-foreground">No account data found</p>
+        <p className="text-muted-foreground">{t("common.noData")}</p>
       </div>
     );
   }
@@ -82,48 +84,48 @@ export default function ChallengePage() {
   // Challenge rules based on real data
   const challengeRules = [
     {
-      name: "Objectif Profit",
-      description: `Atteindre ${userData.profitTarget}% de profit (${formatCurrency(profitTargetAmount)})`,
+      name: t("challenge.profitObjective"),
+      description: `${t("challenge.reachProfit")} ${userData.profitTarget}% ${t("challenge.ofProfit")} (${formatCurrency(profitTargetAmount)})`,
       status: profitLoss >= profitTargetAmount ? "PASSED" : profitLoss > 0 ? "IN_PROGRESS" : "PENDING",
       current: profitLoss,
       target: profitTargetAmount,
       critical: false,
     },
     {
-      name: "Perte Journalière Maximum",
-      description: `Maximum 3% de perte par jour (${formatCurrency(dailyLossLimit)})`,
+      name: t("challenge.maxDailyLoss"),
+      description: `${t("challenge.maxPerDay")} (${formatCurrency(dailyLossLimit)})`,
       status: "PASSED",
       current: 0,
       target: dailyLossLimit,
       critical: true,
     },
     {
-      name: "Perte Totale Maximum",
-      description: `Maximum ${userData.maxDrawdown}% de perte totale (${formatCurrency(totalLossLimit)})`,
+      name: t("challenge.maxTotalLoss"),
+      description: `${t("challenge.maxTotalDrawdown")} ${userData.maxDrawdown}% ${t("challenge.ofTotalLoss")} (${formatCurrency(totalLossLimit)})`,
       status: "PASSED",
       current: Math.abs(Math.min(profitLoss, 0)),
       target: totalLossLimit,
       critical: true,
     },
     {
-      name: "Jours de Trading Minimum",
-      description: "Trader au moins 3 jours",
+      name: t("challenge.minTradingDays"),
+      description: t("challenge.tradeAtLeast"),
       status: userData.tradingDays >= 3 ? "PASSED" : userData.tradingDays > 0 ? "IN_PROGRESS" : "PENDING",
       current: userData.tradingDays,
       target: 3,
       critical: false,
     },
     {
-      name: "Positions de Nuit",
-      description: "Autorisées SAUF entre 22h et 00h",
+      name: t("challenge.overnightPositions"),
+      description: t("challenge.allowedExcept"),
       status: "PASSED",
       current: 0,
       target: 0,
       critical: true,
     },
     {
-      name: "Positions Week-end",
-      description: "Interdites (samedi et dimanche)",
+      name: t("challenge.weekendPositions"),
+      description: t("challenge.forbidden"),
       status: "PASSED",
       current: 0,
       target: 0,
@@ -135,9 +137,9 @@ export default function ChallengePage() {
     <div className="flex flex-col gap-6 p-8">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Challenge Progress</h1>
+        <h1 className="text-3xl font-bold tracking-tight">{t("challenge.title")}</h1>
         <p className="text-muted-foreground">
-          Track your progress and challenge rules
+          {t("challenge.subtitle")}
         </p>
       </div>
 
@@ -147,13 +149,13 @@ export default function ChallengePage() {
           <div className="flex items-center justify-between">
             <CardTitle className="flex items-center gap-2">
               <Target className="h-6 w-6" />
-              Challenge Overview
+              {t("challenge.overview")}
             </CardTitle>
             <Badge
               variant={userData.accountStatus === "active" ? "success" : "destructive"}
               className="text-sm"
             >
-              {userData.accountStatus.toUpperCase()}
+              {t(`status.${userData.accountStatus}`)}
             </Badge>
           </div>
         </CardHeader>
@@ -161,9 +163,9 @@ export default function ChallengePage() {
           {/* Main Progress */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-muted-foreground">Overall Progress</span>
+              <span className="text-sm text-muted-foreground">{t("challenge.overallProgress")}</span>
               <span className="text-sm font-semibold">
-                {Math.max(0, progressPercentage).toFixed(1)}% Complete
+                {Math.max(0, progressPercentage).toFixed(1)}% {t("challenge.complete")}
               </span>
             </div>
             <div className="h-4 bg-secondary rounded-full overflow-hidden">
@@ -183,21 +185,21 @@ export default function ChallengePage() {
           {/* Key Metrics */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-4 border-t">
             <div>
-              <p className="text-sm text-muted-foreground">Current Balance</p>
+              <p className="text-sm text-muted-foreground">{t("challenge.currentBalance")}</p>
               <p className="text-xl font-bold">{formatCurrency(currentBalance)}</p>
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">Profit Made</p>
+              <p className="text-sm text-muted-foreground">{t("challenge.profitMade")}</p>
               <p className={`text-xl font-bold ${profitLoss >= 0 ? 'text-green-500' : 'text-red-500'}`}>
                 {formatCurrency(profitLoss)}
               </p>
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">Target</p>
+              <p className="text-sm text-muted-foreground">{t("challenge.target")}</p>
               <p className="text-xl font-bold">{formatCurrency(profitTargetAmount)}</p>
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">Remaining</p>
+              <p className="text-sm text-muted-foreground">{t("challenge.remaining")}</p>
               <p className="text-xl font-bold text-blue-500">
                 {formatCurrency(Math.max(0, profitTargetAmount - profitLoss))}
               </p>
@@ -208,7 +210,7 @@ export default function ChallengePage() {
 
       {/* Challenge Rules */}
       <div>
-        <h2 className="text-2xl font-bold mb-4">Challenge Rules</h2>
+        <h2 className="text-2xl font-bold mb-4">{t("challenge.challengeRules")}</h2>
         <div className="grid gap-4">
           {challengeRules.map((rule, index) => {
             const isCompleted = rule.status === "PASSED";
@@ -232,7 +234,7 @@ export default function ChallengePage() {
                         <h3 className="font-semibold text-lg">{rule.name}</h3>
                         {rule.critical && (
                           <Badge variant="destructive" className="ml-2 text-xs">
-                            CRITIQUE
+                            {t("challenge.critical")}
                           </Badge>
                         )}
                       </div>
@@ -241,19 +243,19 @@ export default function ChallengePage() {
                       </p>
                       {rule.critical && (
                         <p className="text-xs text-orange-500 mb-3">
-                          ⚠️ La violation de cette règle entraîne la suspension immédiate du compte
+                          {t("challenge.violationWarning")}
                         </p>
                       )}
 
                       {/* Progress Bar */}
                       <div className="space-y-2">
                         <div className="flex items-center justify-between text-sm">
-                          <span className="text-muted-foreground">Progress</span>
+                          <span className="text-muted-foreground">{t("challenge.progress")}</span>
                           <span className="font-semibold">
-                            {rule.name.includes("Drawdown")
+                            {rule.name.includes(t("challenge.maxTotalLoss")) || rule.name.includes(t("challenge.maxDailyLoss"))
                               ? `${formatCurrency(rule.current)} / ${formatCurrency(rule.target)}`
-                              : rule.name.includes("Days")
-                              ? `${rule.current} / ${rule.target} days`
+                              : rule.name.includes(t("challenge.minTradingDays"))
+                              ? `${rule.current} / ${rule.target} ${t("challenge.days")}`
                               : `${formatCurrency(rule.current)} / ${formatCurrency(rule.target)}`}
                           </span>
                         </div>
@@ -284,7 +286,7 @@ export default function ChallengePage() {
                       }
                       className="ml-4"
                     >
-                      {rule.status.replace("_", " ")}
+                      {t(`challenge.${rule.status.toLowerCase().replace("_", "")}`).toUpperCase()}
                     </Badge>
                   </div>
                 </CardContent>
@@ -299,25 +301,25 @@ export default function ChallengePage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-yellow-600">
             <AlertTriangle className="h-5 w-5" />
-            Risk Management
+            {t("challenge.riskManagement")}
           </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="space-y-3 text-sm">
             <div className="flex justify-between">
-              <span className="text-muted-foreground">Current Drawdown:</span>
+              <span className="text-muted-foreground">{t("challenge.currentDrawdown")}</span>
               <span className="font-semibold">
                 {formatCurrency(0)}
               </span>
             </div>
             <div className="flex justify-between">
-              <span className="text-muted-foreground">Max Allowed Drawdown:</span>
+              <span className="text-muted-foreground">{t("challenge.maxAllowedDrawdown")}</span>
               <span className="font-semibold">
                 {formatCurrency(maxDrawdownAmount)}
               </span>
             </div>
             <div className="flex justify-between">
-              <span className="text-muted-foreground">Remaining Buffer:</span>
+              <span className="text-muted-foreground">{t("challenge.remainingBuffer")}</span>
               <span className="font-semibold text-green-500">
                 {formatCurrency(maxDrawdownAmount)}
               </span>
@@ -337,15 +339,15 @@ export default function ChallengePage() {
       {/* Timeline */}
       <Card>
         <CardHeader>
-          <CardTitle>Challenge Timeline</CardTitle>
+          <CardTitle>{t("challenge.challengeTimeline")}</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
             <div className="flex justify-between items-center">
               <div>
-                <p className="font-semibold">Days Traded</p>
+                <p className="font-semibold">{t("challenge.daysTraded")}</p>
                 <p className="text-sm text-muted-foreground">
-                  Minimum 5 days required
+                  {t("challenge.minRequired")}
                 </p>
               </div>
               <div className="text-right">
@@ -353,7 +355,7 @@ export default function ChallengePage() {
                   {userData.tradingDays} / 30
                 </p>
                 <Badge variant={userData.tradingDays >= 5 ? "success" : "secondary"}>
-                  {userData.tradingDays >= 5 ? "Requirement Met" : "In Progress"}
+                  {userData.tradingDays >= 5 ? t("challenge.requirementMet") : t("challenge.inProgress")}
                 </Badge>
               </div>
             </div>

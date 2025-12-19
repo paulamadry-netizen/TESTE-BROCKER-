@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase/config";
 import { useAuth } from "@/context/AuthContext";
+import { useLanguage } from "@/context/LanguageContext";
 import { User, Bell, Shield, Palette, Loader2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -17,6 +18,7 @@ interface UserData {
 
 export default function SettingsPage() {
   const { user, loading: authLoading } = useAuth();
+  const { t } = useLanguage();
   const [userData, setUserData] = useState<UserData | null>(null);
   const [loading, setLoading] = useState(true);
   const [notifications, setNotifications] = useState({
@@ -63,7 +65,7 @@ export default function SettingsPage() {
   if (!userData) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <p className="text-muted-foreground">No account data found</p>
+        <p className="text-muted-foreground">{t("common.noData")}</p>
       </div>
     );
   }
@@ -96,9 +98,9 @@ export default function SettingsPage() {
     <div className="flex flex-col gap-6 p-8">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
+        <h1 className="text-3xl font-bold tracking-tight">{t("settings.title")}</h1>
         <p className="text-muted-foreground">
-          Manage your account settings and preferences
+          {t("settings.subtitle")}
         </p>
       </div>
 
@@ -107,27 +109,27 @@ export default function SettingsPage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <User className="h-5 w-5" />
-            Profile Settings
+            {t("settings.profileSettings")}
           </CardTitle>
           <CardDescription>
-            Update your personal information and profile details
+            {t("settings.updatePersonalInfo")}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2">
             <div>
-              <label className="text-sm font-medium text-muted-foreground">Email</label>
+              <label className="text-sm font-medium text-muted-foreground">{t("settings.email")}</label>
               <p className="mt-1 text-lg font-semibold">{userData.email}</p>
             </div>
             <div>
-              <label className="text-sm font-medium text-muted-foreground">Account Status</label>
+              <label className="text-sm font-medium text-muted-foreground">{t("settings.accountStatus")}</label>
               <Badge variant={userData.accountStatus === "active" ? "success" : "secondary"} className="mt-1">
-                {userData.accountStatus.toUpperCase()}
+                {t(`status.${userData.accountStatus}`)}
               </Badge>
             </div>
           </div>
           <div className="pt-4">
-            <Button onClick={handleEditProfile}>Edit Profile</Button>
+            <Button onClick={handleEditProfile}>{t("settings.editProfile")}</Button>
           </div>
         </CardContent>
       </Card>
@@ -137,18 +139,18 @@ export default function SettingsPage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Bell className="h-5 w-5" />
-            Notification Preferences
+            {t("settings.notificationPreferences")}
           </CardTitle>
           <CardDescription>
-            Choose what notifications you want to receive
+            {t("settings.chooseNotifications")}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between py-3 border-b">
             <div>
-              <p className="font-medium">Trade Alerts</p>
+              <p className="font-medium">{t("settings.tradeAlerts")}</p>
               <p className="text-sm text-muted-foreground">
-                Get notified when trades are opened or closed
+                {t("settings.tradeAlertsDesc")}
               </p>
             </div>
             <Button
@@ -156,14 +158,14 @@ export default function SettingsPage() {
               size="sm"
               onClick={() => toggleNotification("tradeAlerts")}
             >
-              {notifications.tradeAlerts ? "Enabled" : "Disabled"}
+              {notifications.tradeAlerts ? t("settings.enabled") : t("settings.disabled")}
             </Button>
           </div>
           <div className="flex items-center justify-between py-3 border-b">
             <div>
-              <p className="font-medium">Challenge Updates</p>
+              <p className="font-medium">{t("settings.challengeUpdates")}</p>
               <p className="text-sm text-muted-foreground">
-                Receive updates about your challenge progress
+                {t("settings.challengeUpdatesDesc")}
               </p>
             </div>
             <Button
@@ -171,14 +173,14 @@ export default function SettingsPage() {
               size="sm"
               onClick={() => toggleNotification("challengeUpdates")}
             >
-              {notifications.challengeUpdates ? "Enabled" : "Disabled"}
+              {notifications.challengeUpdates ? t("settings.enabled") : t("settings.disabled")}
             </Button>
           </div>
           <div className="flex items-center justify-between py-3 border-b">
             <div>
-              <p className="font-medium">Risk Warnings</p>
+              <p className="font-medium">{t("settings.riskWarnings")}</p>
               <p className="text-sm text-muted-foreground">
-                Get alerts when approaching drawdown limits
+                {t("settings.riskWarningsDesc")}
               </p>
             </div>
             <Button
@@ -186,14 +188,14 @@ export default function SettingsPage() {
               size="sm"
               onClick={() => toggleNotification("riskWarnings")}
             >
-              {notifications.riskWarnings ? "Enabled" : "Disabled"}
+              {notifications.riskWarnings ? t("settings.enabled") : t("settings.disabled")}
             </Button>
           </div>
           <div className="flex items-center justify-between py-3">
             <div>
-              <p className="font-medium">Marketing Emails</p>
+              <p className="font-medium">{t("settings.marketingEmails")}</p>
               <p className="text-sm text-muted-foreground">
-                Receive news and promotional offers
+                {t("settings.marketingEmailsDesc")}
               </p>
             </div>
             <Button
@@ -201,11 +203,11 @@ export default function SettingsPage() {
               size="sm"
               onClick={() => toggleNotification("marketingEmails")}
             >
-              {notifications.marketingEmails ? "Enabled" : "Disabled"}
+              {notifications.marketingEmails ? t("settings.enabled") : t("settings.disabled")}
             </Button>
           </div>
           <div className="pt-4">
-            <Button onClick={handleUpdatePreferences}>Update Preferences</Button>
+            <Button onClick={handleUpdatePreferences}>{t("settings.updatePreferences")}</Button>
           </div>
         </CardContent>
       </Card>
@@ -215,39 +217,39 @@ export default function SettingsPage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Shield className="h-5 w-5" />
-            Security
+            {t("settings.security")}
           </CardTitle>
           <CardDescription>
-            Manage your password and security settings
+            {t("settings.managePassword")}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between py-3 border-b">
             <div>
-              <p className="font-medium">Password</p>
+              <p className="font-medium">{t("settings.password")}</p>
               <p className="text-sm text-muted-foreground">
-                Last changed 30 days ago
+                {t("settings.lastChanged")}
               </p>
             </div>
-            <Button variant="outline" onClick={handleChangePassword}>Change Password</Button>
+            <Button variant="outline" onClick={handleChangePassword}>{t("settings.changePassword")}</Button>
           </div>
           <div className="flex items-center justify-between py-3 border-b">
             <div>
-              <p className="font-medium">Two-Factor Authentication</p>
+              <p className="font-medium">{t("settings.twoFactorAuth")}</p>
               <p className="text-sm text-muted-foreground">
-                Add an extra layer of security to your account
+                {t("settings.addExtraSecurity")}
               </p>
             </div>
-            <Button variant="outline" onClick={handleEnable2FA}>Enable 2FA</Button>
+            <Button variant="outline" onClick={handleEnable2FA}>{t("settings.enable2FA")}</Button>
           </div>
           <div className="flex items-center justify-between py-3">
             <div>
-              <p className="font-medium">Active Sessions</p>
+              <p className="font-medium">{t("settings.activeSessions")}</p>
               <p className="text-sm text-muted-foreground">
-                View and manage your active sessions
+                {t("settings.viewManageSessions")}
               </p>
             </div>
-            <Button variant="outline" onClick={handleManageSessions}>Manage Sessions</Button>
+            <Button variant="outline" onClick={handleManageSessions}>{t("settings.manageSessions")}</Button>
           </div>
         </CardContent>
       </Card>
@@ -257,24 +259,24 @@ export default function SettingsPage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Palette className="h-5 w-5" />
-            Appearance
+            {t("settings.appearance")}
           </CardTitle>
           <CardDescription>
-            Customize the look and feel of your dashboard
+            {t("settings.customizeDashboard")}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between py-3">
             <div>
-              <p className="font-medium">Theme</p>
+              <p className="font-medium">{t("settings.theme")}</p>
               <p className="text-sm text-muted-foreground">
-                Currently using dark mode
+                {t("settings.currentlyDarkMode")}
               </p>
             </div>
-            <Badge variant="secondary">Dark Mode</Badge>
+            <Badge variant="secondary">{t("settings.darkMode")}</Badge>
           </div>
           <p className="text-sm text-muted-foreground">
-            Note: Light mode and theme customization coming soon!
+            {t("settings.lightModeComingSoon")}
           </p>
         </CardContent>
       </Card>

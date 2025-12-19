@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { doc, getDoc, collection, query, where, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase/config";
 import { useAuth } from "@/context/AuthContext";
+import { useLanguage } from "@/context/LanguageContext";
 import {
   DollarSign,
   TrendingUp,
@@ -32,6 +33,7 @@ interface UserData {
 
 export default function DashboardPage() {
   const { user, loading: authLoading } = useAuth();
+  const { t } = useLanguage();
   const [userData, setUserData] = useState<UserData | null>(null);
   const [trades, setTrades] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -89,7 +91,7 @@ export default function DashboardPage() {
   if (!userData) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <p className="text-muted-foreground">No account data found</p>
+        <p className="text-muted-foreground">{t("common.noData")}</p>
       </div>
     );
   }
@@ -98,36 +100,89 @@ export default function DashboardPage() {
   const closedTrades = trades.filter(t => t.status === 'closed');
   const recentTrades = closedTrades.slice(-5).reverse(); // Last 5 trades
   const totalTrades = closedTrades.length;
-  const winningTrades = closedTrades.filter(t => t.pnl > 0).length;
-  const winRate = totalTrades > 0 ? Math.round((winningTrades / totalTrades) * 100) : 0;
+  const winningTrades = closedTrades.filter(t => t.pnl > 0);
+  const losingTrades = closedTrades.filter(t => t.pnl < 0);
+  const winningTradesCount = winningTrades.length;
+  const losingTradesCount = losingTrades.length;
+
+  // Win Rate: (trades gagnants / trades totaux) * 100
+  const winRate = totalTrades > 0 ? ((winningTradesCount / totalTrades) * 100).toFixed(2) : "0.00";
 
   // Calculate initial balance (before first trade) and current balance
   const totalPnl = closedTrades.reduce((sum, t) => sum + (t.pnl || 0), 0);
   const initialBalance = userData.accountBalance - totalPnl; // Reconstruct initial balance
   const currentBalance = userData.accountBalance;
   const profitLoss = currentBalance - initialBalance;
-  const profitLossPercentage = ((profitLoss / initialBalance) * 100).toFixed(2);
+  const profitLossPercentage = initialBalance !== 0
+    ? ((profitLoss / initialBalance) * 100).toFixed(2)
+    : "0.00";
   const profitTargetAmount = (initialBalance * userData.profitTarget) / 100;
   const maxDrawdownAmount = (initialBalance * userData.maxDrawdown) / 100;
+  const dailyMaxLoss = (initialBalance * 3) / 100; // 3% daily max loss
+
+  // Calculate Average Win: moyenne des trades gagnants uniquement
+  const totalWins = winningTrades.reduce((sum, t) => sum + (t.pnl || 0), 0);
+  const avgWin = winningTradesCount > 0 ? totalWins / winningTradesCount : 0;
+
+  // Calculate Average Loss: moyenne des trades perdants uniquement (en valeur absolue)
+  const totalLosses = losingTrades.reduce((sum, t) => sum + Math.abs(t.pnl || 0), 0);
+  const avgLoss = losingTradesCount > 0 ? totalLosses / losingTradesCount : 0;
+
+  // Profit Factor: (total gains / total pertes absolues) ou 0 si pas de pertes
+  const profitFactor = totalLosses > 0 ? (totalWins / totalLosses).toFixed(2) : (totalWins > 0 ? "∞" : "0.00");
+
+  // Calculate Current Drawdown: différence entre le pic le plus haut et le solde actuel
+  let peakBalance = initialBalance;
+  let currentDrawdown = 0;
+  let runningBalanceForDD = initialBalance;
+
+  closedTrades.forEach((trade) => {
+    runningBalanceForDD += trade.pnl || 0;
+    if (runningBalanceForDD > peakBalance) {
+      peakBalance = runningBalanceForDD;
+    }
+  });
+
+  currentDrawdown = peakBalance - currentBalance;
+  const currentDrawdownPercentage = peakBalance !== 0
+    ? ((currentDrawdown / peakBalance) * 100).toFixed(2)
+    : "0.00";
 
   // Build performance chart data from trades
   const performanceData: { date: string; balance: number; profit: number }[] = [];
 
+  // Helper function to format date safely
+  const formatTradeDate = (dateValue: any): string => {
+    try {
+      if (!dateValue) return new Date().toLocaleDateString('fr-FR');
+      const date = new Date(dateValue);
+      if (isNaN(date.getTime())) return new Date().toLocaleDateString('fr-FR');
+      return date.toLocaleDateString('fr-FR');
+    } catch {
+      return new Date().toLocaleDateString('fr-FR');
+    }
+  };
+
   // Start with initial balance
   let runningBalance = initialBalance;
+  const startDate = closedTrades.length > 0
+    ? formatTradeDate(closedTrades[0].openedAt)
+    : new Date().toLocaleDateString('fr-FR');
+
   performanceData.push({
-    date: new Date(userData.stripeSessionId ? '2024-01-01' : Date.now()).toLocaleDateString('fr-FR'),
-    balance: initialBalance,
+    date: startDate,
+    balance: Number.isFinite(initialBalance) ? initialBalance : 0,
     profit: 0
   });
 
   // Add each closed trade to build the curve
   closedTrades.forEach((trade) => {
-    runningBalance += trade.pnl || 0;
+    const tradePnl = Number.isFinite(trade.pnl) ? trade.pnl : 0;
+    runningBalance += tradePnl;
     performanceData.push({
-      date: new Date(trade.closedAt || trade.openedAt).toLocaleDateString('fr-FR'),
-      balance: runningBalance,
-      profit: trade.pnl || 0
+      date: formatTradeDate(trade.closedAt || trade.openedAt),
+      balance: Number.isFinite(runningBalance) ? runningBalance : initialBalance,
+      profit: tradePnl
     });
   });
 
@@ -135,7 +190,7 @@ export default function DashboardPage() {
   if (performanceData.length === 1) {
     performanceData.push({
       date: new Date().toLocaleDateString('fr-FR'),
-      balance: initialBalance,
+      balance: Number.isFinite(initialBalance) ? initialBalance : 0,
       profit: 0
     });
   }
@@ -144,9 +199,9 @@ export default function DashboardPage() {
     <div className="flex flex-col gap-6 p-8">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+        <h1 className="text-3xl font-bold tracking-tight">{t("dashboard.title")}</h1>
         <p className="text-muted-foreground">
-          Welcome back! Here's your trading overview.
+          {t("dashboard.subtitle")}
         </p>
       </div>
 
@@ -154,9 +209,9 @@ export default function DashboardPage() {
       <Card className="bg-gradient-to-r from-green-500/10 to-blue-500/10 border-green-500/20">
         <CardContent className="flex items-center justify-between p-6">
           <div>
-            <h3 className="text-xl font-bold mb-1">Ready to Trade?</h3>
+            <h3 className="text-xl font-bold mb-1">{t("dashboard.readyToTrade")}</h3>
             <p className="text-sm text-muted-foreground">
-              Access your trading platform and start executing trades
+              {t("dashboard.accessPlatform")}
             </p>
           </div>
           <a
@@ -166,7 +221,7 @@ export default function DashboardPage() {
             className="inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none ring-offset-background bg-primary text-primary-foreground hover:bg-primary/90 h-10 py-2 px-6"
           >
             <Activity className="mr-2 h-4 w-4" />
-            Launch Broker
+            {t("dashboard.launchBroker")}
           </a>
         </CardContent>
       </Card>
@@ -174,31 +229,31 @@ export default function DashboardPage() {
       {/* Stats Grid */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <StatCard
-          title="Account Balance"
+          title={t("dashboard.accountBalance")}
           value={formatCurrency(currentBalance)}
-          change={`${formatPercentage(parseFloat(profitLossPercentage))} from start`}
+          change={`${formatPercentage(parseFloat(profitLossPercentage))} ${t("dashboard.fromStart")}`}
           changeType={profitLoss >= 0 ? "positive" : "negative"}
           icon={DollarSign}
         />
         <StatCard
-          title="Total Profit"
+          title={t("dashboard.totalProfit")}
           value={formatCurrency(profitLoss)}
-          change={`Target: ${formatCurrency(profitTargetAmount)}`}
+          change={`${t("dashboard.target")}: ${formatCurrency(profitTargetAmount)}`}
           changeType={profitLoss >= 0 ? "positive" : "negative"}
           icon={TrendingUp}
         />
         <StatCard
-          title="Current Drawdown"
-          value={formatCurrency(0)}
-          change={`Max: ${formatCurrency(maxDrawdownAmount)}`}
-          changeType="positive"
+          title={t("dashboard.currentDrawdown")}
+          value={formatCurrency(currentDrawdown)}
+          change={`${t("dashboard.max")}: ${formatCurrency(maxDrawdownAmount)} (${userData.maxDrawdown}%)`}
+          changeType={currentDrawdown === 0 ? "positive" : currentDrawdown < maxDrawdownAmount ? "neutral" : "negative"}
           icon={TrendingDown}
         />
         <StatCard
-          title="Win Rate"
+          title={t("dashboard.winRate")}
           value={totalTrades > 0 ? `${winRate}%` : "N/A"}
-          change={`${winningTrades}/${totalTrades} trades`}
-          changeType={winRate >= 60 ? "positive" : "negative"}
+          change={`${winningTradesCount}/${totalTrades} ${t("dashboard.trades")}`}
+          changeType={parseFloat(winRate) >= 60 ? "positive" : "negative"}
           icon={Activity}
         />
       </div>
@@ -208,13 +263,13 @@ export default function DashboardPage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Target className="h-5 w-5" />
-            Challenge Progress
+            {t("dashboard.challengeProgress")}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
             <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Profit Target</span>
+              <span className="text-muted-foreground">{t("dashboard.profitTarget")}</span>
               <span className="font-semibold">
                 {formatCurrency(profitLoss)} / {formatCurrency(profitTargetAmount)}
               </span>
@@ -223,7 +278,11 @@ export default function DashboardPage() {
               <div
                 className="h-full bg-green-500 transition-all"
                 style={{
-                  width: `${Math.min((profitLoss / profitTargetAmount) * 100, 100)}%`,
+                  width: `${
+                    profitTargetAmount > 0
+                      ? Math.min(Math.max((profitLoss / profitTargetAmount) * 100, 0), 100)
+                      : 0
+                  }%`,
                 }}
               />
             </div>
@@ -231,24 +290,24 @@ export default function DashboardPage() {
 
           <div className="grid grid-cols-3 gap-4 pt-4 border-t">
             <div>
-              <p className="text-sm text-muted-foreground">Trading Days</p>
+              <p className="text-sm text-muted-foreground">{t("dashboard.tradingDays")}</p>
               <p className="text-2xl font-bold">
                 {userData.tradingDays}/30
               </p>
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">Account Type</p>
+              <p className="text-sm text-muted-foreground">{t("dashboard.accountType")}</p>
               <Badge variant="secondary" className="mt-1">
                 {userData.challengeType.toUpperCase()}
               </Badge>
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">Status</p>
+              <p className="text-sm text-muted-foreground">{t("dashboard.status")}</p>
               <Badge
                 variant={userData.accountStatus === "active" ? "success" : "destructive"}
                 className="mt-1"
               >
-                {userData.accountStatus.toUpperCase()}
+                {t(`status.${userData.accountStatus}`)}
               </Badge>
             </div>
           </div>
@@ -261,7 +320,7 @@ export default function DashboardPage() {
       {/* Recent Trades */}
       <Card>
         <CardHeader>
-          <CardTitle>Recent Trades</CardTitle>
+          <CardTitle>{t("dashboard.recentTrades")}</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
@@ -292,14 +351,14 @@ export default function DashboardPage() {
                       {formatCurrency(trade.pnl || 0)}
                     </p>
                     <p className="text-sm text-muted-foreground">
-                      {trade.lots} lot{trade.lots > 1 ? 's' : ''}
+                      {trade.lots} {trade.lots > 1 ? t("dashboard.lots") : t("dashboard.lot")}
                     </p>
                   </div>
                 </div>
               ))
             ) : (
               <p className="text-center text-muted-foreground py-8">
-                No trades yet. Start trading to see your activity here.
+                {t("dashboard.noTrades")}
               </p>
             )}
           </div>
@@ -310,40 +369,46 @@ export default function DashboardPage() {
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm font-medium">Profit Factor</CardTitle>
+            <CardTitle className="text-sm font-medium">{t("dashboard.profitFactor")}</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">N/A</div>
+            <div className={`text-2xl font-bold ${
+              profitFactor === "∞" ? "text-green-500" :
+              parseFloat(profitFactor) >= 2 ? "text-green-500" :
+              parseFloat(profitFactor) >= 1 ? "text-yellow-500" : "text-red-500"
+            }`}>
+              {profitFactor}
+            </div>
             <p className="text-xs text-muted-foreground mt-1">
-              Ratio of gross profit to gross loss
+              {t("dashboard.profitFactorDesc")}
             </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm font-medium">Average Win</CardTitle>
+            <CardTitle className="text-sm font-medium">{t("dashboard.averageWin")}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-green-500">
-              {formatCurrency(0)}
+              {formatCurrency(avgWin)}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              Per winning trade
+              {t("dashboard.perWinningTrade")} ({winningTradesCount} {t("dashboard.trades")})
             </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm font-medium">Average Loss</CardTitle>
+            <CardTitle className="text-sm font-medium">{t("dashboard.averageLoss")}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-red-500">
-              {formatCurrency(0)}
+              {formatCurrency(avgLoss)}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              Per losing trade
+              {t("dashboard.perLosingTrade")} ({losingTradesCount} {t("dashboard.trades")})
             </p>
           </CardContent>
         </Card>

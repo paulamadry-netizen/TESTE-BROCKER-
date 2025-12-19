@@ -289,7 +289,12 @@
 </script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
-:root{--bg-primary:#0a0e1a;--bg-secondary:#0f1419;--bg-tertiary:#141925;--surface:#1a1f2e;--surface-elevated:#1f2433;--border:#252b3d;--border-light:#2d3548;--text-primary:#e8edf4;--text-secondary:#9ba3b4;--text-muted:#6b7280;--accent:#00d9b8;--accent-hover:#00f0cc;--accent-dark:#00b397;--success:#10b981;--success-bg:rgba(16,185,129,0.1);--danger:#ef4444;--danger-bg:rgba(239,68,68,0.1);--warning:#f59e0b;--warning-bg:rgba(245,158,11,0.1);--shadow-sm:0 2px 8px rgba(0,0,0,0.3);--shadow-md:0 4px 16px rgba(0,0,0,0.4);--shadow-lg:0 8px 32px rgba(0,0,0,0.5);--shadow-xl:0 20px 60px rgba(0,0,0,0.6);--radius-sm:8px;--radius-md:12px;--radius-lg:16px;--transition:all 0.2s cubic-bezier(0.4,0,0.2,1);font-family:'Inter',system-ui,-apple-system,sans-serif}
+:root{--bg-primary:#0a0e1a;--bg-secondary:#0f1419;--bg-tertiary:#141925;--surface:#1a1f2e;--surface-elevated:#1f2433;--border:#252b3d;--border-light:#2d3548;--text-primary:#e8edf4;--text-secondary:#9ba3b4;--text-muted:#6b7280;--accent:#3b82f6;--accent-hover:#60a5fa;--accent-dark:#2563eb;--success:#10b981;--success-bg:rgba(16,185,129,0.1);--danger:#ef4444;--danger-bg:rgba(239,68,68,0.1);--warning:#f59e0b;--warning-bg:rgba(245,158,11,0.1);--shadow-sm:0 2px 8px rgba(0,0,0,0.3);--shadow-md:0 4px 16px rgba(0,0,0,0.4);--shadow-lg:0 8px 32px rgba(0,0,0,0.5);--shadow-xl:0 20px 60px rgba(0,0,0,0.6);--radius-sm:8px;--radius-md:12px;--radius-lg:16px;--transition:all 0.2s cubic-bezier(0.4,0,0.2,1);font-family:'Inter',system-ui,-apple-system,sans-serif}
+:root[data-theme="dark-blue"]{--bg-primary:#0a0e1a;--bg-secondary:#0f1419;--bg-tertiary:#141925;--surface:#1a1f2e;--surface-elevated:#1f2433;--border:#252b3d;--border-light:#2d3548;--accent:#3b82f6;--accent-hover:#60a5fa;--accent-dark:#2563eb}
+:root[data-theme="midnight-purple"]{--bg-primary:#0d0a18;--bg-secondary:#1a1228;--bg-tertiary:#22182f;--surface:#2a1f3d;--surface-elevated:#322747;--border:#3d2d54;--border-light:#4a3661;--accent:#a855f7;--accent-hover:#c084fc;--accent-dark:#9333ea;--danger:#f43f5e}
+:root[data-theme="matrix-green"]{--bg-primary:#0a1410;--bg-secondary:#0d1916;--bg-tertiary:#10201c;--surface:#12241d;--surface-elevated:#152e25;--border:#1a3a2d;--border-light:#204635;--accent:#10b981;--accent-hover:#34d399;--accent-dark:#059669;--success:#22c55e}
+:root[data-theme="sunset-orange"]{--bg-primary:#1a0f0a;--bg-secondary:#241710;--bg-tertiary:#2a1d15;--surface:#2e1f15;--surface-elevated:#38261a;--border:#463020;--border-light:#543a28;--accent:#f97316;--accent-hover:#fb923c;--accent-dark:#ea580c}
+:root[data-theme="arctic-blue"]{--bg-primary:#0a1419;--bg-secondary:#0f1f26;--bg-tertiary:#122631;--surface:#152a35;--surface-elevated:#1a333f;--border:#244654;--border-light:#2d5563;--accent:#06b6d4;--accent-hover:#22d3ee;--accent-dark:#0891b2}
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;background:linear-gradient(135deg,var(--bg-primary) 0%,var(--bg-secondary) 100%);color:var(--text-primary);overflow:hidden}
 .app{display:flex;flex-direction:column;height:100vh}
@@ -442,6 +447,12 @@ html,body{height:100%;background:linear-gradient(135deg,var(--bg-primary) 0%,var
 .toast.info{border-color:var(--accent);background:rgba(0,217,184,0.1)}
 .debug-panel{position:fixed;bottom:10px;left:10px;background:rgba(0,0,0,0.95);color:#00ff00;font-family:'Courier New',monospace;font-size:10px;padding:12px;border-radius:var(--radius-md);max-width:500px;max-height:300px;overflow-y:auto;z-index:1000;display:none;border:1px solid #00ff00}
 .debug-panel.active{display:block}
+.theme-selector{display:flex;align-items:center;gap:10px;padding:8px 14px;background:var(--bg-tertiary);border-radius:var(--radius-md);border:1px solid var(--border);transition:var(--transition)}
+.theme-selector:hover{background:var(--surface-elevated);border-color:var(--border-light)}
+.theme-selector i{color:var(--accent);font-size:16px}
+.theme-dropdown{padding:6px 12px;border-radius:var(--radius-md);border:1px solid var(--border);background:var(--bg-primary);color:var(--text-primary);font-weight:600;font-size:12px;cursor:pointer;transition:var(--transition);outline:none}
+.theme-dropdown:hover{border-color:var(--accent);background:var(--surface-elevated)}
+.theme-dropdown:focus{border-color:var(--accent);box-shadow:0 0 0 2px rgba(59,130,246,0.2)}
 ::-webkit-scrollbar{width:8px;height:8px}
 ::-webkit-scrollbar-track{background:var(--bg-tertiary)}
 ::-webkit-scrollbar-thumb{background:var(--border-light);border-radius:4px}
@@ -458,6 +469,16 @@ html,body{height:100%;background:linear-gradient(135deg,var(--bg-primary) 0%,var
 <div class="header-symbol">
 <div class="symbol-badge" id="currentSymbolBadge">OANDA:EURUSD</div>
 <div class="symbol-price"><div class="price-value" id="currentPriceValue">—</div><div class="price-label">Prix actuel</div></div>
+</div>
+<div class="theme-selector">
+<i class="fas fa-palette"></i>
+<select id="themeSelect" class="theme-dropdown">
+<option value="dark-blue">Dark Blue</option>
+<option value="midnight-purple">Midnight Purple</option>
+<option value="matrix-green">Matrix Green</option>
+<option value="sunset-orange">Sunset Orange</option>
+<option value="arctic-blue">Arctic Blue</option>
+</select>
 </div>
 <div class="header-account">
 <div class="account-stat"><div class="stat-label"><i class="fas fa-wallet"></i> Balance</div><div class="stat-value" id="simBalance">50000.00 USD</div></div>
@@ -584,6 +605,34 @@ let ws,wsConnected=false,reconDelay=CFG.reconBase,reconAttempts=0,reconTimer,kee
 let currentTimeframe='15',chartHistoryData={};
 let initialBalance=0,startOfDayBalance=0,todayStartDate=new Date().toDateString(),accountSuspended=false;
 const $=(id)=>document.getElementById(id),debugLog=(msg)=>{if(!debugMode)return;const t=new Date().toLocaleTimeString();debugPanel.innerHTML+=`[${t}] ${msg}\n`;debugPanel.scrollTop=debugPanel.scrollHeight;console.log(`[DEBUG] ${msg}`)};
+
+// Theme Management System
+const THEMES={
+  'dark-blue':{name:'Dark Blue',icon:'🔵'},
+  'midnight-purple':{name:'Midnight Purple',icon:'🟣'},
+  'matrix-green':{name:'Matrix Green',icon:'🟢'},
+  'sunset-orange':{name:'Sunset Orange',icon:'🟠'},
+  'arctic-blue':{name:'Arctic Blue',icon:'🔷'}
+};
+const setTheme=(themeName)=>{
+  if(!THEMES[themeName]){
+    console.warn(`Unknown theme: ${themeName}`);
+    themeName='dark-blue';
+  }
+  document.documentElement.setAttribute('data-theme',themeName);
+  localStorage.setItem('broker-theme',themeName);
+  const select=$('themeSelect');
+  if(select)select.value=themeName;
+  debugLog(`Theme changed to: ${themeName}`);
+  console.log(`✨ Theme applied: ${THEMES[themeName].name}`);
+};
+const loadTheme=()=>{
+  const savedTheme=localStorage.getItem('broker-theme')||'dark-blue';
+  setTheme(savedTheme);
+};
+// Load theme immediately
+loadTheme();
+
 $('debugToggle').onclick=()=>{debugMode=!debugMode;debugPanel.classList.toggle('active');debugPanel.innerHTML=debugMode?'=== DEBUG MODE ACTIVATED ===\n':''};
 const toastEl=$('toast');let toastTimer;
 const showToast=(msg,type='info',dur=2500)=>{if(toastTimer)clearTimeout(toastTimer);toastEl.textContent=msg;toastEl.className=`toast visible ${type}`;toastTimer=setTimeout(()=>toastEl.classList.remove('visible'),dur);debugLog(`Toast: ${msg}`)};
@@ -674,6 +723,13 @@ $('tabHistory').addEventListener('click',()=>{$('tabHistory').classList.add('act
 $('modalCancel').addEventListener('click',()=>$('positionModal').style.display='none');
 $('modalSave').addEventListener('click',()=>{const pos=positions.find(p=>p.id===activeModalId);if(!pos)return;const tp=$('modalTp').value,sl=$('modalSl').value,sellLots=parseFloat($('modalSellLots').value)||0;pos.tp=tp?Number(tp):null;pos.sl=sl?Number(sl):null;if(sellLots>0)closePosition(pos.id,sellLots);$('positionModal').style.display='none';renderPositions();renderTotals();showToast('✅ Sauvegardé','success')});
 document.querySelectorAll('.timeframe-btn').forEach(btn=>btn.addEventListener('click',()=>switchTimeframe(btn.dataset.tf)));
+
+// Theme selector event listener
+$('themeSelect').addEventListener('change',(e)=>{
+  const selectedTheme=e.target.value;
+  setTheme(selectedTheme);
+  showToast(`✨ Thème changé: ${THEMES[selectedTheme].name}`,'success',2000);
+});
 
 window.closePosition=closePosition;window.removeOrder=removeOrder;
 console.log('🚀 AmABrocker');

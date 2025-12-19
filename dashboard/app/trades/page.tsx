@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { collection, query, where, getDocs, orderBy } from "firebase/firestore";
 import { db } from "@/lib/firebase/config";
 import { useAuth } from "@/context/AuthContext";
+import { useLanguage } from "@/context/LanguageContext";
 import { History, TrendingUp, TrendingDown, DollarSign, Loader2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -24,6 +25,7 @@ interface Trade {
 
 export default function TradesPage() {
   const { user, loading: authLoading } = useAuth();
+  const { t } = useLanguage();
   const [trades, setTrades] = useState<Trade[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -106,9 +108,9 @@ export default function TradesPage() {
     <div className="flex flex-col gap-6 p-8">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Trade History</h1>
+        <h1 className="text-3xl font-bold tracking-tight">{t("trades.title")}</h1>
         <p className="text-muted-foreground">
-          Complete history of all your trades
+          {t("trades.subtitle")}
         </p>
       </div>
 
@@ -116,18 +118,18 @@ export default function TradesPage() {
       <div className="grid gap-4 md:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Trades</CardTitle>
+            <CardTitle className="text-sm font-medium">{t("trades.totalTrades")}</CardTitle>
             <History className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{totalTrades}</div>
-            <p className="text-xs text-muted-foreground">All time</p>
+            <p className="text-xs text-muted-foreground">{t("trades.allTime")}</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Win Rate</CardTitle>
+            <CardTitle className="text-sm font-medium">{t("trades.winRate")}</CardTitle>
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -135,34 +137,34 @@ export default function TradesPage() {
               {totalTrades > 0 ? `${winRate}%` : "N/A"}
             </div>
             <p className="text-xs text-muted-foreground">
-              {winningTrades} winning trades
+              {winningTrades} {t("trades.winningTrades")}
             </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Profit</CardTitle>
+            <CardTitle className="text-sm font-medium">{t("trades.totalProfit")}</CardTitle>
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
               {formatCurrency(totalProfit)}
             </div>
-            <p className="text-xs text-muted-foreground">Net profit</p>
+            <p className="text-xs text-muted-foreground">{t("trades.netProfit")}</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Profit Factor</CardTitle>
+            <CardTitle className="text-sm font-medium">{t("trades.profitFactor")}</CardTitle>
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
               {totalTrades > 0 ? profitFactor : "N/A"}
             </div>
-            <p className="text-xs text-muted-foreground">Risk/Reward ratio</p>
+            <p className="text-xs text-muted-foreground">{t("trades.riskReward")}</p>
           </CardContent>
         </Card>
       </div>
@@ -170,7 +172,7 @@ export default function TradesPage() {
       {/* Trades Table */}
       <Card>
         <CardHeader>
-          <CardTitle>All Trades</CardTitle>
+          <CardTitle>{t("trades.allTrades")}</CardTitle>
         </CardHeader>
         <CardContent>
           {trades.length > 0 ? (
@@ -180,31 +182,31 @@ export default function TradesPage() {
                   <thead className="border-b bg-muted/50">
                     <tr>
                       <th className="h-12 px-4 text-left align-middle font-medium text-sm">
-                        Symbol
+                        {t("trades.symbol")}
                       </th>
                       <th className="h-12 px-4 text-left align-middle font-medium text-sm">
-                        Type
+                        {t("trades.type")}
                       </th>
                       <th className="h-12 px-4 text-left align-middle font-medium text-sm">
-                        Open Time
+                        {t("trades.openTime")}
                       </th>
                       <th className="h-12 px-4 text-left align-middle font-medium text-sm">
-                        Close Time
+                        {t("trades.closeTime")}
                       </th>
                       <th className="h-12 px-4 text-right align-middle font-medium text-sm">
-                        Open Price
+                        {t("trades.openPrice")}
                       </th>
                       <th className="h-12 px-4 text-right align-middle font-medium text-sm">
-                        Close Price
+                        {t("trades.closePrice")}
                       </th>
                       <th className="h-12 px-4 text-right align-middle font-medium text-sm">
-                        Volume
+                        {t("trades.volume")}
                       </th>
                       <th className="h-12 px-4 text-right align-middle font-medium text-sm">
-                        Profit/Loss
+                        {t("trades.profitLoss")}
                       </th>
                       <th className="h-12 px-4 text-center align-middle font-medium text-sm">
-                        Status
+                        {t("trades.status")}
                       </th>
                     </tr>
                   </thead>
@@ -253,7 +255,7 @@ export default function TradesPage() {
                           <Badge
                             variant={trade.status === "closed" ? "secondary" : "outline"}
                           >
-                            {trade.status.toUpperCase()}
+                            {t(`trades.${trade.status}`).toUpperCase()}
                           </Badge>
                         </td>
                       </tr>
@@ -265,9 +267,9 @@ export default function TradesPage() {
           ) : (
             <div className="text-center py-12">
               <History className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <p className="text-lg font-semibold">No trades yet</p>
+              <p className="text-lg font-semibold">{t("trades.noTradesYet")}</p>
               <p className="text-sm text-muted-foreground mt-2">
-                Your trading history will appear here once you start trading
+                {t("trades.tradingHistoryWillAppear")}
               </p>
             </div>
           )}
@@ -278,21 +280,21 @@ export default function TradesPage() {
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Winning Trades Statistics</CardTitle>
+            <CardTitle>{t("trades.winningStatistics")}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex justify-between">
-              <span className="text-muted-foreground">Total Wins:</span>
+              <span className="text-muted-foreground">{t("trades.totalWins")}</span>
               <span className="font-semibold">{winningTrades}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-muted-foreground">Average Win:</span>
+              <span className="text-muted-foreground">{t("trades.averageWin")}</span>
               <span className="font-semibold text-green-500">
                 {formatCurrency(avgWin)}
               </span>
             </div>
             <div className="flex justify-between">
-              <span className="text-muted-foreground">Best Trade:</span>
+              <span className="text-muted-foreground">{t("trades.bestTrade")}</span>
               <span className="font-semibold text-green-500">
                 {formatCurrency(bestTrade)}
               </span>
@@ -302,21 +304,21 @@ export default function TradesPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Losing Trades Statistics</CardTitle>
+            <CardTitle>{t("trades.losingStatistics")}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex justify-between">
-              <span className="text-muted-foreground">Total Losses:</span>
+              <span className="text-muted-foreground">{t("trades.totalLosses")}</span>
               <span className="font-semibold">{losingTrades}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-muted-foreground">Average Loss:</span>
+              <span className="text-muted-foreground">{t("trades.averageLoss")}</span>
               <span className="font-semibold text-red-500">
                 {formatCurrency(avgLoss)}
               </span>
             </div>
             <div className="flex justify-between">
-              <span className="text-muted-foreground">Worst Trade:</span>
+              <span className="text-muted-foreground">{t("trades.worstTrade")}</span>
               <span className="font-semibold text-red-500">
                 {formatCurrency(worstTrade)}
               </span>
