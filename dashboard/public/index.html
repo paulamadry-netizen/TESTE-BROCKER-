@@ -1,0 +1,551 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>AmABrocker — Pro Trading Platform</title>
+<script src="https://s3.tradingview.com/tv.js"></script>
+<script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<!-- Firebase SDK -->
+<script type="module">
+  import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+  import { getAuth, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+  import { getFirestore, collection, addDoc, updateDoc, doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyBCAeaaJMMw3_Egf-6-4i63IhAUy4EyzBc",
+    authDomain: "teste-brocker.firebaseapp.com",
+    projectId: "teste-brocker",
+    storageBucket: "teste-brocker.firebasestorage.app",
+    messagingSenderId: "44407447466",
+    appId: "1:44407447466:web:ce5fde6a8104a1b82bd5d3",
+    measurementId: "G-MHKNE6H1ZS"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+
+  // Make available globally
+  window.firebaseAuth = auth;
+  window.firebaseDb = db;
+  window.firebaseUser = null;
+  window.userData = null;
+  window.firestoreDoc = doc;
+  window.firestoreUpdateDoc = updateDoc;
+
+  // Load user data from Firestore
+  window.loadUserData = async (userId) => {
+    try {
+      const userDocRef = doc(db, 'users', userId);
+      const userDocSnap = await getDoc(userDocRef);
+
+      if (userDocSnap.exists()) {
+        window.userData = userDocSnap.data();
+        console.log('✅ User data loaded:', window.userData);
+
+        // Check account status
+        if (window.checkAccountStatus) {
+          window.checkAccountStatus(window.userData.accountStatus);
+        }
+
+        // Update broker balance with real account balance
+        if (window.updateBrokerBalance) {
+          window.updateBrokerBalance(window.userData.accountBalance);
+        }
+
+        // Update user email in header
+        if (window.updateUserEmail) {
+          window.updateUserEmail(window.userData.email);
+        }
+
+        return window.userData;
+      } else {
+        console.error('❌ User document not found');
+        return null;
+      }
+    } catch (error) {
+      console.error('❌ Error loading user data:', error);
+      return null;
+    }
+  };
+
+  // Update user balance in Firestore
+  window.updateUserBalance = async (newBalance) => {
+    if (!window.firebaseUser) {
+      console.warn('No user authenticated');
+      return false;
+    }
+
+    try {
+      const userDocRef = doc(db, 'users', window.firebaseUser.uid);
+      await updateDoc(userDocRef, {
+        accountBalance: newBalance,
+        updatedAt: new Date().toISOString()
+      });
+      console.log('✅ Balance updated in Firestore:', newBalance);
+
+      // Update local userData
+      if (window.userData) {
+        window.userData.accountBalance = newBalance;
+      }
+
+      return true;
+    } catch (error) {
+      console.error('❌ Error updating balance:', error);
+      return false;
+    }
+  };
+
+  // Logout function
+  window.logoutBroker = async () => {
+    try {
+      await signOut(auth);
+      console.log('✅ Logged out');
+      window.location.href = '/login.html';
+    } catch (error) {
+      console.error('❌ Logout error:', error);
+    }
+  };
+
+  // Listen for auth state changes
+  onAuthStateChanged(auth, async (user) => {
+    window.firebaseUser = user;
+    if (user) {
+      console.log('🔐 User authenticated:', user.uid);
+      // Load user data from Firestore
+      await window.loadUserData(user.uid);
+    } else {
+      console.log('⚠️ No user authenticated');
+      // Redirect to login
+      window.location.href = '/login.html';
+    }
+  });
+
+  // Firebase sync functions - available globally
+  window.saveTrade = async (tradeData) => {
+    if (!window.firebaseUser) {
+      console.warn('No user authenticated - trade not saved');
+      return null;
+    }
+
+    try {
+      const tradesRef = collection(db, 'trades');
+      const docRef = await addDoc(tradesRef, {
+        ...tradeData,
+        userId: window.firebaseUser.uid,
+        createdAt: new Date().toISOString()
+      });
+      console.log('✅ Trade saved to Firestore:', docRef.id);
+      return docRef.id;
+    } catch (error) {
+      console.error('❌ Error saving trade:', error);
+      return null;
+    }
+  };
+
+  window.updateTrade = async (tradeId, updateData) => {
+    if (!window.firebaseUser || !tradeId) {
+      console.warn('No user or trade ID - update skipped');
+      return false;
+    }
+
+    try {
+      const tradeRef = doc(db, 'trades', tradeId);
+      await updateDoc(tradeRef, {
+        ...updateData,
+        updatedAt: new Date().toISOString()
+      });
+      console.log('✅ Trade updated in Firestore:', tradeId);
+      return true;
+    } catch (error) {
+      console.error('❌ Error updating trade:', error);
+      return false;
+    }
+  };
+</script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+:root{--bg-primary:#0a0e1a;--bg-secondary:#0f1419;--bg-tertiary:#141925;--surface:#1a1f2e;--surface-elevated:#1f2433;--border:#252b3d;--border-light:#2d3548;--text-primary:#e8edf4;--text-secondary:#9ba3b4;--text-muted:#6b7280;--accent:#00d9b8;--accent-hover:#00f0cc;--accent-dark:#00b397;--success:#10b981;--success-bg:rgba(16,185,129,0.1);--danger:#ef4444;--danger-bg:rgba(239,68,68,0.1);--warning:#f59e0b;--warning-bg:rgba(245,158,11,0.1);--shadow-sm:0 2px 8px rgba(0,0,0,0.3);--shadow-md:0 4px 16px rgba(0,0,0,0.4);--shadow-lg:0 8px 32px rgba(0,0,0,0.5);--shadow-xl:0 20px 60px rgba(0,0,0,0.6);--radius-sm:8px;--radius-md:12px;--radius-lg:16px;--transition:all 0.2s cubic-bezier(0.4,0,0.2,1);font-family:'Inter',system-ui,-apple-system,sans-serif}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:linear-gradient(135deg,var(--bg-primary) 0%,var(--bg-secondary) 100%);color:var(--text-primary);overflow:hidden}
+.app{display:flex;flex-direction:column;height:100vh}
+.header{background:var(--surface);border-bottom:1px solid var(--border);padding:16px 24px;display:flex;align-items:center;justify-content:space-between;backdrop-filter:blur(20px);flex-shrink:0}
+.header-left{display:flex;align-items:center;gap:20px;flex:1}
+.header-account{display:flex;align-items:center;gap:16px;margin-left:auto;padding-left:24px;border-left:1px solid var(--border)}
+.account-stat{display:flex;flex-direction:column;gap:4px}
+.stat-label{font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;font-weight:600;display:flex;align-items:center;gap:4px}
+.stat-value{font-size:14px;font-weight:700;color:var(--text-primary)}
+.pnl-stat .stat-value{font-size:16px}
+.pnl-stat .stat-value.positive{color:var(--success)}
+.pnl-stat .stat-value.negative{color:var(--danger)}
+.logo{display:flex;align-items:center;gap:12px;font-size:20px;font-weight:800;color:var(--accent)}
+.logo-icon{width:36px;height:36px;background:linear-gradient(135deg,var(--accent),var(--accent-dark));border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px}
+.header-symbol{display:flex;align-items:center;gap:12px;padding:10px 16px;background:var(--bg-tertiary);border-radius:var(--radius-md);border:1px solid var(--border)}
+.symbol-badge{font-weight:700;font-size:14px;color:var(--accent)}
+.symbol-price{display:flex;flex-direction:column}
+.price-value{font-weight:700;font-size:16px}
+.price-label{font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px}
+.header-right{display:flex;align-items:center;gap:12px}
+.status-badge{padding:8px 14px;border-radius:var(--radius-md);font-weight:600;font-size:12px;display:flex;align-items:center;gap:8px;border:1px solid}
+.status-badge.connected{background:var(--success-bg);color:var(--success);border-color:var(--success)}
+.status-badge.connecting{background:var(--warning-bg);color:var(--warning);border-color:var(--warning)}
+.status-badge.disconnected{background:var(--danger-bg);color:var(--danger);border-color:var(--danger)}
+.status-dot{width:8px;height:8px;border-radius:50%;background:currentColor;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}
+.icon-btn{width:40px;height:40px;border-radius:var(--radius-md);border:1px solid var(--border);background:var(--bg-tertiary);color:var(--text-secondary);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:var(--transition);font-size:16px}
+.icon-btn:hover{background:var(--surface-elevated);border-color:var(--border-light);color:var(--text-primary);transform:translateY(-2px)}
+.icon-btn.active{background:var(--accent);color:#0a0e1a;border-color:var(--accent)}
+.view-controls{display:flex;gap:6px;padding-left:12px;border-left:1px solid var(--border)}
+.workspace{flex:1;display:flex;overflow:hidden;position:relative}
+.resizable-panel{position:relative;background:var(--surface);border:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;min-width:250px;min-height:200px;transition:width 0.3s ease,height 0.3s ease}
+.resizable-panel.hidden{display:none}
+.panel-header{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;cursor:move;user-select:none;background:var(--bg-tertiary)}
+.panel-header:active{cursor:grabbing}
+.panel-title{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-secondary);display:flex;align-items:center;gap:8px}
+.panel-controls{display:flex;gap:6px}
+.panel-btn{width:24px;height:24px;border-radius:6px;border:none;background:transparent;color:var(--text-muted);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:var(--transition);font-size:12px}
+.panel-btn:hover{background:var(--surface-elevated);color:var(--text-primary)}
+.panel-content{flex:1;overflow:auto;padding:12px}
+.resize-handle{position:absolute;background:transparent;z-index:10}
+.resize-handle-right{right:0;top:0;bottom:0;width:4px;cursor:ew-resize}
+.resize-handle-bottom{left:0;right:0;bottom:0;height:4px;cursor:ns-resize}
+.resize-handle-corner{right:0;bottom:0;width:12px;height:12px;cursor:nwse-resize}
+.resize-handle:hover,.resize-handle.resizing{background:var(--accent);opacity:0.5}
+.watchlist-panel{width:320px;border-right:1px solid var(--border)}
+.wl-item{padding:14px;border-radius:var(--radius-md);cursor:pointer;transition:var(--transition);background:var(--bg-tertiary);border:1px solid transparent;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center}
+.wl-item:hover{background:var(--surface-elevated);border-color:var(--border-light);transform:translateX(4px)}
+.wl-item.active{background:var(--surface-elevated);border-color:var(--accent)}
+.wl-item.updating{animation:flash 0.5s}
+@keyframes flash{0%,100%{opacity:1}50%{opacity:0.7}}
+.wl-left{display:flex;flex-direction:column;gap:4px}
+.wl-symbol{font-weight:700;font-size:13px}
+.wl-label{font-size:11px;color:var(--text-muted)}
+.wl-right{text-align:right}
+.wl-price{font-weight:700;font-size:14px}
+.wl-change{font-size:11px;margin-top:2px}
+.wl-change.positive{color:var(--success)}
+.wl-change.negative{color:var(--danger)}
+.chart-panel{flex:1;min-width:400px}
+.chart-toolbar{padding:8px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;background:var(--bg-tertiary)}
+.lot-selector{display:flex;align-items:center;gap:8px}
+.lot-selector label{font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.5px}
+.lot-input{width:70px;padding:6px 8px;border-radius:var(--radius-md);border:1px solid var(--border);background:var(--bg-primary);color:var(--text-primary);font-weight:600;font-size:13px;transition:var(--transition)}
+.lot-input:focus{outline:none;border-color:var(--accent);background:var(--surface-elevated)}
+.lot-info{font-size:10px;color:var(--text-muted);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.timeframe-selector{display:flex;gap:4px;padding:0 8px;border-left:1px solid var(--border);border-right:1px solid var(--border)}
+.timeframe-btn{padding:4px 8px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--bg-primary);color:var(--text-secondary);cursor:pointer;font-weight:600;font-size:11px;transition:var(--transition)}
+.timeframe-btn:hover{background:var(--surface-elevated);border-color:var(--border-light);color:var(--text-primary)}
+.timeframe-btn.active{background:var(--accent);color:#0a0e1a;border-color:var(--accent)}
+.trade-buttons{display:flex;gap:8px;margin-left:auto}
+.btn{padding:8px 16px;border-radius:var(--radius-md);border:none;cursor:pointer;font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:0.5px;transition:var(--transition);display:flex;align-items:center;gap:6px}
+.btn:hover{transform:translateY(-2px);box-shadow:var(--shadow-md)}
+.btn:active{transform:translateY(0)}
+.btn-buy{background:linear-gradient(135deg,var(--success),#059669);color:#fff}
+.btn-buy:hover{background:linear-gradient(135deg,#10b981,#047857)}
+.btn-sell{background:linear-gradient(135deg,var(--danger),#dc2626);color:#fff}
+.btn-sell:hover{background:linear-gradient(135deg,#ef4444,#b91c1c)}
+.btn-ghost{background:transparent;color:var(--text-secondary);border:1px solid var(--border)}
+.btn-ghost:hover{background:var(--surface-elevated);border-color:var(--border-light);color:var(--text-primary)}
+#tv_chart_container,#lw_chart_container{width:100%;height:100%}
+#lw_chart_container{display:none}
+.chart-loading{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:var(--text-muted);font-size:14px;display:flex;align-items:center;gap:10px}
+.orders-panel{width:380px;border-left:1px solid var(--border)}
+.order-form{display:grid;gap:12px;padding:16px;border-bottom:1px solid var(--border)}
+.form-group{display:flex;flex-direction:column;gap:6px}
+.form-label{font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px}
+.form-input,.form-select{width:100%;padding:10px 12px;border-radius:var(--radius-md);border:1px solid var(--border);background:var(--bg-primary);color:var(--text-primary);font-size:13px;transition:var(--transition)}
+.form-input:focus,.form-select:focus{outline:none;border-color:var(--accent);background:var(--surface-elevated)}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.btn-add-order{background:linear-gradient(135deg,var(--accent),var(--accent-dark));color:#0a0e1a;margin-top:8px}
+.btn-add-order:hover{background:linear-gradient(135deg,var(--accent-hover),var(--accent))}
+.orders-list{padding:12px}
+.order-card{background:var(--bg-tertiary);border:1px solid var(--border);border-radius:var(--radius-md);padding:12px;margin-bottom:8px;transition:var(--transition)}
+.order-card:hover{background:var(--surface-elevated);border-color:var(--border-light)}
+.order-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.order-symbol{font-weight:700;font-size:13px}
+.order-side{padding:4px 8px;border-radius:6px;font-size:11px;font-weight:700}
+.order-side.buy{background:var(--success-bg);color:var(--success)}
+.order-side.sell{background:var(--danger-bg);color:var(--danger)}
+.order-details{display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;color:var(--text-muted)}
+.order-detail span{color:var(--text-primary);font-weight:600}
+.order-actions{margin-top:8px;padding-top:8px;border-top:1px solid var(--border);display:flex;justify-content:flex-end}
+.btn-remove{padding:6px 12px;font-size:11px;background:transparent;color:var(--danger);border:1px solid var(--danger)}
+.btn-remove:hover{background:var(--danger-bg)}
+.bottom-panel{height:280px;border-top:1px solid var(--border);background:var(--surface)}
+.positions-panel{width:100%;height:100%}
+.section-header{padding:12px 16px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;background:var(--bg-tertiary)}
+.tabs{display:flex;gap:8px}
+.tab{padding:8px 16px;border-radius:var(--radius-md);cursor:pointer;font-weight:600;font-size:13px;color:var(--text-secondary);transition:var(--transition);background:transparent;border:none}
+.tab:hover{background:var(--surface);color:var(--text-primary)}
+.tab.active{background:var(--accent);color:#0a0e1a}
+.info-text{font-size:11px;color:var(--text-muted)}
+.table-container{overflow-y:auto;height:calc(100% - 50px)}
+.data-table{width:100%;border-collapse:collapse}
+.data-table thead{position:sticky;top:0;background:var(--bg-tertiary);z-index:10}
+.data-table th{padding:12px 16px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);border-bottom:1px solid var(--border)}
+.data-table td{padding:14px 16px;font-size:13px;border-bottom:1px solid var(--border)}
+.data-table tbody tr{transition:var(--transition)}
+.data-table tbody tr:hover{background:var(--bg-tertiary)}
+.symbol-cell{font-weight:700}
+.symbol-label{font-size:11px;color:var(--text-muted);margin-top:2px}
+.side-badge{padding:4px 10px;border-radius:6px;font-size:11px;font-weight:700;display:inline-block}
+.side-badge.buy{background:var(--success-bg);color:var(--success)}
+.side-badge.sell{background:var(--danger-bg);color:var(--danger)}
+.pnl-value{font-weight:700;padding:6px 12px;border-radius:6px;display:inline-block}
+.pnl-value.positive{background:var(--success-bg);color:var(--success)}
+.pnl-value.negative{background:var(--danger-bg);color:var(--danger)}
+.action-buttons{display:flex;gap:8px}
+.btn-action{width:32px;height:32px;border-radius:var(--radius-sm);border:1px solid var(--border);background:transparent;color:var(--text-secondary);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:var(--transition);font-size:14px}
+.btn-action:hover{background:var(--surface-elevated);border-color:var(--border-light);color:var(--text-primary)}
+.empty-state{padding:40px;text-align:center;color:var(--text-muted);font-size:13px}
+.modal{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.8);display:flex;align-items:center;justify-content:center;z-index:1000;backdrop-filter:blur(8px)}
+.modal-content{background:var(--surface);border-radius:var(--radius-lg);padding:28px;width:450px;max-width:90vw;box-shadow:var(--shadow-xl);border:1px solid var(--border)}
+.modal-header{font-weight:700;font-size:18px;margin-bottom:24px;color:var(--accent);display:flex;align-items:center;gap:10px}
+.modal-body{display:flex;flex-direction:column;gap:16px}
+.modal-info{padding:12px;background:var(--bg-tertiary);border-radius:var(--radius-md);border:1px solid var(--border)}
+.modal-info-label{font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px}
+.modal-info-value{font-size:15px;font-weight:700;margin-top:4px}
+.modal-actions{display:flex;gap:12px;justify-content:flex-end;margin-top:8px}
+.toast{position:fixed;bottom:24px;right:24px;background:var(--surface-elevated);color:var(--text-primary);padding:16px 20px;border-radius:var(--radius-md);font-weight:600;font-size:14px;opacity:0;transform:translateY(20px);transition:var(--transition);pointer-events:none;z-index:2000;border:1px solid var(--border);box-shadow:var(--shadow-lg);min-width:300px}
+.toast.visible{opacity:1;transform:translateY(0);pointer-events:auto}
+.toast.error{border-color:var(--danger);background:var(--danger-bg)}
+.toast.success{border-color:var(--success);background:var(--success-bg)}
+.toast.info{border-color:var(--accent);background:rgba(0,217,184,0.1)}
+.debug-panel{position:fixed;bottom:10px;left:10px;background:rgba(0,0,0,0.95);color:#00ff00;font-family:'Courier New',monospace;font-size:10px;padding:12px;border-radius:var(--radius-md);max-width:500px;max-height:300px;overflow-y:auto;z-index:1000;display:none;border:1px solid #00ff00}
+.debug-panel.active{display:block}
+::-webkit-scrollbar{width:8px;height:8px}
+::-webkit-scrollbar-track{background:var(--bg-tertiary)}
+::-webkit-scrollbar-thumb{background:var(--border-light);border-radius:4px}
+::-webkit-scrollbar-thumb:hover{background:var(--text-muted)}
+@media (max-width:1400px){.watchlist-panel{width:280px}.orders-panel{width:340px}.header-account{display:none}}
+@media (max-width:1100px){.workspace{flex-direction:column}.watchlist-panel,.orders-panel{width:100%;border:none;border-bottom:1px solid var(--border)}.bottom-panel{flex-direction:column;height:auto}.header-account{display:none}}
+</style>
+</head>
+<body>
+<div class="app">
+<header class="header">
+<div class="header-left">
+<div class="logo"><div class="logo-icon"><i class="fas fa-chart-line"></i></div><span>AmABrocker</span></div>
+<div class="header-symbol">
+<div class="symbol-badge" id="currentSymbolBadge">OANDA:EURUSD</div>
+<div class="symbol-price"><div class="price-value" id="currentPriceValue">—</div><div class="price-label">Prix actuel</div></div>
+</div>
+<div class="header-account">
+<div class="account-stat"><div class="stat-label"><i class="fas fa-wallet"></i> Balance</div><div class="stat-value" id="simBalance">50000.00 USD</div></div>
+<div class="account-stat"><div class="stat-label"><i class="fas fa-money-bill-wave"></i> Disponible</div><div class="stat-value" id="availableBalance">50000.00 USD</div></div>
+<div class="account-stat"><div class="stat-label"><i class="fas fa-percentage"></i> Marge</div><div class="stat-value" id="usedMargin">0.00 USD</div></div>
+<div class="account-stat pnl-stat"><div class="stat-label"><i class="fas fa-chart-line"></i> PnL Total</div><div class="stat-value total-pnl-value" id="totalPnl">0.00 USD</div></div>
+</div>
+</div>
+<div class="header-right">
+<div class="view-controls">
+<button class="icon-btn active" id="toggleWatchlist" title="Watchlist"><i class="fas fa-list-ul"></i></button>
+<button class="icon-btn active" id="toggleOrders" title="Ordres"><i class="fas fa-clock"></i></button>
+<button class="icon-btn active" id="togglePositions" title="Positions"><i class="fas fa-briefcase"></i></button>
+</div>
+<div class="status-badge disconnected" id="wsStatus"><div class="status-dot"></div><span>Déconnecté</span></div>
+<div class="account-stat"><div class="stat-label"><i class="fas fa-user"></i> User</div><div class="stat-value" id="userEmail" style="font-size:12px;max-width:150px;overflow:hidden;text-overflow:ellipsis;">Loading...</div></div>
+<button class="icon-btn" id="debugToggle" title="Debug"><i class="fas fa-bug"></i></button>
+<button class="icon-btn" id="refreshPricesBtn" title="Rafraîchir"><i class="fas fa-sync-alt"></i></button>
+<button class="icon-btn" onclick="window.logoutBroker()" title="Déconnexion"><i class="fas fa-sign-out-alt"></i></button>
+</div>
+</header>
+<div class="workspace">
+<div class="resizable-panel watchlist-panel" id="watchlistPanel">
+<div class="panel-header"><div class="panel-title"><i class="fas fa-list-ul"></i>Watchlist</div><div class="panel-controls"><button class="panel-btn" id="closeWatchlist" title="Fermer"><i class="fas fa-times"></i></button></div></div>
+<div class="panel-content" id="wlList"></div>
+<div class="resize-handle resize-handle-right"></div>
+</div>
+<div class="resizable-panel chart-panel" id="chartPanel">
+<div class="panel-header"><div class="panel-title"><i class="fas fa-chart-area"></i>Graphique</div></div>
+<div class="chart-toolbar">
+<div class="lot-selector"><label><i class="fas fa-layer-group"></i> Lots</label><input type="number" class="lot-input" id="lotInput" min="0.01" step="0.01" value="1"/></div>
+<div class="lot-info" id="lotValueInfo">1 lot = 100 000 unités · marge 1:20</div>
+<div class="timeframe-selector" id="timeframeSelector">
+<button class="timeframe-btn" data-tf="1">1m</button>
+<button class="timeframe-btn" data-tf="5">5m</button>
+<button class="timeframe-btn active" data-tf="15">15m</button>
+<button class="timeframe-btn" data-tf="60">1h</button>
+<button class="timeframe-btn" data-tf="240">4h</button>
+<button class="timeframe-btn" data-tf="1D">1D</button>
+</div>
+<div class="trade-buttons">
+<button class="btn btn-buy" id="buyBtn"><i class="fas fa-arrow-trend-up"></i><span>BUY</span></button>
+<button class="btn btn-sell" id="sellBtn"><i class="fas fa-arrow-trend-down"></i><span>SELL</span></button>
+</div>
+</div>
+<div id="tv_chart_container"></div>
+<div id="lw_chart_container"></div>
+</div>
+<div class="resizable-panel orders-panel" id="ordersPanel">
+<div class="panel-header"><div class="panel-title"><i class="fas fa-clock"></i>Ordres Limites</div><div class="panel-controls"><button class="panel-btn" id="closeOrders" title="Fermer"><i class="fas fa-times"></i></button></div></div>
+<form class="order-form" onsubmit="return false;">
+<div class="form-group"><label class="form-label"><i class="fas fa-coins"></i> Symbole</label><select id="ordSymbol" class="form-select"></select></div>
+<div class="form-row">
+<div class="form-group"><label class="form-label"><i class="fas fa-exchange-alt"></i> Type</label><select id="ordSide" class="form-select"><option value="BUY">BUY</option><option value="SELL">SELL</option></select></div>
+<div class="form-group"><label class="form-label"><i class="fas fa-layer-group"></i> Lots</label><input id="ordSize" class="form-input" type="number" step="0.01" value="1"/></div>
+</div>
+<div class="form-group"><label class="form-label"><i class="fas fa-bullseye"></i> Prix cible</label><input id="ordPrice" class="form-input" type="number" step="0.00001" placeholder="0.00000"/></div>
+<div class="form-row">
+<div class="form-group"><label class="form-label"><i class="fas fa-check-circle"></i> Take Profit</label><input id="ordTp" class="form-input" type="number" step="0.00001" placeholder="Optionnel"/></div>
+<div class="form-group"><label class="form-label"><i class="fas fa-times-circle"></i> Stop Loss</label><input id="ordSl" class="form-input" type="number" step="0.00001" placeholder="Optionnel"/></div>
+</div>
+<button class="btn btn-add-order" id="addOrderBtn"><i class="fas fa-plus-circle"></i>Ajouter l'ordre</button>
+</form>
+<div class="orders-list" id="ordersBody"></div>
+<div class="resize-handle resize-handle-left"></div>
+</div>
+</div>
+<div class="resizable-panel bottom-panel" id="bottomPanel">
+<div class="resizable-panel positions-panel">
+<div class="section-header">
+<div class="tabs">
+<button class="tab active" id="tabPositions"><i class="fas fa-briefcase"></i> Positions</button>
+<button class="tab" id="tabHistory"><i class="fas fa-history"></i> Historique</button>
+</div>
+<div style="display:flex;align-items:center;gap:12px">
+<div class="info-text">Simulé · Alpaca + Finnhub · Effet 1:20</div>
+<button class="panel-btn" id="closePositions" title="Fermer"><i class="fas fa-times"></i></button>
+</div>
+</div>
+<div class="table-container">
+<div id="positionsPane"><table class="data-table"><thead><tr><th>Symbole</th><th>Type</th><th>Entry</th><th>Actuel</th><th>Lots</th><th>PNL</th><th>Actions</th></tr></thead><tbody id="positionsBody"></tbody></table></div>
+<div id="historyPane" style="display:none"><table class="data-table"><thead><tr><th>Symbole</th><th>Type</th><th>Entry</th><th>Close</th><th>Lots</th><th>PNL</th><th>Date</th></tr></thead><tbody id="historyBody"></tbody></table></div>
+</div>
+<div class="resize-handle resize-handle-top"></div>
+</div>
+</div>
+</div>
+<div class="modal" id="positionModal" style="display:none">
+<div class="modal-content">
+<div class="modal-header"><i class="fas fa-cog"></i>Modifier la position</div>
+<div class="modal-body">
+<div class="modal-info"><div class="modal-info-label">Symbole</div><div class="modal-info-value" id="modalSymbol">—</div></div>
+<div class="modal-info"><div class="modal-info-label">Lots disponibles</div><div class="modal-info-value" id="modalLots">—</div></div>
+<div class="form-group"><label class="form-label"><i class="fas fa-check-circle"></i> Take Profit (prix)</label><input type="number" class="form-input" id="modalTp" step="0.00001" placeholder="Laisser vide pour aucun"/></div>
+<div class="form-group"><label class="form-label"><i class="fas fa-times-circle"></i> Stop Loss (prix)</label><input type="number" class="form-input" id="modalSl" step="0.00001" placeholder="Laisser vide pour aucun"/></div>
+<div class="form-group"><label class="form-label"><i class="fas fa-sign-out-alt"></i> Lots à clôturer</label><input type="number" class="form-input" id="modalSellLots" min="0" step="0.01" value="0" placeholder="0 = garder ouvert"/></div>
+</div>
+<div class="modal-actions">
+<button class="btn btn-ghost" id="modalCancel"><i class="fas fa-times"></i>Annuler</button>
+<button class="btn btn-add-order" id="modalSave"><i class="fas fa-save"></i>Sauvegarder</button>
+</div>
+</div>
+</div>
+<div id="toast" class="toast"></div>
+<div id="debugPanel" class="debug-panel"></div>
+<script>
+const CFG={ws:'wss://finnhub-proxy-477220862918.europe-west1.run.app',keepalive:2e4,reconBase:2e3,reconMax:3e4,baseLot:1e5,leverage:20};
+const WATCHLIST=[
+{tv:'OANDA:EURUSD',label:'EUR / USD',api:'EUR_USD',type:'forex',yahoo:'EURUSD=X'},
+{tv:'OANDA:USDJPY',label:'USD / JPY',api:'USD_JPY',type:'forex',yahoo:'USDJPY=X'},
+{tv:'OANDA:GBPUSD',label:'GBP / USD',api:'GBP_USD',type:'forex',yahoo:'GBPUSD=X'},
+{tv:'OANDA:USDCHF',label:'USD / CHF',api:'USD_CHF',type:'forex',yahoo:'USDCHF=X'},
+{tv:'OANDA:AUDUSD',label:'AUD / USD',api:'AUD_USD',type:'forex',yahoo:'AUDUSD=X'},
+{tv:'OANDA:XAUUSD',label:'Gold / USD',api:'XAU_USD',type:'metal',yahoo:'GC=F'},
+{tv:'NASDAQ:SPY',label:'SPY (S&P 500 ETF)',api:'SPY',type:'etf',yahoo:'SPY'},
+{tv:'NASDAQ:DIA',label:'DIA (Dow Jones ETF)',api:'DIA',type:'etf',yahoo:'DIA'},
+{tv:'NASDAQ:QQQ',label:'QQQ (Nasdaq 100 ETF)',api:'QQQ',type:'etf',yahoo:'QQQ'}
+];
+const PIP_STEPS={default:0.0001,jpy:0.01,xau:0.1,etf:0.01};
+let ws,wsConnected=false,reconDelay=CFG.reconBase,reconAttempts=0,reconTimer,keepaliveTimer,currentSymbol=WATCHLIST[0],priceCache={},lastPriceUpdate={},positions=[],history=[],orders=[],simBalance=0,availableBalance=0,tvWidget,lwChart,lwSeries,activeModalId,debugMode=false,msgCount=0;
+let currentTimeframe='15',chartHistoryData={};
+let initialBalance=0,startOfDayBalance=0,todayStartDate=new Date().toDateString(),accountSuspended=false;
+const $=(id)=>document.getElementById(id),debugLog=(msg)=>{if(!debugMode)return;const t=new Date().toLocaleTimeString();debugPanel.innerHTML+=`[${t}] ${msg}\n`;debugPanel.scrollTop=debugPanel.scrollHeight;console.log(`[DEBUG] ${msg}`)};
+$('debugToggle').onclick=()=>{debugMode=!debugMode;debugPanel.classList.toggle('active');debugPanel.innerHTML=debugMode?'=== DEBUG MODE ACTIVATED ===\n':''};
+const toastEl=$('toast');let toastTimer;
+const showToast=(msg,type='info',dur=2500)=>{if(toastTimer)clearTimeout(toastTimer);toastEl.textContent=msg;toastEl.className=`toast visible ${type}`;toastTimer=setTimeout(()=>toastEl.classList.remove('visible'),dur);debugLog(`Toast: ${msg}`)};
+const checkTradingHours=()=>{const now=new Date(),hours=now.getHours(),day=now.getDay();if(hours>=22||hours<0){return{allowed:false,reason:'Positions interdites entre 22h et 00h'}}if(day===0||day===6){return{allowed:false,reason:'Positions interdites le week-end'}}return{allowed:true}};
+const checkDailyDrawdown=()=>{const todayDate=new Date().toDateString();if(todayDate!==todayStartDate){todayStartDate=todayDate;startOfDayBalance=simBalance}const dailyLoss=startOfDayBalance-simBalance,dailyLossPercent=(dailyLoss/startOfDayBalance)*100;if(dailyLossPercent>3){return{violated:true,reason:`Perte journalière de ${dailyLossPercent.toFixed(2)}% (max: 3%)`}}return{violated:false}};
+const checkTotalDrawdown=()=>{const totalLoss=initialBalance-simBalance,totalLossPercent=(totalLoss/initialBalance)*100;if(totalLossPercent>8){return{violated:true,reason:`Perte totale de ${totalLossPercent.toFixed(2)}% (max: 8%)`}}return{violated:false}};
+const closeAllPositions=async()=>{debugLog('⚠️ Closing all positions...');const positionsCopy=[...positions];for(const pos of positionsCopy){await closePosition(pos.id)}debugLog('✅ All positions closed')};
+const suspendAccount=async(reason)=>{accountSuspended=true;showToast(`🚫 COMPTE SUSPENDU: ${reason}`,'error',10000);await closeAllPositions();if(window.firebaseUser&&window.firestoreDoc&&window.firestoreUpdateDoc){try{const userDocRef=window.firestoreDoc(window.firebaseDb,'users',window.firebaseUser.uid);await window.firestoreUpdateDoc(userDocRef,{accountStatus:'suspended',suspensionReason:reason,suspendedAt:new Date().toISOString()});debugLog(`Account suspended in Firestore: ${reason}`);alert(`⚠️ COMPTE DÉSACTIVÉ\n\n${reason}\n\nVotre compte a été suspendu pour violation des règles de trading.\nVeuillez contacter le support.`)}catch(error){console.error('Error suspending account:',error)}}};
+const checkAllRules=async()=>{if(accountSuspended)return true;const hoursCheck=checkTradingHours();if(!hoursCheck.allowed){await suspendAccount(hoursCheck.reason);return true}const dailyCheck=checkDailyDrawdown();if(dailyCheck.violated){await suspendAccount(dailyCheck.reason);return true}const totalCheck=checkTotalDrawdown();if(totalCheck.violated){await suspendAccount(totalCheck.reason);return true}return false};
+const escapeId=(v)=>String(v).replace(/[^\w]/g,'_'),formatPrice=(v)=>{if(v===undefined||v===null)return'—';const n=Number(v);return currentSymbol&&currentSymbol.type==='etf'?n.toFixed(2):n.toFixed(5).replace(/\.?0+$/,'')},formatMoney=(v)=>v===undefined||v===null?'0.00':Number(v).toFixed(2),formatDateTime=(t)=>new Date(t).toLocaleString('fr-FR');
+const lotUnits=(s)=>{const o=WATCHLIST.find(w=>w.api===s);if(o&&o.type==='etf')return 1;return s.includes('XAU')?100:CFG.baseLot},isQuoteUsd=(s)=>s.endsWith('USD'),isBaseUsd=(s)=>s.startsWith('USD'),isETF=(s)=>{const o=WATCHLIST.find(w=>w.api===s);return o&&o.type==='etf'},pipStep=(s)=>isETF(s)?PIP_STEPS.etf:s.includes('JPY')?PIP_STEPS.jpy:s.includes('XAU')?PIP_STEPS.xau:PIP_STEPS.default;
+const pipValuePerLot=(s,p)=>{
+const step=pipStep(s),units=lotUnits(s);
+if(isETF(s))return step*units;
+if(s.includes('JPY')){
+const price=Number(p)||150;
+return(step*units)/price;
+}
+if(s.includes('CHF')&&isBaseUsd(s)){
+const price=Number(p)||0.9;
+return(step*units)/price;
+}
+if(s.includes('XAU'))return step*units;
+if(isQuoteUsd(s))return step*units;
+if(isBaseUsd(s))return units;
+return p>0?(step*units)/p:step*units;
+};
+const describePip=(s,p)=>{const perLot=pipValuePerLot(s,p||priceCache[s]||1);return isETF(s)?`1 lot ≈ ${formatMoney(perLot)} USD/point`:`1 lot ≈ ${formatMoney(perLot)} USD/pip`};
+const marginRequirement=(s,lots,p)=>{const l=Number(lots);if(!l)return 0;if(isETF(s)){const price=Number(p)||0,exp=price*l;return exp/CFG.leverage}if(isBaseUsd(s))return(lotUnits(s)*l)/CFG.leverage;const price=Number(p)||0,units=lotUnits(s),exp=price?price*units*l:units*l;return exp/CFG.leverage};
+
+const getYahooInterval=(tf)=>{if(tf==='1')return '1m';if(tf==='5')return '5m';if(tf==='15')return '15m';if(tf==='60')return '1h';if(tf==='240')return '1h';if(tf==='1D')return '1d';return '15m'};
+const getYahooRange=(tf)=>{if(tf==='1'||tf==='5')return '5d';if(tf==='15')return '1mo';if(tf==='60')return '3mo';if(tf==='240')return '3mo';if(tf==='1D')return '3mo';return '1mo'};
+const aggregateCandles=(candles,targetTF)=>{if(!candles||candles.length===0)return[];const tfMinutes={'1':1,'5':5,'15':15,'60':60,'240':240,'1D':1440}[targetTF]||15;const result=[];let currentCandle=null;candles.forEach(c=>{const candleTime=Math.floor(c.time/(tfMinutes*60))*tfMinutes*60;if(!currentCandle||currentCandle.time!==candleTime){if(currentCandle)result.push(currentCandle);currentCandle={time:candleTime,open:c.open,high:c.high,low:c.low,close:c.close}}else{currentCandle.high=Math.max(currentCandle.high,c.high);currentCandle.low=Math.min(currentCandle.low,c.low);currentCandle.close=c.close}});if(currentCandle)result.push(currentCandle);return result};
+const loadHistoricalData=async(symbol,timeframe)=>{const symObj=WATCHLIST.find(w=>w.api===symbol);if(!symObj||symObj.type!=='etf'){debugLog(`Not ETF: ${symbol}`);return null}const interval=getYahooInterval(timeframe),range=getYahooRange(timeframe),proxyUrl=CFG.ws.replace('wss://','https://').replace('ws://','http://'),url=`${proxyUrl}/api/history/${symbol}?interval=${interval}&range=${range}`;debugLog(`📥 ${symbol} (${interval}/${range})`);try{const resp=await fetch(url);if(!resp.ok){debugLog(`HTTP ${resp.status}`);return null}const data=await resp.json();if(!data.candles||data.candles.length===0){debugLog('No candles');return null}debugLog(`✅ ${data.candles.length} candles`);const aggregated=aggregateCandles(data.candles,timeframe);debugLog(`✅ ${aggregated.length} aggregated`);return aggregated}catch(e){debugLog(`Error: ${e.message}`);return null}};
+const initLightweightChart=async()=>{const container=$('lw_chart_container');if(!container)return;if(lwChart){try{lwChart.remove()}catch(e){}lwChart=null;lwSeries=null}container.innerHTML='';lwChart=LightweightCharts.createChart(container,{layout:{background:{color:'#0f1419'},textColor:'#9ba3b4'},grid:{vertLines:{color:'#1a1f2e'},horzLines:{color:'#1a1f2e'}},crosshair:{mode:LightweightCharts.CrosshairMode.Normal},rightPriceScale:{borderColor:'#252b3d'},timeScale:{borderColor:'#252b3d',timeVisible:true,secondsVisible:false}});lwSeries=lwChart.addCandlestickSeries({upColor:'#10b981',downColor:'#ef4444',borderUpColor:'#10b981',borderDownColor:'#ef4444',wickUpColor:'#10b981',wickDownColor:'#ef4444'});const histData=await loadHistoricalData(currentSymbol.api,currentTimeframe);if(histData&&histData.length>0){chartHistoryData[currentSymbol.api]=histData;lwSeries.setData(histData);debugLog(`Chart: ${histData.length} candles`)}else debugLog('No data');const resizeObserver=new ResizeObserver(()=>{if(lwChart)lwChart.applyOptions({width:container.clientWidth,height:container.clientHeight})});resizeObserver.observe(container)};
+const updateLightweightChart=(price)=>{if(!lwSeries||!price)return;const now=Math.floor(Date.now()/1000),tfMinutes={'1':1,'5':5,'15':15,'60':60,'240':240,'1D':1440}[currentTimeframe]||15,candleTime=Math.floor(now/(tfMinutes*60))*tfMinutes*60,currentData=chartHistoryData[currentSymbol.api]||[],lastCandle=currentData[currentData.length-1];if(!lastCandle||lastCandle.time<candleTime){const newCandle={time:candleTime,open:price,high:price,low:price,close:price};currentData.push(newCandle);chartHistoryData[currentSymbol.api]=currentData;lwSeries.update(newCandle);debugLog(`New candle: ${price.toFixed(2)}`)}else{lastCandle.high=Math.max(lastCandle.high,price);lastCandle.low=Math.min(lastCandle.low,price);lastCandle.close=price;lwSeries.update(lastCandle)}};
+const switchTimeframe=(tf)=>{currentTimeframe=tf;document.querySelectorAll('.timeframe-btn').forEach(btn=>btn.classList.toggle('active',btn.dataset.tf===tf));if(currentSymbol.type==='etf')initLightweightChart()};
+
+const togglePanel=(panelId,btnId)=>{const panel=$(panelId),btn=$(btnId);const isHidden=panel.classList.contains('hidden');panel.classList.toggle('hidden',!isHidden);btn.classList.toggle('active',!isHidden);if(tvWidget)setTimeout(()=>tvWidget.activeChart&&tvWidget.activeChart().resetData(),100);if(lwChart)setTimeout(()=>{const container=$('lw_chart_container');if(lwChart&&container)lwChart.applyOptions({width:container.clientWidth,height:container.clientHeight})},100)};
+$('toggleWatchlist').onclick=()=>togglePanel('watchlistPanel','toggleWatchlist');
+$('toggleOrders').onclick=()=>togglePanel('ordersPanel','toggleOrders');
+$('togglePositions').onclick=()=>togglePanel('bottomPanel','togglePositions');
+$('closeWatchlist').onclick=()=>togglePanel('watchlistPanel','toggleWatchlist');
+$('closeOrders').onclick=()=>togglePanel('ordersPanel','toggleOrders');
+$('closePositions').onclick=()=>togglePanel('bottomPanel','togglePositions');
+
+const setWsStatus=(status)=>{const el=$('wsStatus');wsConnected=status==='connected';if(status==='connected'){el.className='status-badge connected';el.innerHTML='<div class="status-dot"></div><span>Connecté</span>'}else if(status==='connecting'){el.className='status-badge connecting';el.innerHTML='<div class="status-dot"></div><span>Connexion...</span>'}else{el.className='status-badge disconnected';el.innerHTML='<div class="status-dot"></div><span>Déconnecté</span>'}};
+const startKeepalive=()=>{stopKeepalive();keepaliveTimer=setInterval(()=>{if(ws&&ws.readyState===WebSocket.OPEN){try{ws.send(JSON.stringify({type:'ping'}));debugLog('Ping')}catch(e){debugLog(`Keepalive error: ${e.message}`)}}},CFG.keepalive)},stopKeepalive=()=>{if(keepaliveTimer){clearInterval(keepaliveTimer);keepaliveTimer=null}};
+const scheduleReconnect=()=>{stopKeepalive();if(reconTimer)clearTimeout(reconTimer);reconAttempts++;reconDelay=Math.min(CFG.reconMax,CFG.reconBase*Math.pow(1.5,reconAttempts));debugLog(`Reconnect #${reconAttempts} in ${reconDelay}ms`);reconTimer=setTimeout(()=>startWebSocket(),reconDelay)};
+const startWebSocket=()=>{if(ws&&(ws.readyState===WebSocket.CONNECTING||ws.readyState===WebSocket.OPEN))return;try{debugLog(`Connecting: ${CFG.ws}`);setWsStatus('connecting');ws=new WebSocket(CFG.ws);ws.addEventListener('open',()=>{debugLog('✅ WS OPEN');setWsStatus('connected');reconAttempts=0;reconDelay=CFG.reconBase;msgCount=0;startKeepalive();showToast('✅ Connecté','success');setTimeout(()=>{WATCHLIST.forEach(w=>{try{ws.send(JSON.stringify({type:'subscribe',symbol:w.api}));debugLog(`Sub: ${w.api}`)}catch(e){debugLog(`Sub error: ${e.message}`)}});debugLog('All subs sent')},500)});ws.addEventListener('message',ev=>{msgCount++;try{const msg=JSON.parse(ev.data);debugLog(`MSG #${msgCount}: ${JSON.stringify(msg).substring(0,100)}`);handleWsMessage(msg)}catch(e){debugLog(`Parse error: ${e.message}`)}});ws.addEventListener('close',evt=>{debugLog(`❌ WS CLOSE: ${evt.code}`);setWsStatus('disconnected');showToast('❌ Déconnecté','error');scheduleReconnect()});ws.addEventListener('error',err=>{debugLog(`⚠️ WS ERROR: ${err}`);setWsStatus('disconnected')})}catch(e){debugLog(`❌ WS failed: ${e.message}`);setWsStatus('disconnected');scheduleReconnect()}};
+const handleWsMessage=(msg)=>{if(!msg)return;if(Array.isArray(msg)){msg.forEach(m=>handleWsMessage(m));return}if(msg.type==='ping'||msg.type==='pong')return;if(msg.type==='error'){debugLog(`Server error: ${JSON.stringify(msg)}`);showToast(`Erreur: ${msg.message||'Unknown'}`,'error');return}if(msg.type==='trade'&&Array.isArray(msg.data)){msg.data.forEach(d=>{const sym=d.s||d.sym||d.symbol,price=d.p||d.price;if(!sym||price===undefined)return;const oldPrice=priceCache[sym],newPrice=Number(price);priceCache[sym]=newPrice;lastPriceUpdate[sym]=Date.now();debugLog(`Price: ${sym} = ${price}`);updatePriceUI(sym,oldPrice,newPrice);onPriceUpdate(sym)});return}if(msg.data&&typeof msg.data==='object'){const sym=msg.data.s||msg.data.symbol,price=msg.data.p||msg.data.price||msg.data.c;if(sym&&price!==undefined){const oldPrice=priceCache[sym],newPrice=Number(price);priceCache[sym]=newPrice;lastPriceUpdate[sym]=Date.now();debugLog(`Price: ${sym} = ${price}`);updatePriceUI(sym,oldPrice,newPrice);onPriceUpdate(sym)}}};
+const updatePriceUI=(symbol,oldPrice,newPrice)=>{const el=$('price_'+escapeId(symbol));if(el){const symObj=WATCHLIST.find(w=>w.api===symbol);el.innerText=symObj&&symObj.type==='etf'?newPrice.toFixed(2):formatPrice(newPrice);const parentItem=el.closest('.wl-item');if(parentItem&&oldPrice!==undefined&&oldPrice!==newPrice){parentItem.classList.add('updating');setTimeout(()=>parentItem.classList.remove('updating'),500)}}if(symbol===currentSymbol.api){if(currentSymbol.type==='etf')updateLightweightChart(newPrice);const formatted=currentSymbol.type==='etf'?newPrice.toFixed(2):formatPrice(newPrice);$('currentPriceValue').innerText=formatted}};
+const refreshLotInfo=()=>{const price=priceCache[currentSymbol.api],lots=parseFloat($('lotInput').value)||1;if(price!==undefined){let exp;if(isETF(currentSymbol.api))exp=price*lots;else if(isBaseUsd(currentSymbol.api))exp=lotUnits(currentSymbol.api)*lots;else exp=price*lotUnits(currentSymbol.api)*lots;const margin=exp/CFG.leverage,pipInfo=describePip(currentSymbol.api,price);$('lotValueInfo').innerText=`${lots} lots = ${formatMoney(margin)} USD · ${pipInfo} · 1:${CFG.leverage}`;return}$('lotValueInfo').innerText=`1 lot = ${lotUnits(currentSymbol.api)}u · 1:${CFG.leverage}`};
+const onPriceUpdate=(symbol)=>{let updated=false;positions.forEach(pos=>{if(pos.symbol.api===symbol){pos.current=priceCache[symbol];updated=true}});checkPositionTargets(symbol);checkOrdersForSymbol(symbol);if(updated)renderPositions();renderTotals()};
+const checkPositionTargets=(symbol)=>{const price=priceCache[symbol];if(price===undefined)return;const toClose=[];positions.forEach(pos=>{if(pos.symbol.api!==symbol)return;if(pos.side==='BUY'){if(pos.tp!==null&&price>=pos.tp)toClose.push({id:pos.id,reason:'TP'});if(pos.sl!==null&&price<=pos.sl)toClose.push({id:pos.id,reason:'SL'})}else{if(pos.tp!==null&&price<=pos.tp)toClose.push({id:pos.id,reason:'TP'});if(pos.sl!==null&&price>=pos.sl)toClose.push({id:pos.id,reason:'SL'})}});toClose.forEach(({id,reason})=>{debugLog(`Close ${id}: ${reason}`);closePosition(id)})};
+const checkOrdersForSymbol=(symbol)=>{const price=priceCache[symbol];if(price===undefined)return;const matches=orders.filter(o=>o.symbol===symbol&&((o.side==='BUY'&&price<=o.price)||(o.side==='SELL'&&price>=o.price)));matches.forEach(async m=>{const symObj=WATCHLIST.find(w=>w.api===m.symbol)||{label:m.symbol,tv:m.symbol,api:m.symbol,type:'forex'};debugLog(`Exec order: ${m.side} ${m.symbol}`);await openPosition(symObj,m.side,m.size,price,m.tp,m.sl);removeOrder(m.id)})};
+const computePnl=(pos)=>{const current=pos.current!==undefined?pos.current:priceCache[pos.symbol.api];if(current===undefined)return 0;const step=pipStep(pos.symbol.api),pipDiff=(current-pos.entry)/step,pipValue=pipValuePerLot(pos.symbol.api,current),pnlPerLot=pipDiff*pipValue*pos.size;return pos.side==='BUY'?pnlPerLot:-pnlPerLot};
+const getTotalMarginUsed=()=>positions.reduce((sum,pos)=>{const price=pos.current||priceCache[pos.symbol.api]||pos.entry;return sum+marginRequirement(pos.symbol.api,pos.size,price)},0)+orders.reduce((sum,ord)=>sum+ord.margin,0);
+const openPosition=async(symObj,side,lots=1,forcedEntry=null,tp=null,sl=null)=>{if(accountSuspended){showToast('❌ Compte suspendu - trading désactivé','error');return false}const hoursCheck=checkTradingHours();if(!hoursCheck.allowed){showToast(`❌ ${hoursCheck.reason}`,'error');return false}const resolvedLots=Number(lots);if(!resolvedLots||resolvedLots<=0){showToast('❌ Lots invalide','error');return false}let price=forcedEntry!==null?Number(forcedEntry):Number(priceCache[symObj.api]);if(!price||Number.isNaN(price)){showToast('❌ Prix indisponible','error');return false}const required=marginRequirement(symObj.api,resolvedLots,price);if(required>availableBalance){showToast('❌ Solde insuffisant','error');return false}availableBalance-=required;const pos={id:'pos_'+Date.now()+'_'+Math.random().toString(36).slice(2,7),symbol:symObj,side,entry:price,size:resolvedLots,current:price,tp:tp?Number(tp):null,sl:sl?Number(sl):null,openedAt:Date.now(),firestoreId:null};positions.unshift(pos);renderPositions();renderTotals();const displayPrice=symObj.type==='etf'?price.toFixed(2):formatPrice(price);showToast(`✅ ${side}: ${symObj.label} @ ${displayPrice}`,'success');debugLog(`Opened: ${JSON.stringify(pos)}`);if(window.saveTrade){const tradeData={symbol:symObj.label,symbolApi:symObj.api,side,entryPrice:price,currentPrice:price,lots:resolvedLots,takeProfit:pos.tp,stopLoss:pos.sl,status:'open',openedAt:new Date(pos.openedAt).toISOString()};const firestoreId=await window.saveTrade(tradeData);if(firestoreId){pos.firestoreId=firestoreId;debugLog(`Trade synced: ${firestoreId}`)}}return true};
+const closePosition=async(id,lotsToSell=null)=>{const idx=positions.findIndex(p=>p.id===id);if(idx===-1)return;const pos=positions[idx],sellLots=lotsToSell!==null?Math.min(Number(lotsToSell),pos.size):pos.size;if(sellLots<=0)return;const closePrice=priceCache[pos.symbol.api]||pos.current,pnl=computePnl({...pos,size:sellLots,current:closePrice}),released=marginRequirement(pos.symbol.api,sellLots,closePrice);availableBalance+=released;availableBalance+=pnl;simBalance+=pnl;history.unshift({symbol:pos.symbol,side:pos.side,entry:pos.entry,close:closePrice,pnl,lots:sellLots,closedAt:Date.now()});if(pos.firestoreId&&window.updateTrade){const updateData={closePrice,pnl,status:'closed',closedAt:new Date().toISOString()};await window.updateTrade(pos.firestoreId,updateData);debugLog(`Trade updated in Firestore: ${pos.firestoreId}`)}if(window.updateUserBalance){await window.updateUserBalance(simBalance);debugLog(`User balance updated in Firestore: ${simBalance}`)}if(sellLots<pos.size)pos.size-=sellLots;else positions.splice(idx,1);renderPositions();renderHistory();renderTotals();showToast(`✅ Fermé: ${formatMoney(pnl)} USD`,pnl>=0?'success':'error');debugLog(`Closed ${id}: ${pnl}`);await checkAllRules()};
+const addLimitOrder=(symbol,side,price,lots,tp,sl)=>{const resolvedLots=Number(lots),resolvedPrice=Number(price);if(!resolvedLots||!resolvedPrice){showToast('❌ Prix et lots requis','error');return}const required=marginRequirement(symbol,resolvedLots,resolvedPrice);if(required>availableBalance){showToast('❌ Solde insuffisant','error');return}availableBalance-=required;orders.push({id:'ord_'+Date.now()+'_'+Math.random().toString(36).slice(2,7),symbol,side,price:resolvedPrice,size:resolvedLots,tp:tp?Number(tp):null,sl:sl?Number(sl):null,margin:required,createdAt:Date.now()});renderOrders();renderTotals();showToast('✅ Ordre ajouté','success');debugLog(`Order: ${side} ${symbol}`)};
+const removeOrder=(id)=>{const order=orders.find(o=>o.id===id);if(order)availableBalance+=order.margin;orders=orders.filter(o=>o.id!==id);renderOrders();renderTotals();showToast('✅ Ordre annulé','info');debugLog(`Removed: ${id}`)};
+const renderPositions=()=>{const tbody=$('positionsBody');tbody.innerHTML='';if(positions.length===0){tbody.innerHTML='<tr><td colspan="7" class="empty-state">Aucune position</td></tr>';return}positions.forEach(pos=>{const current=pos.current!==undefined?pos.current:priceCache[pos.symbol.api];pos.current=current;const pnl=computePnl(pos),pnlClass=pnl>=0?'positive':'negative',tr=document.createElement('tr');tr.innerHTML=`<td><div class="symbol-cell">${pos.symbol.label}</div><div class="symbol-label">${pos.symbol.tv}</div></td><td><span class="side-badge ${pos.side.toLowerCase()}">${pos.side}</span></td><td>${formatPrice(pos.entry)}</td><td>${formatPrice(current)}</td><td>${pos.size}</td><td><span class="pnl-value ${pnlClass}">${formatMoney(pnl)}</span></td><td><div class="action-buttons"><button class="btn-action" data-id="${pos.id}"><i class="fas fa-cog"></i></button><button class="btn-action" data-close="${pos.id}"><i class="fas fa-times"></i></button></div></td>`;tbody.appendChild(tr)});tbody.querySelectorAll('button[data-id]').forEach(btn=>btn.onclick=()=>openPositionModal(btn.dataset.id));tbody.querySelectorAll('button[data-close]').forEach(btn=>btn.onclick=()=>closePosition(btn.dataset.close))};
+const renderHistory=()=>{const tbody=$('historyBody');tbody.innerHTML='';if(history.length===0){tbody.innerHTML='<tr><td colspan="7" class="empty-state">Aucun historique</td></tr>';return}history.slice(0,50).forEach(h=>{const pnlClass=h.pnl>=0?'positive':'negative',tr=document.createElement('tr');tr.innerHTML=`<td><div class="symbol-cell">${h.symbol.label}</div><div class="symbol-label">${h.symbol.tv}</div></td><td><span class="side-badge ${h.side.toLowerCase()}">${h.side}</span></td><td>${formatPrice(h.entry)}</td><td>${formatPrice(h.close)}</td><td>${h.lots}</td><td><span class="pnl-value ${pnlClass}">${formatMoney(h.pnl)}</span></td><td class="symbol-label">${formatDateTime(h.closedAt)}</td>`;tbody.appendChild(tr)})};
+const renderOrders=()=>{const container=$('ordersBody');container.innerHTML='';if(orders.length===0){container.innerHTML='<div class="empty-state">Aucun ordre</div>';return}orders.forEach(o=>{const card=document.createElement('div');card.className='order-card';card.innerHTML=`<div class="order-header"><div class="order-symbol">${o.symbol}</div><div class="order-side ${o.side.toLowerCase()}">${o.side}</div></div><div class="order-details"><div class="order-detail">Prix: <span>${formatPrice(o.price)}</span></div><div class="order-detail">Lots: <span>${o.size}</span></div><div class="order-detail">TP: <span>${o.tp?formatPrice(o.tp):'—'}</span></div><div class="order-detail">SL: <span>${o.sl?formatPrice(o.sl):'—'}</span></div></div><div class="order-actions"><button class="btn btn-remove" data-id="${o.id}"><i class="fas fa-trash-alt"></i>Annuler</button></div>`;container.appendChild(card)});container.querySelectorAll('button[data-id]').forEach(btn=>btn.onclick=()=>removeOrder(btn.dataset.id))};
+const renderTotals=()=>{const total=positions.reduce((sum,p)=>sum+computePnl(p),0),usedMargin=getTotalMarginUsed();$('totalPnl').innerText=formatMoney(total)+' USD';$('totalPnl').className='stat-value total-pnl-value '+(total>=0?'positive':'negative');$('simBalance').innerText=formatMoney(simBalance)+' USD';$('availableBalance').innerText=formatMoney(availableBalance)+' USD';$('usedMargin').innerText=formatMoney(usedMargin)+' USD'};
+const renderAll=()=>{renderPositions();renderHistory();renderOrders();renderTotals()};
+window.updateBrokerBalance=(balance)=>{simBalance=Number(balance);availableBalance=Number(balance);if(initialBalance===0){initialBalance=Number(balance);startOfDayBalance=Number(balance)}console.log('✅ Broker balance updated:',simBalance);renderTotals()};
+window.updateUserEmail=(email)=>{const emailEl=document.getElementById('userEmail');if(emailEl)emailEl.innerText=email};
+window.checkAccountStatus=(status)=>{if(status==='suspended'){accountSuspended=true;showToast('⚠️ Compte suspendu - Trading désactivé','error',10000);alert('⚠️ COMPTE DÉSACTIVÉ\n\nVotre compte a été suspendu pour violation des règles de trading.\nVeuillez contacter le support.')}};
+const wlList=$('wlList'),ordSymbol=$('ordSymbol');
+WATCHLIST.forEach(w=>{const item=document.createElement('div');item.className='wl-item';item.dataset.symbol=w.api;item.innerHTML=`<div class="wl-left"><div class="wl-symbol">${w.label}</div><div class="wl-label">${w.tv}</div></div><div class="wl-right"><div class="wl-price" id="price_${escapeId(w.api)}">—</div></div>`;item.addEventListener('click',()=>selectSymbol(w));wlList.appendChild(item);const opt=document.createElement('option');opt.value=w.api;opt.text=w.label;ordSymbol.appendChild(opt)});
+const initTradingView=()=>{if(!currentSymbol)return;try{const container=$('tv_chart_container');if(tvWidget){try{tvWidget.remove()}catch(e){}tvWidget=null}container.innerHTML='';if(typeof TradingView==='undefined'){debugLog('TV not loaded');return}setTimeout(()=>{tvWidget=new TradingView.widget({container_id:'tv_chart_container',autosize:true,symbol:currentSymbol.tv,interval:'15',timezone:'Etc/UTC',theme:'dark',locale:'fr',disabled_features:['use_localstorage_for_settings']});debugLog(`TV: ${currentSymbol.label}`)},100)}catch(e){console.error('Chart error:',e);debugLog(`Chart error: ${e.message}`)}};
+const selectSymbol=(sym)=>{currentSymbol=sym;document.querySelectorAll('.wl-item').forEach(item=>item.classList.toggle('active',item.dataset.symbol===sym.api));$('currentSymbolBadge').innerText=sym.tv;const price=priceCache[sym.api];if(price!==undefined){const formatted=sym.type==='etf'?price.toFixed(2):formatPrice(price);$('currentPriceValue').innerText=formatted}else $('currentPriceValue').innerText='—';refreshLotInfo();if(sym.type==='etf'){$('tv_chart_container').style.display='none';$('lw_chart_container').style.display='block';$('timeframeSelector').style.display='flex';initLightweightChart()}else{$('tv_chart_container').style.display='block';$('lw_chart_container').style.display='none';$('timeframeSelector').style.display='none';initTradingView()}debugLog(`Selected: ${sym.label}`)};
+const openPositionModal=(id)=>{const pos=positions.find(p=>p.id===id);if(!pos)return;activeModalId=id;$('modalSymbol').innerText=pos.symbol.label;$('modalLots').innerText=pos.size;$('modalTp').value=pos.tp||'';$('modalSl').value=pos.sl||'';$('modalSellLots').value='0';$('positionModal').style.display='flex'};
+const initResizable=()=>{const watchlistPanel=$('watchlistPanel'),watchlistHandle=watchlistPanel.querySelector('.resize-handle-right');let isResizing=false,startX=0,startWidth=0;if(watchlistHandle){watchlistHandle.addEventListener('mousedown',e=>{isResizing=true;startX=e.clientX;startWidth=watchlistPanel.offsetWidth;watchlistHandle.classList.add('resizing');e.preventDefault()})}document.addEventListener('mousemove',e=>{if(isResizing){const diff=e.clientX-startX,newWidth=Math.max(250,Math.min(600,startWidth+diff));watchlistPanel.style.width=newWidth+'px'}});document.addEventListener('mouseup',()=>{if(isResizing){isResizing=false;if(watchlistHandle)watchlistHandle.classList.remove('resizing')}})};
+
+$('lotInput').addEventListener('input',refreshLotInfo);
+$('addOrderBtn').addEventListener('click',()=>{const symbol=$('ordSymbol').value,side=$('ordSide').value,price=$('ordPrice').value,size=parseFloat($('ordSize').value)||1,tp=$('ordTp').value,sl=$('ordSl').value;if(!symbol||!price){showToast('❌ Symbole et prix requis','error');return}addLimitOrder(symbol,side,price,size,tp,sl)});
+$('refreshPricesBtn').addEventListener('click',()=>{if(ws&&ws.readyState===WebSocket.OPEN){WATCHLIST.forEach(w=>{try{ws.send(JSON.stringify({type:'subscribe',symbol:w.api}))}catch(e){}});showToast('🔄 Rafraîchissement','info')}else showToast('❌ Non connecté','error')});
+$('buyBtn').addEventListener('click',()=>openPosition(currentSymbol,'BUY',parseFloat($('lotInput').value)||1));
+$('sellBtn').addEventListener('click',()=>openPosition(currentSymbol,'SELL',parseFloat($('lotInput').value)||1));
+$('tabPositions').addEventListener('click',()=>{$('tabPositions').classList.add('active');$('tabHistory').classList.remove('active');$('positionsPane').style.display='block';$('historyPane').style.display='none';renderPositions()});
+$('tabHistory').addEventListener('click',()=>{$('tabHistory').classList.add('active');$('tabPositions').classList.remove('active');$('positionsPane').style.display='none';$('historyPane').style.display='block';renderHistory()});
+$('modalCancel').addEventListener('click',()=>$('positionModal').style.display='none');
+$('modalSave').addEventListener('click',()=>{const pos=positions.find(p=>p.id===activeModalId);if(!pos)return;const tp=$('modalTp').value,sl=$('modalSl').value,sellLots=parseFloat($('modalSellLots').value)||0;pos.tp=tp?Number(tp):null;pos.sl=sl?Number(sl):null;if(sellLots>0)closePosition(pos.id,sellLots);$('positionModal').style.display='none';renderPositions();renderTotals();showToast('✅ Sauvegardé','success')});
+document.querySelectorAll('.timeframe-btn').forEach(btn=>btn.addEventListener('click',()=>switchTimeframe(btn.dataset.tf)));
+
+window.closePosition=closePosition;window.removeOrder=removeOrder;
+console.log('🚀 AmABrocker');
+initResizable();renderAll();selectSymbol(WATCHLIST[0]);startWebSocket();
+debugLog('=== INITIALIZED ===');
+</script>
+</body>
+</html>
