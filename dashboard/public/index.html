@@ -11,7 +11,7 @@
 <script type="module">
   import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
   import { getAuth, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
-  import { getFirestore, collection, addDoc, updateDoc, doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+  import { getFirestore, collection, addDoc, updateDoc, doc, getDoc, getDocs, query, where, deleteDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
   const firebaseConfig = {
     apiKey: "AIzaSyBCAeaaJMMw3_Egf-6-4i63IhAUy4EyzBc",
@@ -116,6 +116,11 @@
       console.log('🔐 User authenticated:', user.uid);
       // Load user data from Firestore
       await window.loadUserData(user.uid);
+
+      // Load open positions and pending orders
+      if (window.loadBrokerData) {
+        await window.loadBrokerData();
+      }
     } else {
       console.log('⚠️ No user authenticated');
       // Redirect to login
@@ -161,6 +166,123 @@
       return true;
     } catch (error) {
       console.error('❌ Error updating trade:', error);
+      return false;
+    }
+  };
+
+  // Load open positions from Firestore
+  window.loadOpenPositions = async () => {
+    if (!window.firebaseUser) {
+      console.warn('No user authenticated - cannot load positions');
+      return [];
+    }
+
+    try {
+      const tradesRef = collection(db, 'trades');
+      const q = query(tradesRef, where('userId', '==', window.firebaseUser.uid), where('status', '==', 'open'));
+      const querySnapshot = await getDocs(q);
+
+      const loadedPositions = [];
+      querySnapshot.forEach((docSnap) => {
+        const data = docSnap.data();
+        loadedPositions.push({
+          id: docSnap.id,
+          firestoreId: docSnap.id,
+          symbol: window.WATCHLIST.find(w => w.api === data.symbolApi) || { label: data.symbol, api: data.symbolApi, tv: data.symbol, type: 'forex' },
+          side: data.side,
+          entry: data.entryPrice,
+          current: data.currentPrice || data.entryPrice,
+          size: data.lots,
+          tp: data.takeProfit || null,
+          sl: data.stopLoss || null,
+          openedAt: new Date(data.openedAt).getTime()
+        });
+      });
+
+      console.log('✅ Loaded open positions:', loadedPositions.length);
+      return loadedPositions;
+    } catch (error) {
+      console.error('❌ Error loading open positions:', error);
+      return [];
+    }
+  };
+
+  // Save order to Firestore
+  window.saveOrder = async (orderData) => {
+    if (!window.firebaseUser) {
+      console.warn('No user authenticated - order not saved');
+      return null;
+    }
+
+    try {
+      const ordersRef = collection(db, 'orders');
+      const docRef = await addDoc(ordersRef, {
+        ...orderData,
+        userId: window.firebaseUser.uid,
+        createdAt: new Date().toISOString()
+      });
+      console.log('✅ Order saved to Firestore:', docRef.id);
+      return docRef.id;
+    } catch (error) {
+      console.error('❌ Error saving order:', error);
+      return null;
+    }
+  };
+
+  // Load pending orders from Firestore
+  window.loadPendingOrders = async () => {
+    if (!window.firebaseUser) {
+      console.warn('No user authenticated - cannot load orders');
+      return [];
+    }
+
+    try {
+      const ordersRef = collection(db, 'orders');
+      const q = query(ordersRef, where('userId', '==', window.firebaseUser.uid));
+      const querySnapshot = await getDocs(q);
+
+      const loadedOrders = [];
+      querySnapshot.forEach((docSnap) => {
+        const data = docSnap.data();
+        loadedOrders.push({
+          id: 'ord_' + docSnap.id,
+          firestoreId: docSnap.id,
+          type: data.type || 'limit',
+          symbol: data.symbol,
+          side: data.side,
+          price: data.price || null,
+          stopPrice: data.stopPrice || null,
+          size: data.size,
+          tp: data.tp || null,
+          sl: data.sl || null,
+          margin: data.margin,
+          createdAt: new Date(data.createdAt).getTime(),
+          triggered: data.triggered || false
+        });
+      });
+
+      console.log('✅ Loaded pending orders:', loadedOrders.length);
+      return loadedOrders;
+    } catch (error) {
+      console.error('❌ Error loading pending orders:', error);
+      return [];
+    }
+  };
+
+  // Delete order from Firestore
+  window.deleteOrder = async (firestoreId) => {
+    if (!window.firebaseUser || !firestoreId) {
+      console.warn('No user or order ID - delete skipped');
+      return false;
+    }
+
+    try {
+      const orderRef = doc(db, 'orders', firestoreId);
+      await deleteDoc(orderRef);
+      console.log('✅ Order deleted from Firestore:', firestoreId);
+      return true;
+    } catch (error) {
+      console.error('❌ Error deleting order:', error);
       return false;
     }
   };
@@ -268,6 +390,11 @@ html,body{height:100%;background:linear-gradient(135deg,var(--bg-primary) 0%,var
 .order-side{padding:4px 8px;border-radius:6px;font-size:11px;font-weight:700}
 .order-side.buy{background:var(--success-bg);color:var(--success)}
 .order-side.sell{background:var(--danger-bg);color:var(--danger)}
+.order-type-badge{padding:4px 8px;border-radius:6px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px}
+.order-type-badge.market{background:rgba(59,130,246,0.15);color:#3b82f6;border:1px solid rgba(59,130,246,0.3)}
+.order-type-badge.limit{background:rgba(234,179,8,0.15);color:#eab308;border:1px solid rgba(234,179,8,0.3)}
+.order-type-badge.stop{background:rgba(249,115,22,0.15);color:#f97316;border:1px solid rgba(249,115,22,0.3)}
+.order-type-badge.stop-limit{background:rgba(168,85,247,0.15);color:#a855f7;border:1px solid rgba(168,85,247,0.3)}
 .order-details{display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;color:var(--text-muted)}
 .order-detail span{color:var(--text-primary);font-weight:600}
 .order-actions{margin-top:8px;padding-top:8px;border-top:1px solid var(--border);display:flex;justify-content:flex-end}
@@ -380,14 +507,16 @@ html,body{height:100%;background:linear-gradient(135deg,var(--bg-primary) 0%,var
 <div id="lw_chart_container"></div>
 </div>
 <div class="resizable-panel orders-panel" id="ordersPanel">
-<div class="panel-header"><div class="panel-title"><i class="fas fa-clock"></i>Ordres Limites</div><div class="panel-controls"><button class="panel-btn" id="closeOrders" title="Fermer"><i class="fas fa-times"></i></button></div></div>
+<div class="panel-header"><div class="panel-title"><i class="fas fa-clock"></i>Ordres Pendants</div><div class="panel-controls"><button class="panel-btn" id="closeOrders" title="Fermer"><i class="fas fa-times"></i></button></div></div>
 <form class="order-form" onsubmit="return false;">
 <div class="form-group"><label class="form-label"><i class="fas fa-coins"></i> Symbole</label><select id="ordSymbol" class="form-select"></select></div>
 <div class="form-row">
-<div class="form-group"><label class="form-label"><i class="fas fa-exchange-alt"></i> Type</label><select id="ordSide" class="form-select"><option value="BUY">BUY</option><option value="SELL">SELL</option></select></div>
-<div class="form-group"><label class="form-label"><i class="fas fa-layer-group"></i> Lots</label><input id="ordSize" class="form-input" type="number" step="0.01" value="1"/></div>
+<div class="form-group"><label class="form-label"><i class="fas fa-list"></i> Type d'ordre</label><select id="ordType" class="form-select"><option value="market">Market</option><option value="limit" selected>Limit</option><option value="stop">Stop</option><option value="stop-limit">Stop-Limit</option></select></div>
+<div class="form-group"><label class="form-label"><i class="fas fa-exchange-alt"></i> Direction</label><select id="ordSide" class="form-select"><option value="BUY">BUY</option><option value="SELL">SELL</option></select></div>
 </div>
-<div class="form-group"><label class="form-label"><i class="fas fa-bullseye"></i> Prix cible</label><input id="ordPrice" class="form-input" type="number" step="0.00001" placeholder="0.00000"/></div>
+<div class="form-group"><label class="form-label"><i class="fas fa-layer-group"></i> Lots</label><input id="ordSize" class="form-input" type="number" step="0.01" value="1"/></div>
+<div class="form-group" id="ordStopPriceGroup" style="display:none"><label class="form-label"><i class="fas fa-hand-paper"></i> Prix Stop</label><input id="ordStopPrice" class="form-input" type="number" step="0.00001" placeholder="Prix de déclenchement"/></div>
+<div class="form-group" id="ordPriceGroup"><label class="form-label"><i class="fas fa-bullseye"></i> Prix Limite</label><input id="ordPrice" class="form-input" type="number" step="0.00001" placeholder="0.00000"/></div>
 <div class="form-row">
 <div class="form-group"><label class="form-label"><i class="fas fa-check-circle"></i> Take Profit</label><input id="ordTp" class="form-input" type="number" step="0.00001" placeholder="Optionnel"/></div>
 <div class="form-group"><label class="form-label"><i class="fas fa-times-circle"></i> Stop Loss</label><input id="ordSl" class="form-input" type="number" step="0.00001" placeholder="Optionnel"/></div>
@@ -449,6 +578,7 @@ const WATCHLIST=[
 {tv:'NASDAQ:DIA',label:'DIA (Dow Jones ETF)',api:'DIA',type:'etf',yahoo:'DIA'},
 {tv:'NASDAQ:QQQ',label:'QQQ (Nasdaq 100 ETF)',api:'QQQ',type:'etf',yahoo:'QQQ'}
 ];
+window.WATCHLIST=WATCHLIST;
 const PIP_STEPS={default:0.0001,jpy:0.01,xau:0.1,etf:0.01};
 let ws,wsConnected=false,reconDelay=CFG.reconBase,reconAttempts=0,reconTimer,keepaliveTimer,currentSymbol=WATCHLIST[0],priceCache={},lastPriceUpdate={},positions=[],history=[],orders=[],simBalance=0,availableBalance=0,tvWidget,lwChart,lwSeries,activeModalId,debugMode=false,msgCount=0;
 let currentTimeframe='15',chartHistoryData={};
@@ -509,16 +639,18 @@ const updatePriceUI=(symbol,oldPrice,newPrice)=>{const el=$('price_'+escapeId(sy
 const refreshLotInfo=()=>{const price=priceCache[currentSymbol.api],lots=parseFloat($('lotInput').value)||1;if(price!==undefined){let exp;if(isETF(currentSymbol.api))exp=price*lots;else if(isBaseUsd(currentSymbol.api))exp=lotUnits(currentSymbol.api)*lots;else exp=price*lotUnits(currentSymbol.api)*lots;const margin=exp/CFG.leverage,pipInfo=describePip(currentSymbol.api,price);$('lotValueInfo').innerText=`${lots} lots = ${formatMoney(margin)} USD · ${pipInfo} · 1:${CFG.leverage}`;return}$('lotValueInfo').innerText=`1 lot = ${lotUnits(currentSymbol.api)}u · 1:${CFG.leverage}`};
 const onPriceUpdate=(symbol)=>{let updated=false;positions.forEach(pos=>{if(pos.symbol.api===symbol){pos.current=priceCache[symbol];updated=true}});checkPositionTargets(symbol);checkOrdersForSymbol(symbol);if(updated)renderPositions();renderTotals()};
 const checkPositionTargets=(symbol)=>{const price=priceCache[symbol];if(price===undefined)return;const toClose=[];positions.forEach(pos=>{if(pos.symbol.api!==symbol)return;if(pos.side==='BUY'){if(pos.tp!==null&&price>=pos.tp)toClose.push({id:pos.id,reason:'TP'});if(pos.sl!==null&&price<=pos.sl)toClose.push({id:pos.id,reason:'SL'})}else{if(pos.tp!==null&&price<=pos.tp)toClose.push({id:pos.id,reason:'TP'});if(pos.sl!==null&&price>=pos.sl)toClose.push({id:pos.id,reason:'SL'})}});toClose.forEach(({id,reason})=>{debugLog(`Close ${id}: ${reason}`);closePosition(id)})};
-const checkOrdersForSymbol=(symbol)=>{const price=priceCache[symbol];if(price===undefined)return;const matches=orders.filter(o=>o.symbol===symbol&&((o.side==='BUY'&&price<=o.price)||(o.side==='SELL'&&price>=o.price)));matches.forEach(async m=>{const symObj=WATCHLIST.find(w=>w.api===m.symbol)||{label:m.symbol,tv:m.symbol,api:m.symbol,type:'forex'};debugLog(`Exec order: ${m.side} ${m.symbol}`);await openPosition(symObj,m.side,m.size,price,m.tp,m.sl);removeOrder(m.id)})};
+const checkOrdersForSymbol=(symbol)=>{const price=priceCache[symbol];if(price===undefined)return;const matches=[];orders.forEach(o=>{if(o.symbol!==symbol)return;const orderType=o.type||'limit';if(orderType==='limit'){if((o.side==='BUY'&&price<=o.price)||(o.side==='SELL'&&price>=o.price))matches.push(o)}else if(orderType==='stop'){if((o.side==='BUY'&&price>=o.stopPrice)||(o.side==='SELL'&&price<=o.stopPrice))matches.push(o)}else if(orderType==='stop-limit'){if(!o.triggered){if((o.side==='BUY'&&price>=o.stopPrice)||(o.side==='SELL'&&price<=o.stopPrice)){o.triggered=true;debugLog(`Stop-Limit triggered: ${o.id}`)}}else{if((o.side==='BUY'&&price<=o.price)||(o.side==='SELL'&&price>=o.price))matches.push(o)}}});matches.forEach(async m=>{const symObj=WATCHLIST.find(w=>w.api===m.symbol)||{label:m.symbol,tv:m.symbol,api:m.symbol,type:'forex'};const orderType=m.type||'limit';let execPrice=price;if(orderType==='stop-limit')execPrice=m.price;debugLog(`Exec order: ${orderType} ${m.side} ${m.symbol} @ ${execPrice}`);await openPosition(symObj,m.side,m.size,execPrice,m.tp,m.sl);await removeOrder(m.id)})};
 const computePnl=(pos)=>{const current=pos.current!==undefined?pos.current:priceCache[pos.symbol.api];if(current===undefined)return 0;const step=pipStep(pos.symbol.api),pipDiff=(current-pos.entry)/step,pipValue=pipValuePerLot(pos.symbol.api,current),pnlPerLot=pipDiff*pipValue*pos.size;return pos.side==='BUY'?pnlPerLot:-pnlPerLot};
 const getTotalMarginUsed=()=>positions.reduce((sum,pos)=>{const price=pos.current||priceCache[pos.symbol.api]||pos.entry;return sum+marginRequirement(pos.symbol.api,pos.size,price)},0)+orders.reduce((sum,ord)=>sum+ord.margin,0);
+window.loadBrokerData=async()=>{if(!window.loadOpenPositions||!window.loadPendingOrders){debugLog('⚠️ Load functions not available');return}try{debugLog('📥 Loading broker data...');const[loadedPositions,loadedOrders]=await Promise.all([window.loadOpenPositions(),window.loadPendingOrders()]);if(loadedPositions&&loadedPositions.length>0){positions.length=0;positions.push(...loadedPositions);debugLog(`✅ Loaded ${loadedPositions.length} positions`)}if(loadedOrders&&loadedOrders.length>0){orders.length=0;orders.push(...loadedOrders);debugLog(`✅ Loaded ${loadedOrders.length} orders`)}const usedMargin=getTotalMarginUsed();availableBalance=simBalance-usedMargin;debugLog(`💰 Balance: ${simBalance}, Used: ${usedMargin}, Available: ${availableBalance}`);renderAll();showToast(`✅ ${loadedPositions.length} positions, ${loadedOrders.length} ordres chargés`,'success')}catch(error){console.error('❌ Error loading broker data:',error);debugLog(`Error loading: ${error.message}`)}};
 const openPosition=async(symObj,side,lots=1,forcedEntry=null,tp=null,sl=null)=>{if(accountSuspended){showToast('❌ Compte suspendu - trading désactivé','error');return false}const hoursCheck=checkTradingHours();if(!hoursCheck.allowed){showToast(`❌ ${hoursCheck.reason}`,'error');return false}const resolvedLots=Number(lots);if(!resolvedLots||resolvedLots<=0){showToast('❌ Lots invalide','error');return false}let price=forcedEntry!==null?Number(forcedEntry):Number(priceCache[symObj.api]);if(!price||Number.isNaN(price)){showToast('❌ Prix indisponible','error');return false}const required=marginRequirement(symObj.api,resolvedLots,price);if(required>availableBalance){showToast('❌ Solde insuffisant','error');return false}availableBalance-=required;const pos={id:'pos_'+Date.now()+'_'+Math.random().toString(36).slice(2,7),symbol:symObj,side,entry:price,size:resolvedLots,current:price,tp:tp?Number(tp):null,sl:sl?Number(sl):null,openedAt:Date.now(),firestoreId:null};positions.unshift(pos);renderPositions();renderTotals();const displayPrice=symObj.type==='etf'?price.toFixed(2):formatPrice(price);showToast(`✅ ${side}: ${symObj.label} @ ${displayPrice}`,'success');debugLog(`Opened: ${JSON.stringify(pos)}`);if(window.saveTrade){const tradeData={symbol:symObj.label,symbolApi:symObj.api,side,entryPrice:price,currentPrice:price,lots:resolvedLots,takeProfit:pos.tp,stopLoss:pos.sl,status:'open',openedAt:new Date(pos.openedAt).toISOString()};const firestoreId=await window.saveTrade(tradeData);if(firestoreId){pos.firestoreId=firestoreId;debugLog(`Trade synced: ${firestoreId}`)}}return true};
 const closePosition=async(id,lotsToSell=null)=>{const idx=positions.findIndex(p=>p.id===id);if(idx===-1)return;const pos=positions[idx],sellLots=lotsToSell!==null?Math.min(Number(lotsToSell),pos.size):pos.size;if(sellLots<=0)return;const closePrice=priceCache[pos.symbol.api]||pos.current,pnl=computePnl({...pos,size:sellLots,current:closePrice}),released=marginRequirement(pos.symbol.api,sellLots,closePrice);availableBalance+=released;availableBalance+=pnl;simBalance+=pnl;history.unshift({symbol:pos.symbol,side:pos.side,entry:pos.entry,close:closePrice,pnl,lots:sellLots,closedAt:Date.now()});if(pos.firestoreId&&window.updateTrade){const updateData={closePrice,pnl,status:'closed',closedAt:new Date().toISOString()};await window.updateTrade(pos.firestoreId,updateData);debugLog(`Trade updated in Firestore: ${pos.firestoreId}`)}if(window.updateUserBalance){await window.updateUserBalance(simBalance);debugLog(`User balance updated in Firestore: ${simBalance}`)}if(sellLots<pos.size)pos.size-=sellLots;else positions.splice(idx,1);renderPositions();renderHistory();renderTotals();showToast(`✅ Fermé: ${formatMoney(pnl)} USD`,pnl>=0?'success':'error');debugLog(`Closed ${id}: ${pnl}`);await checkAllRules()};
-const addLimitOrder=(symbol,side,price,lots,tp,sl)=>{const resolvedLots=Number(lots),resolvedPrice=Number(price);if(!resolvedLots||!resolvedPrice){showToast('❌ Prix et lots requis','error');return}const required=marginRequirement(symbol,resolvedLots,resolvedPrice);if(required>availableBalance){showToast('❌ Solde insuffisant','error');return}availableBalance-=required;orders.push({id:'ord_'+Date.now()+'_'+Math.random().toString(36).slice(2,7),symbol,side,price:resolvedPrice,size:resolvedLots,tp:tp?Number(tp):null,sl:sl?Number(sl):null,margin:required,createdAt:Date.now()});renderOrders();renderTotals();showToast('✅ Ordre ajouté','success');debugLog(`Order: ${side} ${symbol}`)};
-const removeOrder=(id)=>{const order=orders.find(o=>o.id===id);if(order)availableBalance+=order.margin;orders=orders.filter(o=>o.id!==id);renderOrders();renderTotals();showToast('✅ Ordre annulé','info');debugLog(`Removed: ${id}`)};
+const addOrder=async(type,symbol,side,price,stopPrice,lots,tp,sl)=>{const resolvedLots=Number(lots);if(!resolvedLots||resolvedLots<=0){showToast('❌ Lots requis','error');return}if(type==='market'){await openPosition(WATCHLIST.find(w=>w.api===symbol)||currentSymbol,side,resolvedLots,null,tp?Number(tp):null,sl?Number(sl):null);return}const resolvedPrice=type==='limit'||type==='stop-limit'?Number(price):null;const resolvedStopPrice=type==='stop'||type==='stop-limit'?Number(stopPrice):null;if((type==='limit'||type==='stop-limit')&&!resolvedPrice){showToast('❌ Prix limite requis','error');return}if((type==='stop'||type==='stop-limit')&&!resolvedStopPrice){showToast('❌ Prix stop requis','error');return}const priceForMargin=resolvedPrice||resolvedStopPrice||priceCache[symbol]||1;const required=marginRequirement(symbol,resolvedLots,priceForMargin);if(required>availableBalance){showToast('❌ Solde insuffisant','error');return}availableBalance-=required;const order={id:'ord_'+Date.now()+'_'+Math.random().toString(36).slice(2,7),type,symbol,side,price:resolvedPrice,stopPrice:resolvedStopPrice,size:resolvedLots,tp:tp?Number(tp):null,sl:sl?Number(sl):null,margin:required,createdAt:Date.now(),firestoreId:null};orders.push(order);renderOrders();renderTotals();showToast('✅ Ordre ajouté','success');debugLog(`Order: ${type} ${side} ${symbol}`);if(window.saveOrder){const orderData={type,symbol,side,price:resolvedPrice,stopPrice:resolvedStopPrice,size:resolvedLots,tp:order.tp,sl:order.sl,margin:required};const firestoreId=await window.saveOrder(orderData);if(firestoreId){order.firestoreId=firestoreId;debugLog(`Order synced: ${firestoreId}`)}}};
+const addLimitOrder=async(symbol,side,price,lots,tp,sl)=>addOrder('limit',symbol,side,price,null,lots,tp,sl);
+const removeOrder=async(id)=>{const order=orders.find(o=>o.id===id);if(!order)return;if(order.firestoreId&&window.deleteOrder){await window.deleteOrder(order.firestoreId);debugLog(`Order deleted from Firestore: ${order.firestoreId}`)}availableBalance+=order.margin;orders=orders.filter(o=>o.id!==id);renderOrders();renderTotals();showToast('✅ Ordre annulé','info');debugLog(`Removed: ${id}`)};
 const renderPositions=()=>{const tbody=$('positionsBody');tbody.innerHTML='';if(positions.length===0){tbody.innerHTML='<tr><td colspan="7" class="empty-state">Aucune position</td></tr>';return}positions.forEach(pos=>{const current=pos.current!==undefined?pos.current:priceCache[pos.symbol.api];pos.current=current;const pnl=computePnl(pos),pnlClass=pnl>=0?'positive':'negative',tr=document.createElement('tr');tr.innerHTML=`<td><div class="symbol-cell">${pos.symbol.label}</div><div class="symbol-label">${pos.symbol.tv}</div></td><td><span class="side-badge ${pos.side.toLowerCase()}">${pos.side}</span></td><td>${formatPrice(pos.entry)}</td><td>${formatPrice(current)}</td><td>${pos.size}</td><td><span class="pnl-value ${pnlClass}">${formatMoney(pnl)}</span></td><td><div class="action-buttons"><button class="btn-action" data-id="${pos.id}"><i class="fas fa-cog"></i></button><button class="btn-action" data-close="${pos.id}"><i class="fas fa-times"></i></button></div></td>`;tbody.appendChild(tr)});tbody.querySelectorAll('button[data-id]').forEach(btn=>btn.onclick=()=>openPositionModal(btn.dataset.id));tbody.querySelectorAll('button[data-close]').forEach(btn=>btn.onclick=()=>closePosition(btn.dataset.close))};
 const renderHistory=()=>{const tbody=$('historyBody');tbody.innerHTML='';if(history.length===0){tbody.innerHTML='<tr><td colspan="7" class="empty-state">Aucun historique</td></tr>';return}history.slice(0,50).forEach(h=>{const pnlClass=h.pnl>=0?'positive':'negative',tr=document.createElement('tr');tr.innerHTML=`<td><div class="symbol-cell">${h.symbol.label}</div><div class="symbol-label">${h.symbol.tv}</div></td><td><span class="side-badge ${h.side.toLowerCase()}">${h.side}</span></td><td>${formatPrice(h.entry)}</td><td>${formatPrice(h.close)}</td><td>${h.lots}</td><td><span class="pnl-value ${pnlClass}">${formatMoney(h.pnl)}</span></td><td class="symbol-label">${formatDateTime(h.closedAt)}</td>`;tbody.appendChild(tr)})};
-const renderOrders=()=>{const container=$('ordersBody');container.innerHTML='';if(orders.length===0){container.innerHTML='<div class="empty-state">Aucun ordre</div>';return}orders.forEach(o=>{const card=document.createElement('div');card.className='order-card';card.innerHTML=`<div class="order-header"><div class="order-symbol">${o.symbol}</div><div class="order-side ${o.side.toLowerCase()}">${o.side}</div></div><div class="order-details"><div class="order-detail">Prix: <span>${formatPrice(o.price)}</span></div><div class="order-detail">Lots: <span>${o.size}</span></div><div class="order-detail">TP: <span>${o.tp?formatPrice(o.tp):'—'}</span></div><div class="order-detail">SL: <span>${o.sl?formatPrice(o.sl):'—'}</span></div></div><div class="order-actions"><button class="btn btn-remove" data-id="${o.id}"><i class="fas fa-trash-alt"></i>Annuler</button></div>`;container.appendChild(card)});container.querySelectorAll('button[data-id]').forEach(btn=>btn.onclick=()=>removeOrder(btn.dataset.id))};
+const renderOrders=()=>{const container=$('ordersBody');container.innerHTML='';if(orders.length===0){container.innerHTML='<div class="empty-state">Aucun ordre</div>';return}orders.forEach(o=>{const card=document.createElement('div');card.className='order-card';const orderType=o.type||'limit';let priceDisplay='';if(orderType==='limit'){priceDisplay=`<div class="order-detail">Prix: <span>${formatPrice(o.price)}</span></div>`}else if(orderType==='stop'){priceDisplay=`<div class="order-detail">Stop: <span>${formatPrice(o.stopPrice)}</span></div>`}else if(orderType==='stop-limit'){priceDisplay=`<div class="order-detail">Stop: <span>${formatPrice(o.stopPrice)}</span></div><div class="order-detail">Limite: <span>${formatPrice(o.price)}</span></div>`}const triggeredBadge=o.triggered?'<span class="order-type-badge stop" style="font-size:9px;padding:2px 6px">TRIGGERED</span>':'';card.innerHTML=`<div class="order-header"><div class="order-symbol">${o.symbol}</div><div style="display:flex;gap:6px;align-items:center"><span class="order-type-badge ${orderType}">${orderType}</span><span class="order-side ${o.side.toLowerCase()}">${o.side}</span></div></div>${triggeredBadge}<div class="order-details">${priceDisplay}<div class="order-detail">Lots: <span>${o.size}</span></div><div class="order-detail">TP: <span>${o.tp?formatPrice(o.tp):'—'}</span></div><div class="order-detail">SL: <span>${o.sl?formatPrice(o.sl):'—'}</span></div></div><div class="order-actions"><button class="btn btn-remove" data-id="${o.id}"><i class="fas fa-trash-alt"></i>Annuler</button></div>`;container.appendChild(card)});container.querySelectorAll('button[data-id]').forEach(btn=>btn.onclick=()=>removeOrder(btn.dataset.id))};
 const renderTotals=()=>{const total=positions.reduce((sum,p)=>sum+computePnl(p),0),usedMargin=getTotalMarginUsed();$('totalPnl').innerText=formatMoney(total)+' USD';$('totalPnl').className='stat-value total-pnl-value '+(total>=0?'positive':'negative');$('simBalance').innerText=formatMoney(simBalance)+' USD';$('availableBalance').innerText=formatMoney(availableBalance)+' USD';$('usedMargin').innerText=formatMoney(usedMargin)+' USD'};
 const renderAll=()=>{renderPositions();renderHistory();renderOrders();renderTotals()};
 window.updateBrokerBalance=(balance)=>{simBalance=Number(balance);availableBalance=Number(balance);if(initialBalance===0){initialBalance=Number(balance);startOfDayBalance=Number(balance)}console.log('✅ Broker balance updated:',simBalance);renderTotals()};
@@ -532,7 +664,8 @@ const openPositionModal=(id)=>{const pos=positions.find(p=>p.id===id);if(!pos)re
 const initResizable=()=>{const watchlistPanel=$('watchlistPanel'),watchlistHandle=watchlistPanel.querySelector('.resize-handle-right');let isResizing=false,startX=0,startWidth=0;if(watchlistHandle){watchlistHandle.addEventListener('mousedown',e=>{isResizing=true;startX=e.clientX;startWidth=watchlistPanel.offsetWidth;watchlistHandle.classList.add('resizing');e.preventDefault()})}document.addEventListener('mousemove',e=>{if(isResizing){const diff=e.clientX-startX,newWidth=Math.max(250,Math.min(600,startWidth+diff));watchlistPanel.style.width=newWidth+'px'}});document.addEventListener('mouseup',()=>{if(isResizing){isResizing=false;if(watchlistHandle)watchlistHandle.classList.remove('resizing')}})};
 
 $('lotInput').addEventListener('input',refreshLotInfo);
-$('addOrderBtn').addEventListener('click',()=>{const symbol=$('ordSymbol').value,side=$('ordSide').value,price=$('ordPrice').value,size=parseFloat($('ordSize').value)||1,tp=$('ordTp').value,sl=$('ordSl').value;if(!symbol||!price){showToast('❌ Symbole et prix requis','error');return}addLimitOrder(symbol,side,price,size,tp,sl)});
+$('ordType').addEventListener('change',()=>{const orderType=$('ordType').value;const priceGroup=$('ordPriceGroup');const stopPriceGroup=$('ordStopPriceGroup');if(orderType==='market'){priceGroup.style.display='none';stopPriceGroup.style.display='none'}else if(orderType==='limit'){priceGroup.style.display='block';stopPriceGroup.style.display='none'}else if(orderType==='stop'){priceGroup.style.display='none';stopPriceGroup.style.display='block'}else if(orderType==='stop-limit'){priceGroup.style.display='block';stopPriceGroup.style.display='block'}});
+$('addOrderBtn').addEventListener('click',()=>{const orderType=$('ordType').value,symbol=$('ordSymbol').value,side=$('ordSide').value,price=$('ordPrice').value,stopPrice=$('ordStopPrice').value,size=parseFloat($('ordSize').value)||1,tp=$('ordTp').value,sl=$('ordSl').value;if(!symbol){showToast('❌ Symbole requis','error');return}addOrder(orderType,symbol,side,price,stopPrice,size,tp,sl)});
 $('refreshPricesBtn').addEventListener('click',()=>{if(ws&&ws.readyState===WebSocket.OPEN){WATCHLIST.forEach(w=>{try{ws.send(JSON.stringify({type:'subscribe',symbol:w.api}))}catch(e){}});showToast('🔄 Rafraîchissement','info')}else showToast('❌ Non connecté','error')});
 $('buyBtn').addEventListener('click',()=>openPosition(currentSymbol,'BUY',parseFloat($('lotInput').value)||1));
 $('sellBtn').addEventListener('click',()=>openPosition(currentSymbol,'SELL',parseFloat($('lotInput').value)||1));
