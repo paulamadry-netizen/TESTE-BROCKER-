@@ -666,3 +666,371 @@ export const calculateDrawdowns = onCall(async (request) => {
     todayPnl
   };
 });
+
+// ==========================================
+// FONCTION: UPGRADE CHALLENGE → COMPTE FINANCÉ
+// ==========================================
+
+export const upgradeChallenge = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Non authentifié');
+  }
+
+  const userId = request.auth.uid;
+
+  console.log(`🎯 Tentative d'upgrade challenge → compte financé: ${userId}`);
+
+  // Charger le compte utilisateur
+  const userDoc = await db.collection('users').doc(userId).get();
+  if (!userDoc.exists) {
+    throw new HttpsError('not-found', 'Utilisateur introuvable');
+  }
+
+  const userData = userDoc.data()!;
+
+  // 1. VÉRIFIER QUE C'EST UN COMPTE CHALLENGE
+  if (userData.accountType !== 'challenge') {
+    throw new HttpsError('failed-precondition', 'Ce compte n\'est pas un challenge');
+  }
+
+  if (userData.accountStatus !== 'active') {
+    throw new HttpsError('failed-precondition', `Compte ${userData.accountStatus}. Upgrade impossible.`);
+  }
+
+  // 2. VÉRIFIER: 3 JOURS MINIMUM DE TRADING
+  const tradingDays = userData.tradingDays || 0;
+  if (tradingDays < 3) {
+    throw new HttpsError(
+      'failed-precondition',
+      `Vous devez trader pendant au moins 3 jours. Jours actuels: ${tradingDays}/3`
+    );
+  }
+
+  // 3. VÉRIFIER: 10% DE PROFIT
+  const initialBalance = userData.initialBalance || userData.accountBalance;
+  const currentBalance = userData.accountBalance;
+  const profitPercent = ((currentBalance - initialBalance) / initialBalance) * 100;
+
+  if (profitPercent < 10) {
+    throw new HttpsError(
+      'failed-precondition',
+      `Profit insuffisant. Requis: 10%, Actuel: ${profitPercent.toFixed(2)}%`
+    );
+  }
+
+  // 4. VÉRIFIER: AUCUNE VIOLATION DES RÈGLES
+  const totalDrawdownCheck = await validateTotalDrawdown(userId, userData);
+  if (!totalDrawdownCheck.allowed) {
+    throw new HttpsError('failed-precondition', 'Violation de la règle de drawdown total');
+  }
+
+  const dailyDrawdownCheck = await validateDailyDrawdown(userId, userData);
+  if (!dailyDrawdownCheck.allowed) {
+    throw new HttpsError('failed-precondition', 'Violation de la règle de drawdown journalier');
+  }
+
+  // 5. CRÉER LE COMPTE FINANCÉ
+  try {
+    await db.collection('users').doc(userId).update({
+      accountType: 'funded',
+      fundedAt: admin.firestore.FieldValue.serverTimestamp(),
+      initialFundedBalance: currentBalance,
+      tradingDaysAtUpgrade: tradingDays,
+      profitAtUpgrade: profitPercent,
+      // Réinitialiser les compteurs pour le compte financé
+      payoutsReceived: 0,
+      lastPayoutAt: null,
+      totalPayoutAmount: 0
+    });
+
+    // Log d'audit
+    await auditLog('challenge_upgraded', userId, {
+      tradingDays,
+      profitPercent: profitPercent.toFixed(2),
+      initialBalance,
+      currentBalance
+    });
+
+    console.log(`✅ Challenge upgradé pour ${userId}`);
+
+    return {
+      success: true,
+      message: `Félicitations! Votre challenge est validé avec ${profitPercent.toFixed(2)}% de profit en ${tradingDays} jours.`,
+      newAccountType: 'funded',
+      fundedBalance: currentBalance
+    };
+
+  } catch (error: any) {
+    console.error('❌ Erreur upgrade challenge:', error);
+    throw new HttpsError('internal', `Erreur: ${error.message}`);
+  }
+});
+
+// ==========================================
+// FONCTION: DEMANDER UN PAYOUT
+// ==========================================
+
+export const requestPayout = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Non authentifié');
+  }
+
+  const userId = request.auth.uid;
+  const requestedAmount = request.data.amount;
+
+  console.log(`💰 Demande de payout: ${userId}, montant: ${requestedAmount}`);
+
+  // Charger le compte utilisateur
+  const userDoc = await db.collection('users').doc(userId).get();
+  if (!userDoc.exists) {
+    throw new HttpsError('not-found', 'Utilisateur introuvable');
+  }
+
+  const userData = userDoc.data()!;
+
+  // 1. VÉRIFIER QUE C'EST UN COMPTE FINANCÉ
+  if (userData.accountType !== 'funded') {
+    throw new HttpsError(
+      'failed-precondition',
+      'Vous devez valider votre challenge avant de demander un payout'
+    );
+  }
+
+  if (userData.accountStatus !== 'active') {
+    throw new HttpsError('failed-precondition', `Compte ${userData.accountStatus}. Payout impossible.`);
+  }
+
+  const payoutsReceived = userData.payoutsReceived || 0;
+  const lastPayoutAt = userData.lastPayoutAt;
+  const fundedAt = userData.fundedAt;
+
+  // 2. RÈGLES POUR LE PREMIER PAYOUT
+  if (payoutsReceived === 0) {
+    console.log('📋 Vérification des règles du premier payout...');
+
+    // Règle A: 15 jours depuis le financement
+    const fundedDate = fundedAt?.toDate ? fundedAt.toDate() : new Date(fundedAt);
+    const daysSinceFunding = Math.floor((Date.now() - fundedDate.getTime()) / (1000 * 60 * 60 * 24));
+
+    if (daysSinceFunding < 15) {
+      throw new HttpsError(
+        'failed-precondition',
+        `Premier payout disponible après 15 jours. Jours écoulés: ${daysSinceFunding}/15`
+      );
+    }
+
+    // Règle B: 105% du solde initial
+    const initialBalance = userData.initialFundedBalance || userData.initialBalance;
+    const currentBalance = userData.accountBalance;
+    const requiredBalance = initialBalance * 1.05;
+
+    if (currentBalance < requiredBalance) {
+      throw new HttpsError(
+        'failed-precondition',
+        `Solde insuffisant. Requis: ${requiredBalance.toFixed(2)} USD (105%), Actuel: ${currentBalance.toFixed(2)} USD`
+      );
+    }
+
+    // Règle C: $150 de profit sur 4 jours différents
+    const tradesSnapshot = await db.collection('trades')
+      .where('userId', '==', userId)
+      .where('status', '==', 'closed')
+      .where('closedAt', '>=', fundedDate.toISOString())
+      .get();
+
+    // Grouper par jour
+    const profitByDay = new Map<string, number>();
+    tradesSnapshot.forEach((doc) => {
+      const trade = doc.data();
+      const closedDate = new Date(trade.closedAt);
+      const dateKey = closedDate.toISOString().split('T')[0]; // YYYY-MM-DD
+
+      const currentProfit = profitByDay.get(dateKey) || 0;
+      profitByDay.set(dateKey, currentProfit + (trade.pnl || 0));
+    });
+
+    // Compter les jours avec $150+ de profit
+    let daysWithTarget = 0;
+    for (const [day, profit] of profitByDay.entries()) {
+      if (profit >= 150) {
+        daysWithTarget++;
+      }
+    }
+
+    if (daysWithTarget < 4) {
+      throw new HttpsError(
+        'failed-precondition',
+        `Vous devez faire $150 de profit sur 4 jours différents. Jours validés: ${daysWithTarget}/4`
+      );
+    }
+
+    console.log(`✅ Toutes les règles du premier payout sont respectées`);
+  }
+
+  // 3. RÈGLES POUR LES PAYOUTS SUIVANTS
+  if (payoutsReceived > 0 && lastPayoutAt) {
+    const lastPayoutDate = lastPayoutAt.toDate ? lastPayoutAt.toDate() : new Date(lastPayoutAt);
+    const daysSinceLastPayout = Math.floor((Date.now() - lastPayoutDate.getTime()) / (1000 * 60 * 60 * 24));
+
+    if (daysSinceLastPayout < 15) {
+      throw new HttpsError(
+        'failed-precondition',
+        `Les payouts sont disponibles tous les 15 jours. Jours écoulés: ${daysSinceLastPayout}/15`
+      );
+    }
+  }
+
+  // 4. VÉRIFIER LE MONTANT
+  if (!requestedAmount || requestedAmount <= 0) {
+    throw new HttpsError('invalid-argument', 'Montant invalide');
+  }
+
+  const currentBalance = userData.accountBalance;
+  const initialBalance = userData.initialFundedBalance || userData.initialBalance;
+
+  // Maximum = solde actuel - solde initial (pour garder le capital)
+  const maxPayout = currentBalance - initialBalance;
+
+  if (requestedAmount > maxPayout) {
+    throw new HttpsError(
+      'failed-precondition',
+      `Montant trop élevé. Maximum disponible: ${maxPayout.toFixed(2)} USD (profit uniquement)`
+    );
+  }
+
+  // 5. CRÉER LA DEMANDE DE PAYOUT
+  try {
+    const payoutRef = db.collection('payouts').doc();
+
+    await payoutRef.set({
+      userId,
+      amount: requestedAmount,
+      status: 'pending',
+      requestedAt: admin.firestore.FieldValue.serverTimestamp(),
+      payoutNumber: payoutsReceived + 1,
+      isFirstPayout: payoutsReceived === 0,
+      accountBalance: currentBalance,
+      // Informations KYC (à compléter plus tard)
+      kycVerified: userData.kycVerified || false
+    });
+
+    // Log d'audit
+    await auditLog('payout_requested', userId, {
+      payoutId: payoutRef.id,
+      amount: requestedAmount,
+      payoutNumber: payoutsReceived + 1,
+      isFirstPayout: payoutsReceived === 0
+    });
+
+    console.log(`✅ Demande de payout créée: ${payoutRef.id}`);
+
+    return {
+      success: true,
+      payoutId: payoutRef.id,
+      message: `Demande de payout de ${requestedAmount} USD créée avec succès. En attente d'approbation.`,
+      estimatedProcessingDays: 3
+    };
+
+  } catch (error: any) {
+    console.error('❌ Erreur création payout:', error);
+    throw new HttpsError('internal', `Erreur: ${error.message}`);
+  }
+});
+
+// ==========================================
+// FONCTION: APPROUVER/REJETER UN PAYOUT (ADMIN)
+// ==========================================
+
+export const approvePayout = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Non authentifié');
+  }
+
+  const { payoutId, approved, rejectionReason } = request.data;
+
+  // Vérifier que l'utilisateur est admin
+  const adminDoc = await db.collection('users').doc(request.auth.uid).get();
+  if (!adminDoc.exists || adminDoc.data()?.role !== 'admin') {
+    throw new HttpsError('permission-denied', 'Accès réservé aux administrateurs');
+  }
+
+  console.log(`🔐 Admin ${request.auth.uid} ${approved ? 'approuve' : 'rejette'} le payout ${payoutId}`);
+
+  // Charger le payout
+  const payoutDoc = await db.collection('payouts').doc(payoutId).get();
+  if (!payoutDoc.exists) {
+    throw new HttpsError('not-found', 'Payout introuvable');
+  }
+
+  const payout = payoutDoc.data()!;
+
+  if (payout.status !== 'pending') {
+    throw new HttpsError('failed-precondition', `Ce payout a déjà été traité (status: ${payout.status})`);
+  }
+
+  try {
+    if (approved) {
+      // APPROUVER LE PAYOUT
+      await db.runTransaction(async (transaction) => {
+        // Mettre à jour le payout
+        transaction.update(payoutDoc.ref, {
+          status: 'approved',
+          approvedAt: admin.firestore.FieldValue.serverTimestamp(),
+          approvedBy: request.auth!.uid
+        });
+
+        // Mettre à jour le compte utilisateur
+        const userRef = db.collection('users').doc(payout.userId);
+        transaction.update(userRef, {
+          accountBalance: admin.firestore.FieldValue.increment(-payout.amount),
+          availableBalance: admin.firestore.FieldValue.increment(-payout.amount),
+          payoutsReceived: admin.firestore.FieldValue.increment(1),
+          lastPayoutAt: admin.firestore.FieldValue.serverTimestamp(),
+          totalPayoutAmount: admin.firestore.FieldValue.increment(payout.amount)
+        });
+      });
+
+      // Log d'audit
+      await auditLog('payout_approved', payout.userId, {
+        payoutId,
+        amount: payout.amount,
+        approvedBy: request.auth.uid
+      });
+
+      console.log(`✅ Payout approuvé: ${payoutId}`);
+
+      return {
+        success: true,
+        message: 'Payout approuvé avec succès'
+      };
+
+    } else {
+      // REJETER LE PAYOUT
+      await payoutDoc.ref.update({
+        status: 'rejected',
+        rejectedAt: admin.firestore.FieldValue.serverTimestamp(),
+        rejectedBy: request.auth.uid,
+        rejectionReason: rejectionReason || 'Non spécifié'
+      });
+
+      // Log d'audit
+      await auditLog('payout_rejected', payout.userId, {
+        payoutId,
+        amount: payout.amount,
+        rejectedBy: request.auth.uid,
+        reason: rejectionReason
+      });
+
+      console.log(`❌ Payout rejeté: ${payoutId}`);
+
+      return {
+        success: true,
+        message: 'Payout rejeté'
+      };
+    }
+
+  } catch (error: any) {
+    console.error('❌ Erreur traitement payout:', error);
+    throw new HttpsError('internal', `Erreur: ${error.message}`);
+  }
+});
