@@ -14,6 +14,9 @@ interface UserData {
   email: string;
   accountStatus: string;
   createdAt: any;
+  kycVerified?: boolean;
+  kycStatus?: string;
+  kycVerifiedAt?: any;
 }
 
 export default function SettingsPage() {
@@ -131,6 +134,61 @@ export default function SettingsPage() {
           <div className="pt-4">
             <Button onClick={handleEditProfile}>{t("settings.editProfile")}</Button>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* KYC Verification Status */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Shield className="h-5 w-5" />
+            Vérification d'Identité (KYC)
+          </CardTitle>
+          <CardDescription>
+            Statut de vérification de votre identité
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between py-3">
+            <div>
+              <p className="font-medium">Statut KYC</p>
+              <p className="text-sm text-muted-foreground">
+                {userData.kycVerified
+                  ? `Vérifié le ${userData.kycVerifiedAt?.toDate ? new Date(userData.kycVerifiedAt.toDate()).toLocaleDateString('fr-FR') : 'N/A'}`
+                  : 'Non vérifié'}
+              </p>
+            </div>
+            <Badge variant={userData.kycVerified ? "success" : "secondary"} className="text-base px-4 py-1">
+              {userData.kycVerified ? '✅ Vérifié' : '❌ Non vérifié'}
+            </Badge>
+          </div>
+
+          {userData.kycStatus === 'pending' && (
+            <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+              <p className="text-sm text-yellow-800">
+                ⏳ Vérification en cours. Cela peut prendre quelques minutes.
+              </p>
+            </div>
+          )}
+
+          {userData.kycStatus === 'requires_input' && (
+            <div className="p-3 bg-orange-50 border border-orange-200 rounded-lg">
+              <p className="text-sm text-orange-800">
+                ⚠️ Informations supplémentaires requises. Rendez-vous sur la page Payout pour compléter.
+              </p>
+            </div>
+          )}
+
+          {!userData.kycVerified && (
+            <div className="pt-2">
+              <p className="text-xs text-muted-foreground mb-2">
+                La vérification d'identité est requise pour effectuer des retraits.
+              </p>
+              <Button variant="outline" onClick={() => window.location.href = '/payout'}>
+                Vérifier mon Identité
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
 
