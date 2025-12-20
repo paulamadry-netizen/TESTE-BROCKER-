@@ -342,3 +342,14 @@ async function sendWelcomeEmail(
     // Ne pas bloquer si l'email échoue
   }
 }
+
+// ==========================================
+// EXPORT DES FONCTIONS DE SÉCURITÉ TRADING
+// ==========================================
+
+export {
+  executeTrade,
+  closeTrade,
+  updateTradingDays,
+  calculateDrawdowns
+} from './tradeSecurity';
