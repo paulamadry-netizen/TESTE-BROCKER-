@@ -41,6 +41,7 @@ exports.calculateDrawdowns = exports.updateTradingDays = exports.closeTrade = ex
 const https_1 = require("firebase-functions/v2/https");
 const scheduler_1 = require("firebase-functions/v2/scheduler");
 const admin = __importStar(require("firebase-admin"));
+const priceService_1 = require("./priceService");
 const db = admin.firestore();
 // ==========================================
 // HELPER: LOGS D'AUDIT
@@ -187,7 +188,7 @@ function validateMargin(userData, symbol, lots, price) {
 // ==========================================
 // FONCTION PRINCIPALE: EXÉCUTER UN TRADE
 // ==========================================
-exports.executeTrade = (0, https_1.onCall)(async (request) => {
+exports.executeTrade = (0, https_1.onCall)({ secrets: [priceService_1.finnhubApiKey] }, async (request) => {
     const { userId, symbol, symbolApi, side, lots, tp, sl } = request.data;
     console.log(`🔍 Tentative de trade: ${side} ${symbol} ${lots} lots`);
     // 1. Vérifier l'authentification
@@ -226,11 +227,11 @@ exports.executeTrade = (0, https_1.onCall)(async (request) => {
     if (!dailyDrawdownCheck.allowed) {
         throw new https_1.HttpsError('failed-precondition', dailyDrawdownCheck.reason);
     }
-    // 7. OBTENIR LE PRIX RÉEL (TODO: intégrer API de prix réelle)
-    // Pour l'instant, on accepte le prix du client mais on le log
-    // IMPORTANT: En production, utiliser une API externe (OANDA, Alpha Vantage, etc.)
-    const price = request.data.price || 1.0;
-    console.warn(`⚠️ Prix temporaire: ${price} (TODO: API externe)`);
+    // 7. OBTENIR ET VALIDER LE PRIX EN TEMPS RÉEL
+    // Le prix est récupéré côté serveur via Finnhub (impossible à manipuler par le client)
+    const clientPrice = request.data.price; // Prix envoyé par le client (pour comparaison)
+    const price = await (0, priceService_1.getValidatedPrice)(symbolApi, clientPrice);
+    console.log(`✅ Prix validé serveur: ${symbolApi} = ${price}`);
     // 8. VALIDATION DE LA MARGE
     const marginCheck = validateMargin(userData, symbolApi, lots, price);
     if (!marginCheck.allowed) {
@@ -294,8 +295,8 @@ exports.executeTrade = (0, https_1.onCall)(async (request) => {
 // ==========================================
 // FONCTION: FERMER UN TRADE
 // ==========================================
-exports.closeTrade = (0, https_1.onCall)(async (request) => {
-    const { tradeId, closePrice } = request.data;
+exports.closeTrade = (0, https_1.onCall)({ secrets: [priceService_1.finnhubApiKey] }, async (request) => {
+    const { tradeId, closePrice: clientClosePrice } = request.data;
     if (!request.auth) {
         throw new https_1.HttpsError('unauthenticated', 'Non authentifié');
     }
@@ -310,10 +311,13 @@ exports.closeTrade = (0, https_1.onCall)(async (request) => {
     if (trade.userId !== userId) {
         throw new https_1.HttpsError('permission-denied', 'Ce trade ne vous appartient pas');
     }
+    // VALIDER LE PRIX DE FERMETURE côté serveur (sécurité critique)
+    const symbol = trade.symbolApi;
+    const closePrice = await (0, priceService_1.getValidatedPrice)(symbol, clientClosePrice);
+    console.log(`✅ Prix de fermeture validé: ${symbol} = ${closePrice}`);
     // Calculer le P&L
     const entryPrice = trade.entryPrice;
     const lots = trade.lots;
-    const symbol = trade.symbolApi;
     // Formule simplifiée (à adapter selon le type d'actif)
     const pipValue = 10; // USD par pip pour 1 lot standard
     const pipStep = symbol.includes('JPY') ? 0.01 : 0.0001;

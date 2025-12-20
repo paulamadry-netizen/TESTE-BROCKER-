@@ -6,6 +6,7 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import * as admin from 'firebase-admin';
+import { getValidatedPrice, finnhubApiKey } from './priceService';
 
 const db = admin.firestore();
 
@@ -222,7 +223,7 @@ function validateMargin(
 // FONCTION PRINCIPALE: EXÉCUTER UN TRADE
 // ==========================================
 
-export const executeTrade = onCall(async (request) => {
+export const executeTrade = onCall({ secrets: [finnhubApiKey] }, async (request) => {
   const { userId, symbol, symbolApi, side, lots, tp, sl } = request.data as TradeData;
 
   console.log(`🔍 Tentative de trade: ${side} ${symbol} ${lots} lots`);
@@ -274,11 +275,12 @@ export const executeTrade = onCall(async (request) => {
     throw new HttpsError('failed-precondition', dailyDrawdownCheck.reason!);
   }
 
-  // 7. OBTENIR LE PRIX RÉEL (TODO: intégrer API de prix réelle)
-  // Pour l'instant, on accepte le prix du client mais on le log
-  // IMPORTANT: En production, utiliser une API externe (OANDA, Alpha Vantage, etc.)
-  const price = request.data.price || 1.0;
-  console.warn(`⚠️ Prix temporaire: ${price} (TODO: API externe)`);
+  // 7. OBTENIR ET VALIDER LE PRIX EN TEMPS RÉEL
+  // Le prix est récupéré côté serveur via Finnhub (impossible à manipuler par le client)
+  const clientPrice = request.data.price; // Prix envoyé par le client (pour comparaison)
+  const price = await getValidatedPrice(symbolApi, clientPrice);
+
+  console.log(`✅ Prix validé serveur: ${symbolApi} = ${price}`);
 
   // 8. VALIDATION DE LA MARGE
   const marginCheck = validateMargin(userData, symbolApi, lots, price);
@@ -351,8 +353,8 @@ export const executeTrade = onCall(async (request) => {
 // FONCTION: FERMER UN TRADE
 // ==========================================
 
-export const closeTrade = onCall(async (request) => {
-  const { tradeId, closePrice } = request.data;
+export const closeTrade = onCall({ secrets: [finnhubApiKey] }, async (request) => {
+  const { tradeId, closePrice: clientClosePrice } = request.data;
 
   if (!request.auth) {
     throw new HttpsError('unauthenticated', 'Non authentifié');
@@ -373,10 +375,14 @@ export const closeTrade = onCall(async (request) => {
     throw new HttpsError('permission-denied', 'Ce trade ne vous appartient pas');
   }
 
+  // VALIDER LE PRIX DE FERMETURE côté serveur (sécurité critique)
+  const symbol = trade.symbolApi;
+  const closePrice = await getValidatedPrice(symbol, clientClosePrice);
+  console.log(`✅ Prix de fermeture validé: ${symbol} = ${closePrice}`);
+
   // Calculer le P&L
   const entryPrice = trade.entryPrice;
   const lots = trade.lots;
-  const symbol = trade.symbolApi;
 
   // Formule simplifiée (à adapter selon le type d'actif)
   const pipValue = 10; // USD par pip pour 1 lot standard
