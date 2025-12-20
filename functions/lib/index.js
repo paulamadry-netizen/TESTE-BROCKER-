@@ -40,7 +40,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.stripeWebhookV2 = void 0;
+exports.calculateDrawdowns = exports.updateTradingDays = exports.closeTrade = exports.executeTrade = exports.stripeWebhookV2 = void 0;
 const https_1 = require("firebase-functions/v2/https");
 const params_1 = require("firebase-functions/params");
 const admin = __importStar(require("firebase-admin"));
@@ -313,4 +313,12 @@ async function sendWelcomeEmail(email, password, session) {
         // Ne pas bloquer si l'email échoue
     }
 }
+// ==========================================
+// EXPORT DES FONCTIONS DE SÉCURITÉ TRADING
+// ==========================================
+var tradeSecurity_1 = require("./tradeSecurity");
+Object.defineProperty(exports, "executeTrade", { enumerable: true, get: function () { return tradeSecurity_1.executeTrade; } });
+Object.defineProperty(exports, "closeTrade", { enumerable: true, get: function () { return tradeSecurity_1.closeTrade; } });
+Object.defineProperty(exports, "updateTradingDays", { enumerable: true, get: function () { return tradeSecurity_1.updateTradingDays; } });
+Object.defineProperty(exports, "calculateDrawdowns", { enumerable: true, get: function () { return tradeSecurity_1.calculateDrawdowns; } });
 //# sourceMappingURL=index.js.map
