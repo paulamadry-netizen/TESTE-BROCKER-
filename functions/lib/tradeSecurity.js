@@ -37,7 +37,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.calculateDrawdowns = exports.updateTradingDays = exports.closeTrade = exports.executeTrade = void 0;
+exports.calculateDrawdowns = exports.closeTradesBeforeWeekend = exports.updateTradingDays = exports.closeTrade = exports.executeTrade = void 0;
 const https_1 = require("firebase-functions/v2/https");
 const scheduler_1 = require("firebase-functions/v2/scheduler");
 const admin = __importStar(require("firebase-admin"));
@@ -399,6 +399,95 @@ exports.updateTradingDays = (0, scheduler_1.onSchedule)('0 0 * * *', async (even
     }
     await batch.commit();
     console.log(`✅ Mis à jour ${usersWhoTraded.size} utilisateurs`);
+});
+// ==========================================
+// FONCTION SCHEDULED: FERMER LES TRADES AVANT LE WEEK-END
+// ==========================================
+exports.closeTradesBeforeWeekend = (0, scheduler_1.onSchedule)({
+    schedule: '0 21 * * 5', // Vendredi 21:00 UTC (avant fermeture marché 22:00)
+    timeZone: 'UTC',
+    secrets: [priceService_1.finnhubApiKey]
+}, async (event) => {
+    console.log('🔒 Fermeture automatique des trades avant le week-end...');
+    try {
+        // Trouver tous les trades ouverts
+        const openTradesSnapshot = await db.collection('trades')
+            .where('status', '==', 'open')
+            .get();
+        if (openTradesSnapshot.empty) {
+            console.log('✅ Aucun trade ouvert à fermer');
+            return;
+        }
+        console.log(`📊 ${openTradesSnapshot.size} trades ouverts trouvés`);
+        let closedCount = 0;
+        let errorCount = 0;
+        // Fermer chaque trade
+        for (const tradeDoc of openTradesSnapshot.docs) {
+            const trade = tradeDoc.data();
+            const tradeId = tradeDoc.id;
+            try {
+                // Obtenir le prix de clôture validé depuis Finnhub
+                const closePrice = await (0, priceService_1.getValidatedPrice)(trade.symbolApi);
+                console.log(`✅ Prix validé pour ${trade.symbol}: ${closePrice}`);
+                // Calculer le P&L
+                const entryPrice = trade.entryPrice;
+                const lots = trade.lots;
+                const pipValue = 10; // USD par pip pour 1 lot standard
+                const pipStep = trade.symbolApi.includes('JPY') ? 0.01 : 0.0001;
+                const pipDiff = (closePrice - entryPrice) / pipStep;
+                let pnl = pipDiff * pipValue * lots;
+                // Inverser si SELL
+                if (trade.side === 'SELL') {
+                    pnl = -pnl;
+                }
+                const marginReleased = calculateMargin(trade.symbolApi, lots, entryPrice);
+                console.log(`💰 P&L calculé pour ${trade.symbol}: ${pnl.toFixed(2)} USD`);
+                // Transaction atomique pour fermer le trade
+                await db.runTransaction(async (transaction) => {
+                    // Mettre à jour le trade
+                    transaction.update(tradeDoc.ref, {
+                        status: 'closed',
+                        closePrice,
+                        pnl,
+                        closedAt: admin.firestore.FieldValue.serverTimestamp(),
+                        closedBy: 'weekend_auto_close'
+                    });
+                    // Mettre à jour la balance utilisateur
+                    const userRef = db.collection('users').doc(trade.userId);
+                    transaction.update(userRef, {
+                        accountBalance: admin.firestore.FieldValue.increment(pnl),
+                        availableBalance: admin.firestore.FieldValue.increment(pnl + marginReleased)
+                    });
+                });
+                // Log d'audit
+                await auditLog('weekend_auto_close', trade.userId, {
+                    tradeId,
+                    symbol: trade.symbol,
+                    side: trade.side,
+                    lots,
+                    entryPrice,
+                    closePrice,
+                    pnl,
+                    marginReleased
+                });
+                closedCount++;
+                console.log(`✅ Trade ${tradeId} fermé automatiquement`);
+            }
+            catch (error) {
+                errorCount++;
+                console.error(`❌ Erreur fermeture trade ${tradeId}:`, error.message);
+                // Log d'erreur
+                await auditLog('weekend_auto_close_error', trade.userId, {
+                    tradeId,
+                    error: error.message
+                });
+            }
+        }
+        console.log(`✅ Fermeture automatique terminée: ${closedCount} fermés, ${errorCount} erreurs`);
+    }
+    catch (error) {
+        console.error('❌ Erreur critique fermeture week-end:', error);
+    }
 });
 // ==========================================
 // FONCTION: CALCULER LES DRAWDOWNS
