@@ -3,7 +3,7 @@
  * Version TypeScript avec Firebase Functions v2 et Secrets
  */
 
-import { onRequest } from 'firebase-functions/v2/https';
+import { onRequest, onCall, HttpsError } from 'firebase-functions/v2/https';
 import { defineSecret } from 'firebase-functions/params';
 import * as admin from 'firebase-admin';
 import Stripe from 'stripe';
@@ -75,6 +75,14 @@ export const stripeWebhookV2 = onRequest(
 
         case 'customer.subscription.deleted':
           await handleSubscriptionDeleted(event.data.object as StripeSubscription, stripe);
+          break;
+
+        case 'identity.verification_session.verified':
+          await handleKycVerified(event.data.object as any);
+          break;
+
+        case 'identity.verification_session.requires_input':
+          await handleKycRequiresInput(event.data.object as any);
           break;
 
         default:
@@ -343,6 +351,162 @@ async function sendWelcomeEmail(
   }
 }
 
+/**
+ * Gérer la vérification KYC complétée
+ * @param verificationSession - Session de vérification Stripe Identity
+ */
+async function handleKycVerified(verificationSession: any): Promise<void> {
+  console.log('✅ Vérification KYC complétée:', verificationSession.id);
+
+  const userId = verificationSession.metadata?.userId;
+
+  if (!userId) {
+    console.error('❌ User ID manquant dans les métadonnées de la vérification');
+    return;
+  }
+
+  try {
+    // Mettre à jour le statut KYC de l'utilisateur
+    await admin.firestore().collection('users').doc(userId).update({
+      kycVerified: true,
+      kycVerifiedAt: admin.firestore.FieldValue.serverTimestamp(),
+      kycVerificationId: verificationSession.id,
+      kycStatus: verificationSession.status,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    console.log('✅ Statut KYC mis à jour pour:', userId);
+
+    // Log d'audit
+    await admin.firestore().collection('audit_logs').add({
+      action: 'kyc_verified',
+      userId,
+      details: {
+        verificationId: verificationSession.id,
+        status: verificationSession.status
+      },
+      timestamp: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error('❌ Erreur mise à jour KYC:', errorMessage);
+  }
+}
+
+/**
+ * Gérer les vérifications KYC nécessitant une action
+ * @param verificationSession - Session de vérification Stripe Identity
+ */
+async function handleKycRequiresInput(verificationSession: any): Promise<void> {
+  console.log('⚠️ Vérification KYC nécessite une action:', verificationSession.id);
+
+  const userId = verificationSession.metadata?.userId;
+
+  if (!userId) {
+    console.error('❌ User ID manquant dans les métadonnées de la vérification');
+    return;
+  }
+
+  try {
+    await admin.firestore().collection('users').doc(userId).update({
+      kycStatus: 'requires_input',
+      kycLastCheckId: verificationSession.id,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    console.log('✅ Statut KYC updated (requires input) pour:', userId);
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error('❌ Erreur mise à jour KYC:', errorMessage);
+  }
+}
+
+// ==========================================
+// FONCTION: CRÉER UNE SESSION DE VÉRIFICATION KYC
+// ==========================================
+
+/**
+ * Créer une session de vérification Stripe Identity (KYC)
+ */
+export const createKycVerification = onCall(
+  { secrets: [stripeSecretKey] },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError('unauthenticated', 'Non authentifié');
+    }
+
+    const userId = request.auth.uid;
+
+    console.log(`🔐 Création session KYC pour: ${userId}`);
+
+    // Charger l'utilisateur
+    const userDoc = await admin.firestore().collection('users').doc(userId).get();
+    if (!userDoc.exists) {
+      throw new HttpsError('not-found', 'Utilisateur introuvable');
+    }
+
+    const userData = userDoc.data()!;
+
+    // Vérifier si déjà vérifié
+    if (userData.kycVerified) {
+      throw new HttpsError('failed-precondition', 'Vous êtes déjà vérifié');
+    }
+
+    try {
+      // Initialiser Stripe
+      const stripe = new Stripe(stripeSecretKey.value(), {
+        apiVersion: '2023-10-16'
+      });
+
+      // Créer la session de vérification
+      const verificationSession = await stripe.identity.verificationSessions.create({
+        type: 'document',
+        metadata: {
+          userId: userId
+        },
+        options: {
+          document: {
+            // Accepter les passeports, cartes d'identité et permis de conduire
+            allowed_types: ['driving_license', 'passport', 'id_card'],
+            require_matching_selfie: true // Selfie pour vérifier l'identité
+          }
+        }
+      });
+
+      console.log('✅ Session KYC créée:', verificationSession.id);
+
+      // Sauvegarder la session ID dans Firestore
+      await admin.firestore().collection('users').doc(userId).update({
+        kycSessionId: verificationSession.id,
+        kycStatus: 'pending',
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+
+      // Log d'audit
+      await admin.firestore().collection('audit_logs').add({
+        action: 'kyc_session_created',
+        userId,
+        details: {
+          sessionId: verificationSession.id
+        },
+        timestamp: admin.firestore.FieldValue.serverTimestamp()
+      });
+
+      return {
+        success: true,
+        sessionId: verificationSession.id,
+        clientSecret: verificationSession.client_secret,
+        url: verificationSession.url
+      };
+
+    } catch (error: any) {
+      console.error('❌ Erreur création session KYC:', error);
+      throw new HttpsError('internal', `Erreur: ${error.message}`);
+    }
+  }
+);
+
 // ==========================================
 // EXPORT DES FONCTIONS DE SÉCURITÉ TRADING
 // ==========================================
@@ -351,5 +515,9 @@ export {
   executeTrade,
   closeTrade,
   updateTradingDays,
-  calculateDrawdowns
+  calculateDrawdowns,
+  closeTradesBeforeWeekend,
+  upgradeChallenge,
+  requestPayout,
+  approvePayout
 } from './tradeSecurity';

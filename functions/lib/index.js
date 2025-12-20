@@ -40,7 +40,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.calculateDrawdowns = exports.updateTradingDays = exports.closeTrade = exports.executeTrade = exports.stripeWebhookV2 = void 0;
+exports.approvePayout = exports.requestPayout = exports.upgradeChallenge = exports.closeTradesBeforeWeekend = exports.calculateDrawdowns = exports.updateTradingDays = exports.closeTrade = exports.executeTrade = exports.createKycVerification = exports.stripeWebhookV2 = void 0;
 const https_1 = require("firebase-functions/v2/https");
 const params_1 = require("firebase-functions/params");
 const admin = __importStar(require("firebase-admin"));
@@ -93,6 +93,12 @@ exports.stripeWebhookV2 = (0, https_1.onRequest)({ secrets: [stripeSecretKey, st
                 break;
             case 'customer.subscription.deleted':
                 await handleSubscriptionDeleted(event.data.object, stripe);
+                break;
+            case 'identity.verification_session.verified':
+                await handleKycVerified(event.data.object);
+                break;
+            case 'identity.verification_session.requires_input':
+                await handleKycRequiresInput(event.data.object);
                 break;
             default:
                 console.log(`ℹ️ Événement non géré: ${event.type}`);
@@ -313,6 +319,138 @@ async function sendWelcomeEmail(email, password, session) {
         // Ne pas bloquer si l'email échoue
     }
 }
+/**
+ * Gérer la vérification KYC complétée
+ * @param verificationSession - Session de vérification Stripe Identity
+ */
+async function handleKycVerified(verificationSession) {
+    var _a;
+    console.log('✅ Vérification KYC complétée:', verificationSession.id);
+    const userId = (_a = verificationSession.metadata) === null || _a === void 0 ? void 0 : _a.userId;
+    if (!userId) {
+        console.error('❌ User ID manquant dans les métadonnées de la vérification');
+        return;
+    }
+    try {
+        // Mettre à jour le statut KYC de l'utilisateur
+        await admin.firestore().collection('users').doc(userId).update({
+            kycVerified: true,
+            kycVerifiedAt: admin.firestore.FieldValue.serverTimestamp(),
+            kycVerificationId: verificationSession.id,
+            kycStatus: verificationSession.status,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+        console.log('✅ Statut KYC mis à jour pour:', userId);
+        // Log d'audit
+        await admin.firestore().collection('audit_logs').add({
+            action: 'kyc_verified',
+            userId,
+            details: {
+                verificationId: verificationSession.id,
+                status: verificationSession.status
+            },
+            timestamp: admin.firestore.FieldValue.serverTimestamp()
+        });
+    }
+    catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        console.error('❌ Erreur mise à jour KYC:', errorMessage);
+    }
+}
+/**
+ * Gérer les vérifications KYC nécessitant une action
+ * @param verificationSession - Session de vérification Stripe Identity
+ */
+async function handleKycRequiresInput(verificationSession) {
+    var _a;
+    console.log('⚠️ Vérification KYC nécessite une action:', verificationSession.id);
+    const userId = (_a = verificationSession.metadata) === null || _a === void 0 ? void 0 : _a.userId;
+    if (!userId) {
+        console.error('❌ User ID manquant dans les métadonnées de la vérification');
+        return;
+    }
+    try {
+        await admin.firestore().collection('users').doc(userId).update({
+            kycStatus: 'requires_input',
+            kycLastCheckId: verificationSession.id,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+        console.log('✅ Statut KYC updated (requires input) pour:', userId);
+    }
+    catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        console.error('❌ Erreur mise à jour KYC:', errorMessage);
+    }
+}
+// ==========================================
+// FONCTION: CRÉER UNE SESSION DE VÉRIFICATION KYC
+// ==========================================
+/**
+ * Créer une session de vérification Stripe Identity (KYC)
+ */
+exports.createKycVerification = (0, https_1.onCall)({ secrets: [stripeSecretKey] }, async (request) => {
+    if (!request.auth) {
+        throw new https_1.HttpsError('unauthenticated', 'Non authentifié');
+    }
+    const userId = request.auth.uid;
+    console.log(`🔐 Création session KYC pour: ${userId}`);
+    // Charger l'utilisateur
+    const userDoc = await admin.firestore().collection('users').doc(userId).get();
+    if (!userDoc.exists) {
+        throw new https_1.HttpsError('not-found', 'Utilisateur introuvable');
+    }
+    const userData = userDoc.data();
+    // Vérifier si déjà vérifié
+    if (userData.kycVerified) {
+        throw new https_1.HttpsError('failed-precondition', 'Vous êtes déjà vérifié');
+    }
+    try {
+        // Initialiser Stripe
+        const stripe = new stripe_1.default(stripeSecretKey.value(), {
+            apiVersion: '2023-10-16'
+        });
+        // Créer la session de vérification
+        const verificationSession = await stripe.identity.verificationSessions.create({
+            type: 'document',
+            metadata: {
+                userId: userId
+            },
+            options: {
+                document: {
+                    // Accepter les passeports, cartes d'identité et permis de conduire
+                    allowed_types: ['driving_license', 'passport', 'id_card'],
+                    require_matching_selfie: true // Selfie pour vérifier l'identité
+                }
+            }
+        });
+        console.log('✅ Session KYC créée:', verificationSession.id);
+        // Sauvegarder la session ID dans Firestore
+        await admin.firestore().collection('users').doc(userId).update({
+            kycSessionId: verificationSession.id,
+            kycStatus: 'pending',
+            updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+        // Log d'audit
+        await admin.firestore().collection('audit_logs').add({
+            action: 'kyc_session_created',
+            userId,
+            details: {
+                sessionId: verificationSession.id
+            },
+            timestamp: admin.firestore.FieldValue.serverTimestamp()
+        });
+        return {
+            success: true,
+            sessionId: verificationSession.id,
+            clientSecret: verificationSession.client_secret,
+            url: verificationSession.url
+        };
+    }
+    catch (error) {
+        console.error('❌ Erreur création session KYC:', error);
+        throw new https_1.HttpsError('internal', `Erreur: ${error.message}`);
+    }
+});
 // ==========================================
 // EXPORT DES FONCTIONS DE SÉCURITÉ TRADING
 // ==========================================
@@ -321,4 +459,8 @@ Object.defineProperty(exports, "executeTrade", { enumerable: true, get: function
 Object.defineProperty(exports, "closeTrade", { enumerable: true, get: function () { return tradeSecurity_1.closeTrade; } });
 Object.defineProperty(exports, "updateTradingDays", { enumerable: true, get: function () { return tradeSecurity_1.updateTradingDays; } });
 Object.defineProperty(exports, "calculateDrawdowns", { enumerable: true, get: function () { return tradeSecurity_1.calculateDrawdowns; } });
+Object.defineProperty(exports, "closeTradesBeforeWeekend", { enumerable: true, get: function () { return tradeSecurity_1.closeTradesBeforeWeekend; } });
+Object.defineProperty(exports, "upgradeChallenge", { enumerable: true, get: function () { return tradeSecurity_1.upgradeChallenge; } });
+Object.defineProperty(exports, "requestPayout", { enumerable: true, get: function () { return tradeSecurity_1.requestPayout; } });
+Object.defineProperty(exports, "approvePayout", { enumerable: true, get: function () { return tradeSecurity_1.approvePayout; } });
 //# sourceMappingURL=index.js.map
