@@ -284,12 +284,32 @@ const WATCHLIST=[
 {tv:'OANDA:GBPUSD',label:'GBP / USD',api:'GBP_USD',type:'forex',yahoo:'GBPUSD=X'},
 {tv:'OANDA:USDCHF',label:'USD / CHF',api:'USD_CHF',type:'forex',yahoo:'USDCHF=X'},
 {tv:'OANDA:AUDUSD',label:'AUD / USD',api:'AUD_USD',type:'forex',yahoo:'AUDUSD=X'},
+{tv:'OANDA:EURGBP',label:'EUR / GBP',api:'EUR_GBP',type:'forex',yahoo:'EURGBP=X'},
+{tv:'OANDA:EURJPY',label:'EUR / JPY',api:'EUR_JPY',type:'forex',yahoo:'EURJPY=X'},
+{tv:'OANDA:GBPJPY',label:'GBP / JPY',api:'GBP_JPY',type:'forex',yahoo:'GBPJPY=X'},
+{tv:'OANDA:EURCHF',label:'EUR / CHF',api:'EUR_CHF',type:'forex',yahoo:'EURCHF=X'},
+{tv:'OANDA:USDCAD',label:'USD / CAD',api:'USD_CAD',type:'forex',yahoo:'USDCAD=X'},
+{tv:'OANDA:NZDUSD',label:'NZD / USD',api:'NZD_USD',type:'forex',yahoo:'NZDUSD=X'},
+{tv:'OANDA:AUDJPY',label:'AUD / JPY',api:'AUD_JPY',type:'forex',yahoo:'AUDJPY=X'},
+{tv:'OANDA:GBPCHF',label:'GBP / CHF',api:'GBP_CHF',type:'forex',yahoo:'GBPCHF=X'},
+{tv:'OANDA:EURAUD',label:'EUR / AUD',api:'EUR_AUD',type:'forex',yahoo:'EURAUD=X'},
+{tv:'OANDA:GBPAUD',label:'GBP / AUD',api:'GBP_AUD',type:'forex',yahoo:'GBPAUD=X'},
+{tv:'OANDA:EURCAD',label:'EUR / CAD',api:'EUR_CAD',type:'forex',yahoo:'EURCAD=X'},
+{tv:'OANDA:AUDCAD',label:'AUD / CAD',api:'AUD_CAD',type:'forex',yahoo:'AUDCAD=X'},
+{tv:'OANDA:AUDNZD',label:'AUD / NZD',api:'AUD_NZD',type:'forex',yahoo:'AUDNZD=X'},
+{tv:'OANDA:NZDJPY',label:'NZD / JPY',api:'NZD_JPY',type:'forex',yahoo:'NZDJPY=X'},
+{tv:'OANDA:CHFJPY',label:'CHF / JPY',api:'CHF_JPY',type:'forex',yahoo:'CHFJPY=X'},
 {tv:'OANDA:XAUUSD',label:'Gold / USD',api:'XAU_USD',type:'metal',yahoo:'GC=F'},
+{tv:'OANDA:XAGUSD',label:'Silver / USD',api:'XAG_USD',type:'metal',yahoo:'SI=F'},
+{tv:'TVC:COPPER',label:'Copper',api:'COPPER',type:'commodity',yahoo:'HG=F'},
+{tv:'TVC:ZINC',label:'Zinc',api:'ZINC',type:'commodity',yahoo:'ZN=F'},
+{tv:'TVC:COFFEE',label:'Coffee',api:'COFFEE',type:'commodity',yahoo:'KC=F'},
+{tv:'TVC:USOIL',label:'WTI Crude Oil',api:'WTI',type:'commodity',yahoo:'CL=F'},
 {tv:'NASDAQ:SPY',label:'SPY (S&P 500 ETF)',api:'SPY',type:'etf',yahoo:'SPY'},
 {tv:'NASDAQ:DIA',label:'DIA (Dow Jones ETF)',api:'DIA',type:'etf',yahoo:'DIA'},
 {tv:'NASDAQ:QQQ',label:'QQQ (Nasdaq 100 ETF)',api:'QQQ',type:'etf',yahoo:'QQQ'}
 ];
-const PIP_STEPS={default:0.0001,jpy:0.01,xau:0.1,etf:0.01};
+const PIP_STEPS={default:0.0001,jpy:0.01,xau:0.1,xag:0.01,commodity:0.01,etf:0.01};
 let ws,wsConnected=false,reconDelay=CFG.reconBase,reconAttempts=0,reconTimer,keepaliveTimer,currentSymbol=WATCHLIST[0],priceCache={},lastPriceUpdate={},positions=[],history=[],orders=[],simBalance=50000,availableBalance=50000,tvWidget,lwChart,lwSeries,activeModalId,debugMode=false,msgCount=0;
 let currentTimeframe='15',chartHistoryData={};
 const $=(id)=>document.getElementById(id),debugLog=(msg)=>{if(!debugMode)return;const t=new Date().toLocaleTimeString();debugPanel.innerHTML+=`[${t}] ${msg}\n`;debugPanel.scrollTop=debugPanel.scrollHeight;console.log(`[DEBUG] ${msg}`)};
@@ -297,10 +317,12 @@ $('debugToggle').onclick=()=>{debugMode=!debugMode;debugPanel.classList.toggle('
 const toastEl=$('toast');let toastTimer;
 const showToast=(msg,type='info',dur=2500)=>{if(toastTimer)clearTimeout(toastTimer);toastEl.textContent=msg;toastEl.className=`toast visible ${type}`;toastTimer=setTimeout(()=>toastEl.classList.remove('visible'),dur);debugLog(`Toast: ${msg}`)};
 const escapeId=(v)=>String(v).replace(/[^\w]/g,'_'),formatPrice=(v)=>{if(v===undefined||v===null)return'—';const n=Number(v);return currentSymbol&&currentSymbol.type==='etf'?n.toFixed(2):n.toFixed(5).replace(/\.?0+$/,'')},formatMoney=(v)=>v===undefined||v===null?'0.00':Number(v).toFixed(2),formatDateTime=(t)=>new Date(t).toLocaleString('fr-FR');
-const lotUnits=(s)=>{const o=WATCHLIST.find(w=>w.api===s);if(o&&o.type==='etf')return 1;return s.includes('XAU')?100:CFG.baseLot},isQuoteUsd=(s)=>s.endsWith('USD'),isBaseUsd=(s)=>s.startsWith('USD'),isETF=(s)=>{const o=WATCHLIST.find(w=>w.api===s);return o&&o.type==='etf'},pipStep=(s)=>isETF(s)?PIP_STEPS.etf:s.includes('JPY')?PIP_STEPS.jpy:s.includes('XAU')?PIP_STEPS.xau:PIP_STEPS.default;
+const lotUnits=(s)=>{const o=WATCHLIST.find(w=>w.api===s);if(o&&o.type==='etf')return 1;if(o&&o.type==='commodity')return 1000;if(s.includes('XAU'))return 100;if(s.includes('XAG'))return 5000;return CFG.baseLot},isQuoteUsd=(s)=>s.endsWith('USD'),isBaseUsd=(s)=>s.startsWith('USD'),isETF=(s)=>{const o=WATCHLIST.find(w=>w.api===s);return o&&o.type==='etf'},isCommodity=(s)=>{const o=WATCHLIST.find(w=>w.api===s);return o&&(o.type==='commodity'||o.type==='metal')},pipStep=(s)=>{if(s.includes('JPY'))return PIP_STEPS.jpy;if(s.includes('XAU'))return PIP_STEPS.xau;if(s.includes('XAG'))return PIP_STEPS.xag;if(s==='COPPER'||s==='ZINC'||s==='COFFEE'||s==='WTI')return PIP_STEPS.commodity;const o=WATCHLIST.find(w=>w.api===s);if(o&&o.type==='etf')return PIP_STEPS.etf;if(o&&o.type==='commodity')return PIP_STEPS.commodity;return PIP_STEPS.default};
 const pipValuePerLot=(s,p)=>{
 const step=pipStep(s),units=lotUnits(s);
 if(isETF(s))return step*units;
+if(isCommodity(s))return step*units;
+if(s.includes('XAG'))return step*units;
 if(s.includes('JPY')){
 const price=Number(p)||150;
 return(step*units)/price;
@@ -314,8 +336,8 @@ if(isQuoteUsd(s))return step*units;
 if(isBaseUsd(s))return units;
 return p>0?(step*units)/p:step*units;
 };
-const describePip=(s,p)=>{const perLot=pipValuePerLot(s,p||priceCache[s]||1);return isETF(s)?`1 lot ≈ ${formatMoney(perLot)} USD/point`:`1 lot ≈ ${formatMoney(perLot)} USD/pip`};
-const marginRequirement=(s,lots,p)=>{const l=Number(lots);if(!l)return 0;if(isETF(s)){const price=Number(p)||0,exp=price*l;return exp/CFG.leverage}if(isBaseUsd(s))return(lotUnits(s)*l)/CFG.leverage;const price=Number(p)||0,units=lotUnits(s),exp=price?price*units*l:units*l;return exp/CFG.leverage};
+const describePip=(s,p)=>{const perLot=pipValuePerLot(s,p||priceCache[s]||1);if(isCommodity(s))return `1 contrat ≈ ${formatMoney(perLot)} USD/point`;if(isETF(s))return `1 lot ≈ ${formatMoney(perLot)} USD/point`;return `1 lot ≈ ${formatMoney(perLot)} USD/pip`};
+const marginRequirement=(s,lots,p)=>{const l=Number(lots);if(!l)return 0;if(isETF(s)){const price=Number(p)||0,exp=price*l;return exp/CFG.leverage}if(isCommodity(s)){const price=Number(p)||0,exp=price*lotUnits(s)*l;return exp/CFG.leverage}if(isBaseUsd(s))return(lotUnits(s)*l)/CFG.leverage;const price=Number(p)||0,units=lotUnits(s),exp=price?price*units*l:units*l;return exp/CFG.leverage};
 
 const getYahooInterval=(tf)=>{if(tf==='1')return '1m';if(tf==='5')return '5m';if(tf==='15')return '15m';if(tf==='60')return '1h';if(tf==='240')return '1h';if(tf==='1D')return '1d';return '15m'};
 const getYahooRange=(tf)=>{if(tf==='1'||tf==='5')return '5d';if(tf==='15')return '1mo';if(tf==='60')return '3mo';if(tf==='240')return '3mo';if(tf==='1D')return '3mo';return '1mo'};
