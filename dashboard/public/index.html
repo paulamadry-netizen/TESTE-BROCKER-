@@ -546,18 +546,43 @@ html,body{height:100%;background:linear-gradient(135deg,var(--bg-primary) 0%,var
 <script>
 const CFG={ws:'wss://finnhub-proxy-477220862918.europe-west1.run.app',keepalive:2e4,reconBase:2e3,reconMax:3e4,baseLot:1e5,leverage:20};
 const WATCHLIST=[
-{tv:'OANDA:EURUSD',label:'EUR / USD',api:'EUR_USD',type:'forex',yahoo:'EURUSD=X'},
-{tv:'OANDA:USDJPY',label:'USD / JPY',api:'USD_JPY',type:'forex',yahoo:'USDJPY=X'},
-{tv:'OANDA:GBPUSD',label:'GBP / USD',api:'GBP_USD',type:'forex',yahoo:'GBPUSD=X'},
-{tv:'OANDA:USDCHF',label:'USD / CHF',api:'USD_CHF',type:'forex',yahoo:'USDCHF=X'},
-{tv:'OANDA:AUDUSD',label:'AUD / USD',api:'AUD_USD',type:'forex',yahoo:'AUDUSD=X'},
-{tv:'OANDA:XAUUSD',label:'Gold / USD',api:'XAU_USD',type:'metal',yahoo:'GC=F'},
-{tv:'NASDAQ:SPY',label:'SPY (S&P 500 ETF)',api:'SPY',type:'etf',yahoo:'SPY'},
-{tv:'NASDAQ:DIA',label:'DIA (Dow Jones ETF)',api:'DIA',type:'etf',yahoo:'DIA'},
-{tv:'NASDAQ:QQQ',label:'QQQ (Nasdaq 100 ETF)',api:'QQQ',type:'etf',yahoo:'QQQ'}
+  // Top 10 Forex Pairs
+  {tv:'OANDA:EURUSD',label:'EUR / USD',api:'EUR_USD',type:'forex',yahoo:'EURUSD=X'},
+  {tv:'OANDA:USDJPY',label:'USD / JPY',api:'USD_JPY',type:'forex',yahoo:'USDJPY=X'},
+  {tv:'OANDA:GBPUSD',label:'GBP / USD',api:'GBP_USD',type:'forex',yahoo:'GBPUSD=X'},
+  {tv:'OANDA:USDCHF',label:'USD / CHF',api:'USD_CHF',type:'forex',yahoo:'USDCHF=X'},
+  {tv:'OANDA:AUDUSD',label:'AUD / USD',api:'AUD_USD',type:'forex',yahoo:'AUDUSD=X'},
+  {tv:'OANDA:USDCAD',label:'USD / CAD',api:'USD_CAD',type:'forex',yahoo:'USDCAD=X'},
+  {tv:'OANDA:NZDUSD',label:'NZD / USD',api:'NZD_USD',type:'forex',yahoo:'NZDUSD=X'},
+  {tv:'OANDA:EURGBP',label:'EUR / GBP',api:'EUR_GBP',type:'forex',yahoo:'EURGBP=X'},
+  {tv:'OANDA:EURJPY',label:'EUR / JPY',api:'EUR_JPY',type:'forex',yahoo:'EURJPY=X'},
+  {tv:'OANDA:GBPJPY',label:'GBP / JPY',api:'GBP_JPY',type:'forex',yahoo:'GBPJPY=X'},
+  {tv:'OANDA:AUDCAD',label:'AUD / CAD',api:'AUD_CAD',type:'forex',yahoo:'AUDCAD=X'},
+  {tv:'OANDA:AUDNZD',label:'AUD / NZD',api:'AUD_NZD',type:'forex',yahoo:'AUDNZD=X'},
+  {tv:'OANDA:NZDJPY',label:'NZD / JPY',api:'NZD_JPY',type:'forex',yahoo:'NZDJPY=X'},
+  {tv:'OANDA:CHFJPY',label:'CHF / JPY',api:'CHF_JPY',type:'forex',yahoo:'CHFJPY=X'},
+  {tv:'OANDA:EURCHF',label:'EUR / CHF',api:'EUR_CHF',type:'forex',yahoo:'EURCHF=X'},
+  {tv:'OANDA:GBPCHF',label:'GBP / CHF',api:'GBP_CHF',type:'forex',yahoo:'GBPCHF=X'},
+  {tv:'OANDA:EURAUD',label:'EUR / AUD',api:'EUR_AUD',type:'forex',yahoo:'EURAUD=X'},
+  {tv:'OANDA:GBPAUD',label:'GBP / AUD',api:'GBP_AUD',type:'forex',yahoo:'GBPAUD=X'},
+  {tv:'OANDA:EURCAD',label:'EUR / CAD',api:'EUR_CAD',type:'forex',yahoo:'EURCAD=X'},
+  // Precious Metals
+  {tv:'OANDA:XAUUSD',label:'Or / USD',api:'XAU_USD',type:'metal',yahoo:'GC=F'},
+  {tv:'OANDA:XAGUSD',label:'Argent / USD',api:'XAG_USD',type:'metal',yahoo:'SI=F'},
+  // Industrial Metals
+  {tv:'TVC:COPPER',label:'Cuivre',api:'COPPER',type:'commodity',yahoo:'HG=F'},
+  {tv:'COMEX:ALI1!',label:'Aluminium',api:'ALUMINUM',type:'commodity',yahoo:'ALI=F'},
+  {tv:'MXC:ZINC',label:'Zinc',api:'ZINC',type:'commodity',yahoo:'ZNC=F'},
+  // Energy & Soft Commodities
+  {tv:'TVC:USOIL',label:'Petrole WTI',api:'WTICOUSD',type:'commodity',yahoo:'CL=F'},
+  {tv:'ICEUS:KC1!',label:'Cafe',api:'COFFEE',type:'commodity',yahoo:'KC=F'},
+  // ETFs
+  {tv:'NASDAQ:SPY',label:'SPY (S&P 500)',api:'SPY',type:'etf',yahoo:'SPY'},
+  {tv:'NASDAQ:DIA',label:'DIA (Dow Jones)',api:'DIA',type:'etf',yahoo:'DIA'},
+  {tv:'NASDAQ:QQQ',label:'QQQ (Nasdaq 100)',api:'QQQ',type:'etf',yahoo:'QQQ'}
 ];
 window.WATCHLIST=WATCHLIST;
-const PIP_STEPS={default:0.0001,jpy:0.01,xau:0.1,etf:0.01};
+const PIP_STEPS={default:0.0001,jpy:0.01,xau:0.1,xag:0.01,copper:0.001,oil:0.01,coffee:0.05,aluminum:1,zinc:1,etf:0.01};
 let ws,wsConnected=false,reconDelay=CFG.reconBase,reconAttempts=0,reconTimer,keepaliveTimer,currentSymbol=WATCHLIST[0],priceCache={},lastPriceUpdate={},positions=[],history=[],orders=[],simBalance=0,availableBalance=0,tvWidget,lwChart,lwSeries,activeModalId,debugMode=false,msgCount=0;
 let currentTimeframe='15',chartHistoryData={};
 let initialBalance=0,startOfDayBalance=0,todayStartDate=new Date().toDateString(),accountSuspended=false;
