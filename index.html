@@ -69,6 +69,9 @@ html,body{height:100%;background:linear-gradient(135deg,var(--bg-primary) 0%,var
 .wl-change{font-size:11px;margin-top:2px}
 .wl-change.positive{color:var(--success)}
 .wl-change.negative{color:var(--danger)}
+.filter-btn{transition:var(--transition)}
+.filter-btn:hover{background:var(--surface-elevated)!important;border-color:var(--border-light)!important;color:var(--text-primary)!important}
+.filter-btn.active{background:var(--accent)!important;color:#0a0e1a!important;border-color:var(--accent)!important}
 .chart-panel{flex:1;min-width:400px}
 .chart-toolbar{padding:8px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;background:var(--bg-tertiary)}
 .lot-selector{display:flex;align-items:center;gap:8px}
@@ -182,6 +185,20 @@ html,body{height:100%;background:linear-gradient(135deg,var(--bg-primary) 0%,var
 </div>
 </div>
 <div class="header-right">
+<select id="themeSelect" class="form-select" style="width:auto;padding:8px 12px;font-size:12px;margin-right:12px">
+<option value="dark-blue">Dark Blue</option>
+<option value="midnight-purple">Midnight Purple</option>
+<option value="matrix-green">Matrix Green</option>
+<option value="sunset-orange">Sunset Orange</option>
+<option value="arctic-blue">Arctic Blue</option>
+</select>
+<div class="account-stat" style="border-left:1px solid var(--border);padding-left:12px;margin-right:12px">
+<div class="stat-label"><i class="fas fa-user"></i> User</div>
+<div class="stat-value" id="userEmail" style="font-size:11px">—</div>
+</div>
+<button class="btn btn-ghost" onclick="window.logoutBroker()" style="padding:8px 12px;margin-right:12px">
+<i class="fas fa-sign-out-alt"></i> Logout
+</button>
 <div class="view-controls">
 <button class="icon-btn active" id="toggleWatchlist" title="Watchlist"><i class="fas fa-list-ul"></i></button>
 <button class="icon-btn active" id="toggleOrders" title="Ordres"><i class="fas fa-clock"></i></button>
@@ -194,7 +211,17 @@ html,body{height:100%;background:linear-gradient(135deg,var(--bg-primary) 0%,var
 </header>
 <div class="workspace">
 <div class="resizable-panel watchlist-panel" id="watchlistPanel">
-<div class="panel-header"><div class="panel-title"><i class="fas fa-list-ul"></i>Watchlist</div><div class="panel-controls"><button class="panel-btn" id="closeWatchlist" title="Fermer"><i class="fas fa-times"></i></button></div></div>
+<div class="panel-header">
+<div class="panel-title"><i class="fas fa-list-ul"></i>Watchlist</div>
+<div class="panel-controls"><button class="panel-btn" id="closeWatchlist" title="Fermer"><i class="fas fa-times"></i></button></div>
+</div>
+<div style="padding:8px 12px;border-bottom:1px solid var(--border);display:flex;gap:6px;flex-wrap:wrap">
+<button class="filter-btn active" data-filter="all" style="padding:4px 10px;border-radius:6px;border:1px solid var(--border);background:var(--accent);color:#0a0e1a;font-size:11px;font-weight:600;cursor:pointer">All</button>
+<button class="filter-btn" data-filter="forex" style="padding:4px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg-primary);color:var(--text-secondary);font-size:11px;font-weight:600;cursor:pointer">Forex</button>
+<button class="filter-btn" data-filter="metal" style="padding:4px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg-primary);color:var(--text-secondary);font-size:11px;font-weight:600;cursor:pointer">Metal</button>
+<button class="filter-btn" data-filter="etf" style="padding:4px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg-primary);color:var(--text-secondary);font-size:11px;font-weight:600;cursor:pointer">ETF</button>
+<button class="filter-btn" data-filter="commodity" style="padding:4px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg-primary);color:var(--text-secondary);font-size:11px;font-weight:600;cursor:pointer">Commodity</button>
+</div>
 <div class="panel-content" id="wlList"></div>
 <div class="resize-handle resize-handle-right"></div>
 </div>
@@ -223,6 +250,7 @@ html,body{height:100%;background:linear-gradient(135deg,var(--bg-primary) 0%,var
 <div class="panel-header"><div class="panel-title"><i class="fas fa-clock"></i>Ordres Limites</div><div class="panel-controls"><button class="panel-btn" id="closeOrders" title="Fermer"><i class="fas fa-times"></i></button></div></div>
 <form class="order-form" onsubmit="return false;">
 <div class="form-group"><label class="form-label"><i class="fas fa-coins"></i> Symbole</label><select id="ordSymbol" class="form-select"></select></div>
+<div class="form-group"><label class="form-label"><i class="fas fa-list"></i> Type d'ordre</label><select id="ordType" class="form-select"><option value="market">Market</option><option value="limit">Limit</option><option value="stop">Stop</option><option value="stop-limit">Stop-Limit</option></select></div>
 <div class="form-row">
 <div class="form-group"><label class="form-label"><i class="fas fa-exchange-alt"></i> Type</label><select id="ordSide" class="form-select"><option value="BUY">BUY</option><option value="SELL">SELL</option></select></div>
 <div class="form-group"><label class="form-label"><i class="fas fa-layer-group"></i> Lots</label><input id="ordSize" class="form-input" type="number" step="0.01" value="1"/></div>
@@ -276,28 +304,210 @@ html,body{height:100%;background:linear-gradient(135deg,var(--bg-primary) 0%,var
 </div>
 <div id="toast" class="toast"></div>
 <div id="debugPanel" class="debug-panel"></div>
-<script>
+<script type="module">
+// Firebase SDK Imports
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+import { getAuth, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+import { getFirestore, doc, getDoc, setDoc, collection, query, where, getDocs, updateDoc, deleteDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-functions.js';
+
+// Firebase Configuration
+const firebaseConfig = {
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_AUTH_DOMAIN",
+  projectId: "YOUR_PROJECT_ID",
+  storageBucket: "YOUR_STORAGE_BUCKET",
+  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+  appId: "YOUR_APP_ID"
+};
+
+// Initialize Firebase
+const firebaseApp = initializeApp(firebaseConfig);
+window.firebaseAuth = getAuth(firebaseApp);
+window.firebaseDb = getFirestore(firebaseApp);
+window.firebaseFunctions = getFunctions(firebaseApp);
+window.currentUser = null;
+
+// Authentication Check and Redirect
+onAuthStateChanged(window.firebaseAuth, async (user) => {
+  if (!user && window.location.pathname !== '/login.html') {
+    window.location.href = '/login.html';
+    return;
+  }
+  if (user) {
+    window.currentUser = user;
+    const userEmailEl = document.getElementById('userEmail');
+    if (userEmailEl) {
+      userEmailEl.textContent = user.email;
+    }
+    await loadBrokerData();
+  }
+});
+
+// Logout Function
+window.logoutBroker = async () => {
+  try {
+    await signOut(window.firebaseAuth);
+    window.location.href = '/login.html';
+  } catch (error) {
+    console.error('Logout error:', error);
+    showToast('❌ Erreur de déconnexion', 'error');
+  }
+};
+
+// Security: Block balance modification from console
+window.updateUserBalance = async () => {
+  console.warn('⚠️ SECURITY: Direct balance modification is blocked. All balance updates must go through Cloud Functions.');
+  return false;
+};
+
 const CFG={ws:'wss://finnhub-proxy-477220862918.europe-west1.run.app',keepalive:2e4,reconBase:2e3,reconMax:3e4,baseLot:1e5,leverage:20};
 const WATCHLIST=[
+// Forex pairs (21 total)
 {tv:'OANDA:EURUSD',label:'EUR / USD',api:'EUR_USD',type:'forex',yahoo:'EURUSD=X'},
 {tv:'OANDA:USDJPY',label:'USD / JPY',api:'USD_JPY',type:'forex',yahoo:'USDJPY=X'},
 {tv:'OANDA:GBPUSD',label:'GBP / USD',api:'GBP_USD',type:'forex',yahoo:'GBPUSD=X'},
 {tv:'OANDA:USDCHF',label:'USD / CHF',api:'USD_CHF',type:'forex',yahoo:'USDCHF=X'},
 {tv:'OANDA:AUDUSD',label:'AUD / USD',api:'AUD_USD',type:'forex',yahoo:'AUDUSD=X'},
+{tv:'OANDA:EURGBP',label:'EUR / GBP',api:'EUR_GBP',type:'forex',yahoo:'EURGBP=X'},
+{tv:'OANDA:EURJPY',label:'EUR / JPY',api:'EUR_JPY',type:'forex',yahoo:'EURJPY=X'},
+{tv:'OANDA:GBPJPY',label:'GBP / JPY',api:'GBP_JPY',type:'forex',yahoo:'GBPJPY=X'},
+{tv:'OANDA:EURCHF',label:'EUR / CHF',api:'EUR_CHF',type:'forex',yahoo:'EURCHF=X'},
+{tv:'OANDA:USDCAD',label:'USD / CAD',api:'USD_CAD',type:'forex',yahoo:'USDCAD=X'},
+{tv:'OANDA:NZDUSD',label:'NZD / USD',api:'NZD_USD',type:'forex',yahoo:'NZDUSD=X'},
+{tv:'OANDA:AUDJPY',label:'AUD / JPY',api:'AUD_JPY',type:'forex',yahoo:'AUDJPY=X'},
+{tv:'OANDA:GBPCHF',label:'GBP / CHF',api:'GBP_CHF',type:'forex',yahoo:'GBPCHF=X'},
+{tv:'OANDA:EURAUD',label:'EUR / AUD',api:'EUR_AUD',type:'forex',yahoo:'EURAUD=X'},
+{tv:'OANDA:GBPAUD',label:'GBP / AUD',api:'GBP_AUD',type:'forex',yahoo:'GBPAUD=X'},
+{tv:'OANDA:EURCAD',label:'EUR / CAD',api:'EUR_CAD',type:'forex',yahoo:'EURCAD=X'},
+{tv:'OANDA:AUDCAD',label:'AUD / CAD',api:'AUD_CAD',type:'forex',yahoo:'AUDCAD=X'},
+{tv:'OANDA:AUDNZD',label:'AUD / NZD',api:'AUD_NZD',type:'forex',yahoo:'AUDNZD=X'},
+{tv:'OANDA:NZDJPY',label:'NZD / JPY',api:'NZD_JPY',type:'forex',yahoo:'NZDJPY=X'},
+{tv:'OANDA:CHFJPY',label:'CHF / JPY',api:'CHF_JPY',type:'forex',yahoo:'CHFJPY=X'},
+{tv:'OANDA:CADJPY',label:'CAD / JPY',api:'CAD_JPY',type:'forex',yahoo:'CADJPY=X'},
+// Metals (2 total)
 {tv:'OANDA:XAUUSD',label:'Gold / USD',api:'XAU_USD',type:'metal',yahoo:'GC=F'},
+{tv:'OANDA:XAGUSD',label:'Silver / USD',api:'XAG_USD',type:'metal',yahoo:'SI=F'},
+// Commodities (4 total)
+{tv:'COMEX:COPPER',label:'Copper',api:'COPPER',type:'commodity',yahoo:'HG=F'},
+{tv:'COMEX:ZINC',label:'Zinc',api:'ZINC',type:'commodity',yahoo:'ZN=F'},
+{tv:'ICEUS:KC',label:'Coffee',api:'COFFEE',type:'commodity',yahoo:'KC=F'},
+{tv:'NYMEX:CL1!',label:'WTI Crude Oil',api:'WTI',type:'commodity',yahoo:'CL=F'},
+// ETFs (3 total)
 {tv:'NASDAQ:SPY',label:'SPY (S&P 500 ETF)',api:'SPY',type:'etf',yahoo:'SPY'},
 {tv:'NASDAQ:DIA',label:'DIA (Dow Jones ETF)',api:'DIA',type:'etf',yahoo:'DIA'},
 {tv:'NASDAQ:QQQ',label:'QQQ (Nasdaq 100 ETF)',api:'QQQ',type:'etf',yahoo:'QQQ'}
 ];
-const PIP_STEPS={default:0.0001,jpy:0.01,xau:0.1,etf:0.01};
+const PIP_STEPS={default:0.0001,jpy:0.01,xau:0.1,xag:0.01,etf:0.01,commodity:0.01};
+
+// Theme System - 5 Visual Themes
+const THEMES = {
+  'dark-blue': {
+    name: 'Dark Blue',
+    colors: {
+      '--bg-primary': '#0a0e1a',
+      '--bg-secondary': '#0f1419',
+      '--bg-tertiary': '#141925',
+      '--surface': '#1a1f2e',
+      '--surface-elevated': '#1f2433',
+      '--border': '#252b3d',
+      '--border-light': '#2d3548',
+      '--text-primary': '#e8edf4',
+      '--text-secondary': '#9ba3b4',
+      '--text-muted': '#6b7280',
+      '--accent': '#00d9b8',
+      '--accent-hover': '#00f0cc',
+      '--accent-dark': '#00b397'
+    }
+  },
+  'midnight-purple': {
+    name: 'Midnight Purple',
+    colors: {
+      '--bg-primary': '#0f0a1a',
+      '--bg-secondary': '#140f1f',
+      '--bg-tertiary': '#1a1425',
+      '--surface': '#1f1a2e',
+      '--surface-elevated': '#241f33',
+      '--border': '#2d253d',
+      '--border-light': '#352d48',
+      '--text-primary': '#f0e8f4',
+      '--text-secondary': '#b49ba3',
+      '--text-muted': '#806b72',
+      '--accent': '#b857ff',
+      '--accent-hover': '#c870ff',
+      '--accent-dark': '#9d3ff0'
+    }
+  },
+  'matrix-green': {
+    name: 'Matrix Green',
+    colors: {
+      '--bg-primary': '#0a1a0a',
+      '--bg-secondary': '#0f1f0f',
+      '--bg-tertiary': '#142514',
+      '--surface': '#1a2e1a',
+      '--surface-elevated': '#1f331f',
+      '--border': '#253d25',
+      '--border-light': '#2d482d',
+      '--text-primary': '#e8f4e8',
+      '--text-secondary': '#9ba39b',
+      '--text-muted': '#6b726b',
+      '--accent': '#00ff41',
+      '--accent-hover': '#33ff66',
+      '--accent-dark': '#00cc33'
+    }
+  },
+  'sunset-orange': {
+    name: 'Sunset Orange',
+    colors: {
+      '--bg-primary': '#1a0f0a',
+      '--bg-secondary': '#1f140f',
+      '--bg-tertiary': '#251a14',
+      '--surface': '#2e1f1a',
+      '--surface-elevated': '#33241f',
+      '--border': '#3d2d25',
+      '--border-light': '#48352d',
+      '--text-primary': '#f4ede8',
+      '--text-secondary': '#a39b9b',
+      '--text-muted': '#726b6b',
+      '--accent': '#ff6b35',
+      '--accent-hover': '#ff8555',
+      '--accent-dark': '#e05520'
+    }
+  },
+  'arctic-blue': {
+    name: 'Arctic Blue',
+    colors: {
+      '--bg-primary': '#0a1520',
+      '--bg-secondary': '#0f1a25',
+      '--bg-tertiary': '#14202a',
+      '--surface': '#1a2530',
+      '--surface-elevated': '#1f2a35',
+      '--border': '#253540',
+      '--border-light': '#2d3f4a',
+      '--text-primary': '#e8f2f8',
+      '--text-secondary': '#9babb4',
+      '--text-muted': '#6b7a82',
+      '--accent': '#00a8e8',
+      '--accent-hover': '#00c4ff',
+      '--accent-dark': '#0088bb'
+    }
+  }
+};
+
 let ws,wsConnected=false,reconDelay=CFG.reconBase,reconAttempts=0,reconTimer,keepaliveTimer,currentSymbol=WATCHLIST[0],priceCache={},lastPriceUpdate={},positions=[],history=[],orders=[],simBalance=50000,availableBalance=50000,tvWidget,lwChart,lwSeries,activeModalId,debugMode=false,msgCount=0;
-let currentTimeframe='15',chartHistoryData={};
+let currentTimeframe='15',chartHistoryData={},currentTheme='dark-blue',currentFilter='all';
 const $=(id)=>document.getElementById(id),debugLog=(msg)=>{if(!debugMode)return;const t=new Date().toLocaleTimeString();debugPanel.innerHTML+=`[${t}] ${msg}\n`;debugPanel.scrollTop=debugPanel.scrollHeight;console.log(`[DEBUG] ${msg}`)};
 $('debugToggle').onclick=()=>{debugMode=!debugMode;debugPanel.classList.toggle('active');debugPanel.innerHTML=debugMode?'=== DEBUG MODE ACTIVATED ===\n':''};
 const toastEl=$('toast');let toastTimer;
 const showToast=(msg,type='info',dur=2500)=>{if(toastTimer)clearTimeout(toastTimer);toastEl.textContent=msg;toastEl.className=`toast visible ${type}`;toastTimer=setTimeout(()=>toastEl.classList.remove('visible'),dur);debugLog(`Toast: ${msg}`)};
 const escapeId=(v)=>String(v).replace(/[^\w]/g,'_'),formatPrice=(v)=>{if(v===undefined||v===null)return'—';const n=Number(v);return currentSymbol&&currentSymbol.type==='etf'?n.toFixed(2):n.toFixed(5).replace(/\.?0+$/,'')},formatMoney=(v)=>v===undefined||v===null?'0.00':Number(v).toFixed(2),formatDateTime=(t)=>new Date(t).toLocaleString('fr-FR');
-const lotUnits=(s)=>{const o=WATCHLIST.find(w=>w.api===s);if(o&&o.type==='etf')return 1;return s.includes('XAU')?100:CFG.baseLot},isQuoteUsd=(s)=>s.endsWith('USD'),isBaseUsd=(s)=>s.startsWith('USD'),isETF=(s)=>{const o=WATCHLIST.find(w=>w.api===s);return o&&o.type==='etf'},pipStep=(s)=>isETF(s)?PIP_STEPS.etf:s.includes('JPY')?PIP_STEPS.jpy:s.includes('XAU')?PIP_STEPS.xau:PIP_STEPS.default;
+
+// Helper functions with commodity support
+const isCommodity=(s)=>{const o=WATCHLIST.find(w=>w.api===s);return o&&o.type==='commodity'};
+const lotUnits=(s)=>{const o=WATCHLIST.find(w=>w.api===s);if(o&&o.type==='etf')return 1;if(o&&o.type==='commodity')return 1000;if(s.includes('XAG'))return 5000;return s.includes('XAU')?100:CFG.baseLot};
+const isQuoteUsd=(s)=>s.endsWith('USD'),isBaseUsd=(s)=>s.startsWith('USD'),isETF=(s)=>{const o=WATCHLIST.find(w=>w.api===s);return o&&o.type==='etf'};
+const pipStep=(s)=>{if(isETF(s))return PIP_STEPS.etf;if(isCommodity(s))return PIP_STEPS.commodity;if(s.includes('XAG'))return PIP_STEPS.xag;if(s.includes('JPY'))return PIP_STEPS.jpy;if(s.includes('XAU'))return PIP_STEPS.xau;return PIP_STEPS.default};
+const describePip=(s,p)=>{if(isCommodity(s))return `1 contrat = ${lotUnits(s)} unités`;if(isETF(s))return `1 lot = 1 action`;const units=lotUnits(s);return `1 lot = ${units} unités`};
 const pipValuePerLot=(s,p)=>{
 const step=pipStep(s),units=lotUnits(s);
 if(isETF(s))return step*units;
@@ -314,8 +524,7 @@ if(isQuoteUsd(s))return step*units;
 if(isBaseUsd(s))return units;
 return p>0?(step*units)/p:step*units;
 };
-const describePip=(s,p)=>{const perLot=pipValuePerLot(s,p||priceCache[s]||1);return isETF(s)?`1 lot ≈ ${formatMoney(perLot)} USD/point`:`1 lot ≈ ${formatMoney(perLot)} USD/pip`};
-const marginRequirement=(s,lots,p)=>{const l=Number(lots);if(!l)return 0;if(isETF(s)){const price=Number(p)||0,exp=price*l;return exp/CFG.leverage}if(isBaseUsd(s))return(lotUnits(s)*l)/CFG.leverage;const price=Number(p)||0,units=lotUnits(s),exp=price?price*units*l:units*l;return exp/CFG.leverage};
+const marginRequirement=(s,lots,p)=>{const l=Number(lots);if(!l)return 0;if(isETF(s)||isCommodity(s)){const price=Number(p)||0,exp=price*l*lotUnits(s);return exp/CFG.leverage}if(isBaseUsd(s))return(lotUnits(s)*l)/CFG.leverage;const price=Number(p)||0,units=lotUnits(s),exp=price?price*units*l:units*l;return exp/CFG.leverage};
 
 const getYahooInterval=(tf)=>{if(tf==='1')return '1m';if(tf==='5')return '5m';if(tf==='15')return '15m';if(tf==='60')return '1h';if(tf==='240')return '1h';if(tf==='1D')return '1d';return '15m'};
 const getYahooRange=(tf)=>{if(tf==='1'||tf==='5')return '5d';if(tf==='15')return '1mo';if(tf==='60')return '3mo';if(tf==='240')return '3mo';if(tf==='1D')return '3mo';return '1mo'};
@@ -333,6 +542,13 @@ $('closeWatchlist').onclick=()=>togglePanel('watchlistPanel','toggleWatchlist');
 $('closeOrders').onclick=()=>togglePanel('ordersPanel','toggleOrders');
 $('closePositions').onclick=()=>togglePanel('bottomPanel','togglePositions');
 
+// Theme Management Functions
+const setTheme=(themeName)=>{if(!THEMES[themeName])return;currentTheme=themeName;const theme=THEMES[themeName];Object.entries(theme.colors).forEach(([key,value])=>{document.documentElement.style.setProperty(key,value)});localStorage.setItem('brokerTheme',themeName);debugLog(`Theme: ${theme.name}`)};
+const loadTheme=()=>{const saved=localStorage.getItem('brokerTheme')||'dark-blue';setTheme(saved);const selector=$('themeSelect');if(selector)selector.value=saved};
+
+// Watchlist Filter Functions
+const applyWatchlistFilter=(filterType)=>{currentFilter=filterType;document.querySelectorAll('.filter-btn').forEach(btn=>btn.classList.toggle('active',btn.dataset.filter===filterType));document.querySelectorAll('.wl-item').forEach(item=>{const symbol=item.dataset.symbol;const asset=WATCHLIST.find(w=>w.api===symbol);if(!asset){item.style.display='none';return}if(filterType==='all'){item.style.display='flex'}else if(filterType==='forex'&&asset.type==='forex'){item.style.display='flex'}else if(filterType==='metal'&&asset.type==='metal'){item.style.display='flex'}else if(filterType==='etf'&&asset.type==='etf'){item.style.display='flex'}else if(filterType==='commodity'&&asset.type==='commodity'){item.style.display='flex'}else{item.style.display='none'}})};
+
 const setWsStatus=(status)=>{const el=$('wsStatus');wsConnected=status==='connected';if(status==='connected'){el.className='status-badge connected';el.innerHTML='<div class="status-dot"></div><span>Connecté</span>'}else if(status==='connecting'){el.className='status-badge connecting';el.innerHTML='<div class="status-dot"></div><span>Connexion...</span>'}else{el.className='status-badge disconnected';el.innerHTML='<div class="status-dot"></div><span>Déconnecté</span>'}};
 const startKeepalive=()=>{stopKeepalive();keepaliveTimer=setInterval(()=>{if(ws&&ws.readyState===WebSocket.OPEN){try{ws.send(JSON.stringify({type:'ping'}));debugLog('Ping')}catch(e){debugLog(`Keepalive error: ${e.message}`)}}},CFG.keepalive)},stopKeepalive=()=>{if(keepaliveTimer){clearInterval(keepaliveTimer);keepaliveTimer=null}};
 const scheduleReconnect=()=>{stopKeepalive();if(reconTimer)clearTimeout(reconTimer);reconAttempts++;reconDelay=Math.min(CFG.reconMax,CFG.reconBase*Math.pow(1.5,reconAttempts));debugLog(`Reconnect #${reconAttempts} in ${reconDelay}ms`);reconTimer=setTimeout(()=>startWebSocket(),reconDelay)};
@@ -345,8 +561,18 @@ const checkPositionTargets=(symbol)=>{const price=priceCache[symbol];if(price===
 const checkOrdersForSymbol=(symbol)=>{const price=priceCache[symbol];if(price===undefined)return;const matches=orders.filter(o=>o.symbol===symbol&&((o.side==='BUY'&&price<=o.price)||(o.side==='SELL'&&price>=o.price)));matches.forEach(async m=>{const symObj=WATCHLIST.find(w=>w.api===m.symbol)||{label:m.symbol,tv:m.symbol,api:m.symbol,type:'forex'};debugLog(`Exec order: ${m.side} ${m.symbol}`);await openPosition(symObj,m.side,m.size,price,m.tp,m.sl);removeOrder(m.id)})};
 const computePnl=(pos)=>{const current=pos.current!==undefined?pos.current:priceCache[pos.symbol.api];if(current===undefined)return 0;const step=pipStep(pos.symbol.api),pipDiff=(current-pos.entry)/step,pipValue=pipValuePerLot(pos.symbol.api,current),pnlPerLot=pipDiff*pipValue*pos.size;return pos.side==='BUY'?pnlPerLot:-pnlPerLot};
 const getTotalMarginUsed=()=>positions.reduce((sum,pos)=>{const price=pos.current||priceCache[pos.symbol.api]||pos.entry;return sum+marginRequirement(pos.symbol.api,pos.size,price)},0)+orders.reduce((sum,ord)=>sum+ord.margin,0);
-const openPosition=async(symObj,side,lots=1,forcedEntry=null,tp=null,sl=null)=>{const resolvedLots=Number(lots);if(!resolvedLots||resolvedLots<=0){showToast('❌ Lots invalide','error');return false}let price=forcedEntry!==null?Number(forcedEntry):Number(priceCache[symObj.api]);if(!price||Number.isNaN(price)){showToast('❌ Prix indisponible','error');return false}const required=marginRequirement(symObj.api,resolvedLots,price);if(required>availableBalance){showToast('❌ Solde insuffisant','error');return false}availableBalance-=required;const pos={id:'pos_'+Date.now()+'_'+Math.random().toString(36).slice(2,7),symbol:symObj,side,entry:price,size:resolvedLots,current:price,tp:tp?Number(tp):null,sl:sl?Number(sl):null,openedAt:Date.now()};positions.unshift(pos);renderPositions();renderTotals();const displayPrice=symObj.type==='etf'?price.toFixed(2):formatPrice(price);showToast(`✅ ${side}: ${symObj.label} @ ${displayPrice}`,'success');debugLog(`Opened: ${JSON.stringify(pos)}`);return true};
-const closePosition=(id,lotsToSell=null)=>{const idx=positions.findIndex(p=>p.id===id);if(idx===-1)return;const pos=positions[idx],sellLots=lotsToSell!==null?Math.min(Number(lotsToSell),pos.size):pos.size;if(sellLots<=0)return;const closePrice=priceCache[pos.symbol.api]||pos.current,pnl=computePnl({...pos,size:sellLots,current:closePrice}),released=marginRequirement(pos.symbol.api,sellLots,closePrice);availableBalance+=released;availableBalance+=pnl;history.unshift({symbol:pos.symbol,side:pos.side,entry:pos.entry,close:closePrice,pnl,lots:sellLots,closedAt:Date.now()});if(sellLots<pos.size)pos.size-=sellLots;else positions.splice(idx,1);renderPositions();renderHistory();renderTotals();showToast(`✅ Fermé: ${formatMoney(pnl)} USD`,pnl>=0?'success':'error');debugLog(`Closed ${id}: ${pnl}`)};
+
+// Firestore Persistence Functions
+const loadBrokerData=async()=>{if(!window.currentUser)return;try{const userDoc=await getDoc(doc(window.firebaseDb,'users',window.currentUser.uid));if(userDoc.exists()){const data=userDoc.data();simBalance=data.balance||50000;availableBalance=simBalance;renderTotals();debugLog(`Loaded balance: ${simBalance}`)}const tradesQuery=query(collection(window.firebaseDb,'trades'),where('userId','==',window.currentUser.uid),where('status','==','open'));const tradesSnapshot=await getDocs(tradesQuery);tradesSnapshot.forEach(doc=>{const data=doc.data();positions.push({id:doc.id,symbol:WATCHLIST.find(w=>w.api===data.symbol)||{label:data.symbol,api:data.symbol,tv:data.symbol,type:'forex'},side:data.side,entry:data.entry,size:data.size,current:data.entry,tp:data.tp,sl:data.sl,openedAt:data.openedAt})});const ordersQuery=query(collection(window.firebaseDb,'orders'),where('userId','==',window.currentUser.uid),where('status','==','pending'));const ordersSnapshot=await getDocs(ordersQuery);ordersSnapshot.forEach(doc=>{const data=doc.data();orders.push({id:doc.id,symbol:data.symbol,side:data.side,price:data.price,size:data.size,tp:data.tp,sl:data.sl,margin:data.margin||0,createdAt:data.createdAt})});renderAll();debugLog(`Loaded ${positions.length} positions, ${orders.length} orders`)}catch(e){console.error('Load error:',e);showToast('⚠️ Erreur de chargement','warning')}};
+
+const openPosition=async(symObj,side,lots=1,forcedEntry=null,tp=null,sl=null)=>{const resolvedLots=Number(lots);if(!resolvedLots||resolvedLots<=0){showToast('❌ Lots invalide','error');return false}let price=forcedEntry!==null?Number(forcedEntry):Number(priceCache[symObj.api]);if(!price||Number.isNaN(price)){showToast('❌ Prix indisponible','error');return false}const required=marginRequirement(symObj.api,resolvedLots,price);if(required>availableBalance){showToast('❌ Solde insuffisant','error');return false}
+// Use Cloud Functions for execution validation
+if(window.firebaseFunctions&&window.currentUser){try{const executeTrade=httpsCallable(window.firebaseFunctions,'executeTrade');const result=await executeTrade({symbol:symObj.api,side,lots:resolvedLots,price,tp,sl});if(!result.data.success){showToast(`❌ ${result.data.error||'Erreur'}','error');return false}simBalance=result.data.newBalance;availableBalance=simBalance-getTotalMarginUsed();debugLog(`Cloud exec: ${result.data.tradeId}`)}catch(e){console.error('Cloud function error:',e);showToast('⚠️ Erreur serveur, mode local','warning')}}
+availableBalance-=required;const pos={id:'pos_'+Date.now()+'_'+Math.random().toString(36).slice(2,7),symbol:symObj,side,entry:price,size:resolvedLots,current:price,tp:tp?Number(tp):null,sl:sl?Number(sl):null,openedAt:Date.now()};positions.unshift(pos);renderPositions();renderTotals();const displayPrice=symObj.type==='etf'?price.toFixed(2):formatPrice(price);showToast(`✅ ${side}: ${symObj.label} @ ${displayPrice}`,'success');debugLog(`Opened: ${JSON.stringify(pos)}`);return true};
+const closePosition=async(id,lotsToSell=null)=>{const idx=positions.findIndex(p=>p.id===id);if(idx===-1)return;const pos=positions[idx],sellLots=lotsToSell!==null?Math.min(Number(lotsToSell),pos.size):pos.size;if(sellLots<=0)return;const closePrice=priceCache[pos.symbol.api]||pos.current,pnl=computePnl({...pos,size:sellLots,current:closePrice}),released=marginRequirement(pos.symbol.api,sellLots,closePrice);
+// Use Cloud Functions for close validation
+if(window.firebaseFunctions&&window.currentUser){try{const closeTrade=httpsCallable(window.firebaseFunctions,'closeTrade');const result=await closeTrade({tradeId:id,lots:sellLots,closePrice});if(result.data.success){simBalance=result.data.newBalance;availableBalance=simBalance-getTotalMarginUsed()}}catch(e){console.error('Cloud close error:',e)}}else{availableBalance+=released;availableBalance+=pnl}
+history.unshift({symbol:pos.symbol,side:pos.side,entry:pos.entry,close:closePrice,pnl,lots:sellLots,closedAt:Date.now()});if(sellLots<pos.size)pos.size-=sellLots;else positions.splice(idx,1);renderPositions();renderHistory();renderTotals();showToast(`✅ Fermé: ${formatMoney(pnl)} USD`,pnl>=0?'success':'error');debugLog(`Closed ${id}: ${pnl}`)};
 const addLimitOrder=(symbol,side,price,lots,tp,sl)=>{const resolvedLots=Number(lots),resolvedPrice=Number(price);if(!resolvedLots||!resolvedPrice){showToast('❌ Prix et lots requis','error');return}const required=marginRequirement(symbol,resolvedLots,resolvedPrice);if(required>availableBalance){showToast('❌ Solde insuffisant','error');return}availableBalance-=required;orders.push({id:'ord_'+Date.now()+'_'+Math.random().toString(36).slice(2,7),symbol,side,price:resolvedPrice,size:resolvedLots,tp:tp?Number(tp):null,sl:sl?Number(sl):null,margin:required,createdAt:Date.now()});renderOrders();renderTotals();showToast('✅ Ordre ajouté','success');debugLog(`Order: ${side} ${symbol}`)};
 const removeOrder=(id)=>{const order=orders.find(o=>o.id===id);if(order)availableBalance+=order.margin;orders=orders.filter(o=>o.id!==id);renderOrders();renderTotals();showToast('✅ Ordre annulé','info');debugLog(`Removed: ${id}`)};
 const renderPositions=()=>{const tbody=$('positionsBody');tbody.innerHTML='';if(positions.length===0){tbody.innerHTML='<tr><td colspan="7" class="empty-state">Aucune position</td></tr>';return}positions.forEach(pos=>{const current=pos.current!==undefined?pos.current:priceCache[pos.symbol.api];pos.current=current;const pnl=computePnl(pos),pnlClass=pnl>=0?'positive':'negative',tr=document.createElement('tr');tr.innerHTML=`<td><div class="symbol-cell">${pos.symbol.label}</div><div class="symbol-label">${pos.symbol.tv}</div></td><td><span class="side-badge ${pos.side.toLowerCase()}">${pos.side}</span></td><td>${formatPrice(pos.entry)}</td><td>${formatPrice(current)}</td><td>${pos.size}</td><td><span class="pnl-value ${pnlClass}">${formatMoney(pnl)}</span></td><td><div class="action-buttons"><button class="btn-action" data-id="${pos.id}"><i class="fas fa-cog"></i></button><button class="btn-action" data-close="${pos.id}"><i class="fas fa-times"></i></button></div></td>`;tbody.appendChild(tr)});tbody.querySelectorAll('button[data-id]').forEach(btn=>btn.onclick=()=>openPositionModal(btn.dataset.id));tbody.querySelectorAll('button[data-close]').forEach(btn=>btn.onclick=()=>closePosition(btn.dataset.close))};
@@ -374,6 +600,19 @@ document.querySelectorAll('.timeframe-btn').forEach(btn=>btn.addEventListener('c
 
 window.closePosition=closePosition;window.removeOrder=removeOrder;
 console.log('🚀 AmABrocker');
+
+// Initialize theme selector
+const themeSelect=$('themeSelect');
+if(themeSelect){
+themeSelect.addEventListener('change',e=>setTheme(e.target.value));
+loadTheme();
+}
+
+// Initialize filter buttons
+document.querySelectorAll('.filter-btn').forEach(btn=>{
+btn.addEventListener('click',()=>applyWatchlistFilter(btn.dataset.filter));
+});
+
 initResizable();renderAll();selectSymbol(WATCHLIST[0]);startWebSocket();
 debugLog('=== INITIALIZED ===');
 </script>
