@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Login - AmABrocker</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+body {
+  font-family: 'Inter', sans-serif;
+  background: linear-gradient(135deg, #0a0e1a 0%, #0f1419 100%);
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #e8edf4;
+}
+.login-container {
+  background: #1a1f2e;
+  border: 1px solid #252b3d;
+  border-radius: 16px;
+  padding: 48px;
+  width: 100%;
+  max-width: 420px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+}
+.logo {
+  text-align: center;
+  margin-bottom: 32px;
+}
+.logo h1 {
+  font-size: 32px;
+  font-weight: 700;
+  background: linear-gradient(135deg, #00d9b8, #00f0cc);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  margin-bottom: 8px;
+}
+.logo p {
+  color: #9ba3b4;
+  font-size: 14px;
+}
+.form-group {
+  margin-bottom: 24px;
+}
+.form-group label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #9ba3b4;
+}
+.form-group input {
+  width: 100%;
+  padding: 12px 16px;
+  background: #0f1419;
+  border: 1px solid #252b3d;
+  border-radius: 8px;
+  color: #e8edf4;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+.form-group input:focus {
+  outline: none;
+  border-color: #00d9b8;
+  box-shadow: 0 0 0 3px rgba(0, 217, 184, 0.1);
+}
+.btn-login {
+  width: 100%;
+  padding: 14px;
+  background: linear-gradient(135deg, #00d9b8, #00f0cc);
+  border: none;
+  border-radius: 8px;
+  color: #0a0e1a;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.btn-login:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 217, 184, 0.3);
+}
+.btn-login:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+.error-message {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid #ef4444;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 24px;
+  color: #ef4444;
+  font-size: 14px;
+  display: none;
+}
+.error-message.show {
+  display: block;
+}
+.loading {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid #0a0e1a;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+.dashboard-link {
+  text-align: center;
+  margin-top: 24px;
+  font-size: 14px;
+  color: #9ba3b4;
+}
+.dashboard-link a {
+  color: #00d9b8;
+  text-decoration: none;
+}
+.dashboard-link a:hover {
+  text-decoration: underline;
+}
+</style>
+</head>
+<body>
+<div class="login-container">
+  <div class="logo">
+    <h1>AmABrocker</h1>
+    <p>Pro Trading Platform</p>
+  </div>
+
+  <div id="errorMessage" class="error-message"></div>
+
+  <form id="loginForm">
+    <div class="form-group">
+      <label for="email">Email</label>
+      <input type="email" id="email" placeholder="your@email.com" required autocomplete="email">
+    </div>
+
+    <div class="form-group">
+      <label for="password">Password</label>
+      <input type="password" id="password" placeholder="••••••••" required autocomplete="current-password">
+    </div>
+
+    <button type="submit" class="btn-login" id="loginBtn">
+      <span id="btnText">Login</span>
+    </button>
+  </form>
+
+  <div class="dashboard-link">
+    Don't have an account? <a href="/dashboard">Go to Dashboard</a>
+  </div>
+</div>
+
+<script type="module">
+  import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+  import { getAuth, signInWithEmailAndPassword } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyBCAeaaJMMw3_Egf-6-4i63IhAUy4EyzBc",
+    authDomain: "teste-brocker.firebaseapp.com",
+    projectId: "teste-brocker",
+    storageBucket: "teste-brocker.firebasestorage.app",
+    messagingSenderId: "44407447466",
+    appId: "1:44407447466:web:ce5fde6a8104a1b82bd5d3",
+    measurementId: "G-MHKNE6H1ZS"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+
+  const loginForm = document.getElementById('loginForm');
+  const emailInput = document.getElementById('email');
+  const passwordInput = document.getElementById('password');
+  const loginBtn = document.getElementById('loginBtn');
+  const btnText = document.getElementById('btnText');
+  const errorMessage = document.getElementById('errorMessage');
+
+  function showError(message) {
+    errorMessage.textContent = message;
+    errorMessage.classList.add('show');
+    setTimeout(() => {
+      errorMessage.classList.remove('show');
+    }, 5000);
+  }
+
+  loginForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const email = emailInput.value.trim();
+    const password = passwordInput.value;
+
+    if (!email || !password) {
+      showError('Please fill in all fields');
+      return;
+    }
+
+    loginBtn.disabled = true;
+    btnText.innerHTML = '<span class="loading"></span>';
+
+    try {
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      console.log('✅ Login successful:', userCredential.user.uid);
+
+      // Redirect to broker
+      window.location.href = '/index.html';
+    } catch (error) {
+      console.error('❌ Login error:', error);
+
+      let errorMsg = 'Login failed. Please try again.';
+      if (error.code === 'auth/user-not-found') {
+        errorMsg = 'No account found with this email';
+      } else if (error.code === 'auth/wrong-password') {
+        errorMsg = 'Incorrect password';
+      } else if (error.code === 'auth/invalid-email') {
+        errorMsg = 'Invalid email address';
+      } else if (error.code === 'auth/too-many-requests') {
+        errorMsg = 'Too many failed attempts. Please try again later';
+      }
+
+      showError(errorMsg);
+      loginBtn.disabled = false;
+      btnText.textContent = 'Login';
+    }
+  });
+</script>
+</body>
+</html>
