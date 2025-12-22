@@ -580,6 +580,7 @@ reconTimerNew=setTimeout(startWebSocketNew,reconDelayNew);
 
 const setWsStatus=(status)=>{
 const el=document.getElementById('wsStatus');
+if(!el)return;
 const anyConnected=wsConnected||wsNewConnected;
 if(status==='connected'&&anyConnected){
 el.className='status-badge connected';
@@ -838,7 +839,8 @@ container.innerHTML=WATCHLIST.map(sym=>`
 function init(){
 log('Initializing ForexSim Pro');
 initWatchlist();
-startWebSocket();startWebSocketNew();
+startWebSocket();
+startWebSocketNew();
 setInterval(updatePositions,1000);
 }
 
