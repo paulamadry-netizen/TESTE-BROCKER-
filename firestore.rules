@@ -1,0 +1,98 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ==========================================
+    // HELPER FUNCTIONS
+    // ==========================================
+
+    // Vérifier si l'utilisateur est authentifié
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Vérifier si l'utilisateur est admin
+    function isAdmin() {
+      return isAuthenticated() &&
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // Vérifier si l'utilisateur accède à ses propres données
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // ==========================================
+    // USERS COLLECTION
+    // ==========================================
+    match /users/{userId} {
+      // Lecture: uniquement ses propres données OU admin
+      allow read: if isOwner(userId) || isAdmin();
+
+      // Écriture: JAMAIS depuis le client
+      // Uniquement via Cloud Functions sécurisées
+      allow write: if false;
+    }
+
+    // ==========================================
+    // TRADES COLLECTION
+    // ==========================================
+    match /trades/{tradeId} {
+      // Lecture: uniquement ses propres trades OU admin
+      allow read: if isAuthenticated() &&
+                     (resource.data.userId == request.auth.uid || isAdmin());
+
+      // Écriture: JAMAIS depuis le client
+      // Tous les trades doivent passer par Cloud Functions
+      allow write: if false;
+    }
+
+    // ==========================================
+    // ORDERS COLLECTION (ordres limites)
+    // ==========================================
+    match /orders/{orderId} {
+      // Lecture: uniquement ses propres ordres OU admin
+      allow read: if isAuthenticated() &&
+                     (resource.data.userId == request.auth.uid || isAdmin());
+
+      // Écriture: JAMAIS depuis le client
+      allow write: if false;
+    }
+
+    // ==========================================
+    // AUDIT LOGS (lecture seule pour admin)
+    // ==========================================
+    match /audit_logs/{logId} {
+      allow read: if isAdmin();
+      allow write: if false;  // Uniquement via Cloud Functions
+    }
+
+    // ==========================================
+    // PAYOUT REQUESTS
+    // ==========================================
+    match /payout_requests/{requestId} {
+      // Lecture: ses propres demandes OU admin
+      allow read: if isAuthenticated() &&
+                     (resource.data.userId == request.auth.uid || isAdmin());
+
+      // Écriture: JAMAIS depuis le client
+      allow write: if false;
+    }
+
+    // ==========================================
+    // PRICE SNAPSHOTS (audit des prix)
+    // ==========================================
+    match /price_snapshots/{snapshotId} {
+      allow read: if isAuthenticated();  // Tous peuvent lire
+      allow write: if false;  // Uniquement Cloud Functions
+    }
+
+    // ==========================================
+    // DÉFAUT: TOUT BLOQUER
+    // ==========================================
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

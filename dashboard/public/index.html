@@ -546,40 +546,31 @@ html,body{height:100%;background:linear-gradient(135deg,var(--bg-primary) 0%,var
 <script>
 const CFG={ws:'wss://finnhub-proxy-477220862918.europe-west1.run.app',keepalive:2e4,reconBase:2e3,reconMax:3e4,baseLot:1e5,leverage:20};
 const WATCHLIST=[
-  // Top 10 Forex Pairs
-  {tv:'OANDA:EURUSD',label:'EUR / USD',api:'EUR_USD',type:'forex',yahoo:'EURUSD=X'},
-  {tv:'OANDA:USDJPY',label:'USD / JPY',api:'USD_JPY',type:'forex',yahoo:'USDJPY=X'},
-  {tv:'OANDA:GBPUSD',label:'GBP / USD',api:'GBP_USD',type:'forex',yahoo:'GBPUSD=X'},
-  {tv:'OANDA:USDCHF',label:'USD / CHF',api:'USD_CHF',type:'forex',yahoo:'USDCHF=X'},
-  {tv:'OANDA:AUDUSD',label:'AUD / USD',api:'AUD_USD',type:'forex',yahoo:'AUDUSD=X'},
-  {tv:'OANDA:USDCAD',label:'USD / CAD',api:'USD_CAD',type:'forex',yahoo:'USDCAD=X'},
-  {tv:'OANDA:NZDUSD',label:'NZD / USD',api:'NZD_USD',type:'forex',yahoo:'NZDUSD=X'},
-  {tv:'OANDA:EURGBP',label:'EUR / GBP',api:'EUR_GBP',type:'forex',yahoo:'EURGBP=X'},
-  {tv:'OANDA:EURJPY',label:'EUR / JPY',api:'EUR_JPY',type:'forex',yahoo:'EURJPY=X'},
-  {tv:'OANDA:GBPJPY',label:'GBP / JPY',api:'GBP_JPY',type:'forex',yahoo:'GBPJPY=X'},
-  {tv:'OANDA:AUDCAD',label:'AUD / CAD',api:'AUD_CAD',type:'forex',yahoo:'AUDCAD=X'},
-  {tv:'OANDA:AUDNZD',label:'AUD / NZD',api:'AUD_NZD',type:'forex',yahoo:'AUDNZD=X'},
-  {tv:'OANDA:NZDJPY',label:'NZD / JPY',api:'NZD_JPY',type:'forex',yahoo:'NZDJPY=X'},
-  {tv:'OANDA:CHFJPY',label:'CHF / JPY',api:'CHF_JPY',type:'forex',yahoo:'CHFJPY=X'},
-  {tv:'OANDA:EURCHF',label:'EUR / CHF',api:'EUR_CHF',type:'forex',yahoo:'EURCHF=X'},
-  {tv:'OANDA:GBPCHF',label:'GBP / CHF',api:'GBP_CHF',type:'forex',yahoo:'GBPCHF=X'},
-  {tv:'OANDA:EURAUD',label:'EUR / AUD',api:'EUR_AUD',type:'forex',yahoo:'EURAUD=X'},
-  {tv:'OANDA:GBPAUD',label:'GBP / AUD',api:'GBP_AUD',type:'forex',yahoo:'GBPAUD=X'},
-  {tv:'OANDA:EURCAD',label:'EUR / CAD',api:'EUR_CAD',type:'forex',yahoo:'EURCAD=X'},
-  // Precious Metals
-  {tv:'OANDA:XAUUSD',label:'Or / USD',api:'XAU_USD',type:'metal',yahoo:'GC=F'},
-  {tv:'OANDA:XAGUSD',label:'Argent / USD',api:'XAG_USD',type:'metal',yahoo:'SI=F'},
-  // Industrial Metals
-  {tv:'TVC:COPPER',label:'Cuivre',api:'COPPER',type:'commodity',yahoo:'HG=F'},
-  {tv:'COMEX:ALI1!',label:'Aluminium',api:'ALUMINUM',type:'commodity',yahoo:'ALI=F'},
-  {tv:'MXC:ZINC',label:'Zinc',api:'ZINC',type:'commodity',yahoo:'ZNC=F'},
-  // Energy & Soft Commodities
-  {tv:'TVC:USOIL',label:'Petrole WTI',api:'WTICOUSD',type:'commodity',yahoo:'CL=F'},
-  {tv:'ICEUS:KC1!',label:'Cafe',api:'COFFEE',type:'commodity',yahoo:'KC=F'},
-  // ETFs
-  {tv:'NASDAQ:SPY',label:'SPY (S&P 500)',api:'SPY',type:'etf',yahoo:'SPY'},
-  {tv:'NASDAQ:DIA',label:'DIA (Dow Jones)',api:'DIA',type:'etf',yahoo:'DIA'},
-  {tv:'NASDAQ:QQQ',label:'QQQ (Nasdaq 100)',api:'QQQ',type:'etf',yahoo:'QQQ'}
+// Top 10 Forex Pairs
+{tv:'OANDA:EURUSD',label:'EUR / USD',api:'EUR_USD',type:'forex',yahoo:'EURUSD=X'},
+{tv:'OANDA:USDJPY',label:'USD / JPY',api:'USD_JPY',type:'forex',yahoo:'USDJPY=X'},
+{tv:'OANDA:GBPUSD',label:'GBP / USD',api:'GBP_USD',type:'forex',yahoo:'GBPUSD=X'},
+{tv:'OANDA:USDCHF',label:'USD / CHF',api:'USD_CHF',type:'forex',yahoo:'USDCHF=X'},
+{tv:'OANDA:AUDUSD',label:'AUD / USD',api:'AUD_USD',type:'forex',yahoo:'AUDUSD=X'},
+{tv:'OANDA:USDCAD',label:'USD / CAD',api:'USD_CAD',type:'forex',yahoo:'USDCAD=X'},
+{tv:'OANDA:NZDUSD',label:'NZD / USD',api:'NZD_USD',type:'forex',yahoo:'NZDUSD=X'},
+{tv:'OANDA:EURGBP',label:'EUR / GBP',api:'EUR_GBP',type:'forex',yahoo:'EURGBP=X'},
+{tv:'OANDA:EURJPY',label:'EUR / JPY',api:'EUR_JPY',type:'forex',yahoo:'EURJPY=X'},
+{tv:'OANDA:GBPJPY',label:'GBP / JPY',api:'GBP_JPY',type:'forex',yahoo:'GBPJPY=X'},
+// Precious Metals
+{tv:'OANDA:XAUUSD',label:'Or / USD',api:'XAU_USD',type:'metal',yahoo:'GC=F'},
+{tv:'OANDA:XAGUSD',label:'Argent / USD',api:'XAG_USD',type:'metal',yahoo:'SI=F'},
+// Industrial Metals
+{tv:'TVC:COPPER',label:'Cuivre',api:'COPPER',type:'commodity',yahoo:'HG=F'},
+{tv:'COMEX:ALI1!',label:'Aluminium',api:'ALUMINUM',type:'commodity',yahoo:'ALI=F'},
+{tv:'MXC:ZINC',label:'Zinc',api:'ZINC',type:'commodity',yahoo:'ZNC=F'},
+// Energy & Soft Commodities
+{tv:'TVC:USOIL',label:'Petrole WTI',api:'WTICOUSD',type:'commodity',yahoo:'CL=F'},
+{tv:'ICEUS:KC1!',label:'Cafe',api:'COFFEE',type:'commodity',yahoo:'KC=F'},
+// ETFs
+{tv:'NASDAQ:SPY',label:'SPY (S&P 500)',api:'SPY',type:'etf',yahoo:'SPY'},
+{tv:'NASDAQ:DIA',label:'DIA (Dow Jones)',api:'DIA',type:'etf',yahoo:'DIA'},
+{tv:'NASDAQ:QQQ',label:'QQQ (Nasdaq 100)',api:'QQQ',type:'etf',yahoo:'QQQ'}
 ];
 window.WATCHLIST=WATCHLIST;
 const PIP_STEPS={default:0.0001,jpy:0.01,xau:0.1,xag:0.01,copper:0.001,oil:0.01,coffee:0.05,aluminum:1,zinc:1,etf:0.01};
@@ -625,8 +616,8 @@ const checkTotalDrawdown=()=>({violated:false});
 const closeAllPositions=async()=>{debugLog('⚠️ Closing all positions...');const positionsCopy=[...positions];for(const pos of positionsCopy){await closePosition(pos.id)}debugLog('✅ All positions closed')};
 const suspendAccount=async(reason)=>{accountSuspended=true;showToast(`🚫 COMPTE SUSPENDU: ${reason}`,'error',10000);await closeAllPositions();if(window.firebaseUser&&window.firestoreDoc&&window.firestoreUpdateDoc){try{const userDocRef=window.firestoreDoc(window.firebaseDb,'users',window.firebaseUser.uid);await window.firestoreUpdateDoc(userDocRef,{accountStatus:'suspended',suspensionReason:reason,suspendedAt:new Date().toISOString()});debugLog(`Account suspended in Firestore: ${reason}`);alert(`⚠️ COMPTE DÉSACTIVÉ\n\n${reason}\n\nVotre compte a été suspendu pour violation des règles de trading.\nVeuillez contacter le support.`)}catch(error){console.error('Error suspending account:',error)}}};
 const checkAllRules=async()=>{return false};
-const escapeId=(v)=>String(v).replace(/[^\w]/g,'_'),formatPrice=(v)=>{if(v===undefined||v===null)return'—';const n=Number(v);return currentSymbol&&currentSymbol.type==='etf'?n.toFixed(2):n.toFixed(5).replace(/\.?0+$/,'')},formatMoney=(v)=>v===undefined||v===null?'0.00':Number(v).toFixed(2),formatDateTime=(t)=>new Date(t).toLocaleString('fr-FR');
-const lotUnits=(s)=>{const o=WATCHLIST.find(w=>w.api===s);if(o&&o.type==='etf')return 1;return s.includes('XAU')?100:CFG.baseLot},isQuoteUsd=(s)=>s.endsWith('USD'),isBaseUsd=(s)=>s.startsWith('USD'),isETF=(s)=>{const o=WATCHLIST.find(w=>w.api===s);return o&&o.type==='etf'},pipStep=(s)=>isETF(s)?PIP_STEPS.etf:s.includes('JPY')?PIP_STEPS.jpy:s.includes('XAU')?PIP_STEPS.xau:PIP_STEPS.default;
+const escapeId=(v)=>String(v).replace(/[^\w]/g,'_'),formatPrice=(v,sym=null)=>{if(v===undefined||v===null)return'—';const n=Number(v);const s=sym||currentSymbol;if(s&&s.type==='etf')return n.toFixed(2);if(s&&(s.type==='commodity'||s.type==='metal'))return n.toFixed(4);if(s&&s.api&&(s.api.includes('JPY')))return n.toFixed(3);return n.toFixed(5).replace(/\.?0+$/,'')},formatMoney=(v)=>v===undefined||v===null?'0.00':Number(v).toFixed(2),formatDateTime=(t)=>new Date(t).toLocaleString('fr-FR');
+const lotUnits=(s)=>{const o=WATCHLIST.find(w=>w.api===s);if(o&&o.type==='etf')return 1;if(o&&o.type==='commodity')return 100;return s.includes('XAU')||s.includes('XAG')?100:CFG.baseLot},isQuoteUsd=(s)=>s.endsWith('USD'),isBaseUsd=(s)=>s.startsWith('USD'),isETF=(s)=>{const o=WATCHLIST.find(w=>w.api===s);return o&&o.type==='etf'},isCommodity=(s)=>{const o=WATCHLIST.find(w=>w.api===s);return o&&(o.type==='commodity'||o.type==='metal')},pipStep=(s)=>{if(isETF(s))return PIP_STEPS.etf;if(s.includes('XAG')||s==='XAG_USD')return PIP_STEPS.xag;if(s.includes('XAU'))return PIP_STEPS.xau;if(s==='COPPER')return PIP_STEPS.copper;if(s==='WTICOUSD')return PIP_STEPS.oil;if(s==='COFFEE')return PIP_STEPS.coffee;if(s==='ALUMINUM')return PIP_STEPS.aluminum;if(s==='ZINC')return PIP_STEPS.zinc;if(s.includes('JPY'))return PIP_STEPS.jpy;return PIP_STEPS.default};
 const pipValuePerLot=(s,p)=>{
 const step=pipStep(s),units=lotUnits(s);
 if(isETF(s))return step*units;
@@ -638,13 +629,13 @@ if(s.includes('CHF')&&isBaseUsd(s)){
 const price=Number(p)||0.9;
 return(step*units)/price;
 }
-if(s.includes('XAU'))return step*units;
+if(s.includes('XAU')||s.includes('XAG')||isCommodity(s))return step*units;
 if(isQuoteUsd(s))return step*units;
 if(isBaseUsd(s))return units;
 return p>0?(step*units)/p:step*units;
 };
 const describePip=(s,p)=>{const perLot=pipValuePerLot(s,p||priceCache[s]||1);return isETF(s)?`1 lot ≈ ${formatMoney(perLot)} USD/point`:`1 lot ≈ ${formatMoney(perLot)} USD/pip`};
-const marginRequirement=(s,lots,p)=>{const l=Number(lots);if(!l)return 0;if(isETF(s)){const price=Number(p)||0,exp=price*l;return exp/CFG.leverage}if(isBaseUsd(s))return(lotUnits(s)*l)/CFG.leverage;const price=Number(p)||0,units=lotUnits(s),exp=price?price*units*l:units*l;return exp/CFG.leverage};
+const marginRequirement=(s,lots,p)=>{const l=Number(lots);if(!l)return 0;if(isETF(s)){const price=Number(p)||0,exp=price*l;return exp/CFG.leverage}if(isCommodity(s)){const price=Number(p)||0,units=lotUnits(s),exp=price*units*l;return exp/CFG.leverage}if(isBaseUsd(s))return(lotUnits(s)*l)/CFG.leverage;const price=Number(p)||0,units=lotUnits(s),exp=price?price*units*l:units*l;return exp/CFG.leverage};
 
 const getYahooInterval=(tf)=>{if(tf==='1')return '1m';if(tf==='5')return '5m';if(tf==='15')return '15m';if(tf==='60')return '1h';if(tf==='240')return '1h';if(tf==='1D')return '1d';return '15m'};
 const getYahooRange=(tf)=>{if(tf==='1'||tf==='5')return '5d';if(tf==='15')return '1mo';if(tf==='60')return '3mo';if(tf==='240')return '3mo';if(tf==='1D')return '3mo';return '1mo'};

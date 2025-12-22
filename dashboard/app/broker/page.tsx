@@ -4,8 +4,8 @@ import { useEffect } from "react";
 
 export default function BrokerRedirect() {
   useEffect(() => {
-    // Redirect to broker.html in public folder
-    window.location.href = "/broker.html";
+    // Redirect to index.html (broker) in public folder
+    window.location.href = "/index.html";
   }, []);
 
   return (

@@ -121,7 +121,7 @@ export default function ChallengePage() {
       status: "PASSED",
       current: 0,
       target: 0,
-      critical: false,
+      critical: true,
     },
     {
       name: t("challenge.weekendPositions"),
@@ -129,7 +129,7 @@ export default function ChallengePage() {
       status: "PASSED",
       current: 0,
       target: 0,
-      critical: false,
+      critical: true,
     },
   ];
 
@@ -352,10 +352,10 @@ export default function ChallengePage() {
               </div>
               <div className="text-right">
                 <p className="text-2xl font-bold">
-                  {userData.tradingDays} {t("challenge.days")}
+                  {userData.tradingDays} / 30
                 </p>
-                <Badge variant={userData.tradingDays >= 3 ? "success" : "secondary"}>
-                  {userData.tradingDays >= 3 ? t("challenge.requirementMet") : t("challenge.inProgress")}
+                <Badge variant={userData.tradingDays >= 5 ? "success" : "secondary"}>
+                  {userData.tradingDays >= 5 ? t("challenge.requirementMet") : t("challenge.inProgress")}
                 </Badge>
               </div>
             </div>
@@ -363,7 +363,7 @@ export default function ChallengePage() {
               <div
                 className="h-full bg-blue-500 transition-all"
                 style={{
-                  width: `${Math.min((userData.tradingDays / 3) * 100, 100)}%`,
+                  width: `${(userData.tradingDays / 30) * 100}%`,
                 }}
               />
             </div>

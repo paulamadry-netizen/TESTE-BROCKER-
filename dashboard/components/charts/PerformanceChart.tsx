@@ -85,7 +85,6 @@ export function PerformanceChart({ data }: PerformanceChartProps) {
   const initialBalance = data.length > 0 ? data[0].balance : 0;
   const profitTarget = initialBalance * 1.10; // +10% target
   const maxDrawdown = initialBalance * 0.92; // -8% max drawdown
-  const dailyDrawdown = initialBalance * 0.97; // -3% daily max loss
 
   // Calculate current balance and performance
   const currentBalance = data.length > 0 ? data[data.length - 1].balance : initialBalance;
@@ -96,14 +95,6 @@ export function PerformanceChart({ data }: PerformanceChartProps) {
   // Determine line color based on performance
   const lineColor = isPositive ? "#10b981" : "#ef4444"; // Green or Red
   const areaFillUrl = isPositive ? "url(#colorGreen)" : "url(#colorRed)";
-
-  // Calculate Y-axis domain to fit data and reference lines with padding
-  const balances = data.map(d => d.balance);
-  const minBalance = Math.min(...balances, maxDrawdown);
-  const maxBalance = Math.max(...balances, profitTarget);
-  const padding = (maxBalance - minBalance) * 0.1; // 10% padding
-  const yMin = minBalance - padding;
-  const yMax = maxBalance + padding;
 
   return (
     <Card className="col-span-4">
@@ -167,7 +158,7 @@ export function PerformanceChart({ data }: PerformanceChartProps) {
               axisLine={{ stroke: 'hsl(var(--border))', strokeWidth: 1 }}
             />
 
-            {/* Y Axis - USD amounts with dynamic domain */}
+            {/* Y Axis - USD amounts */}
             <YAxis
               tickFormatter={formatYAxis}
               tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
@@ -175,7 +166,6 @@ export function PerformanceChart({ data }: PerformanceChartProps) {
               tickLine={false}
               axisLine={{ stroke: 'hsl(var(--border))', strokeWidth: 1 }}
               width={60}
-              domain={[yMin, yMax]}
             />
 
             {/* Custom Tooltip */}
@@ -224,20 +214,6 @@ export function PerformanceChart({ data }: PerformanceChartProps) {
               }}
             />
 
-            {/* Daily Drawdown Line (-3%) */}
-            <ReferenceLine
-              y={dailyDrawdown}
-              stroke="#f97316"
-              strokeDasharray="3 3"
-              strokeWidth={1.5}
-              label={{
-                value: 'Daily DD -3%',
-                position: 'right',
-                fill: '#f97316',
-                fontSize: 11,
-              }}
-            />
-
             {/* Area - Filled area under the curve */}
             <Area
               type="monotone"
@@ -263,22 +239,18 @@ export function PerformanceChart({ data }: PerformanceChartProps) {
         </ResponsiveContainer>
 
         {/* Legend */}
-        <div className="flex items-center justify-center gap-4 mt-4 text-xs text-muted-foreground flex-wrap">
+        <div className="flex items-center justify-center gap-6 mt-4 text-xs text-muted-foreground">
           <div className="flex items-center gap-2">
             <div className="w-3 h-0.5 bg-muted-foreground"></div>
             <span>Initial Balance</span>
           </div>
           <div className="flex items-center gap-2">
             <div className="w-3 h-0.5 bg-green-500" style={{ backgroundImage: 'repeating-linear-gradient(to right, #10b981 0px, #10b981 5px, transparent 5px, transparent 8px)' }}></div>
-            <span>Target (+10%)</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-0.5 bg-orange-500" style={{ backgroundImage: 'repeating-linear-gradient(to right, #f97316 0px, #f97316 3px, transparent 3px, transparent 6px)' }}></div>
-            <span>Daily Max (-3%)</span>
+            <span>Profit Target (+10%)</span>
           </div>
           <div className="flex items-center gap-2">
             <div className="w-3 h-0.5 bg-red-500" style={{ backgroundImage: 'repeating-linear-gradient(to right, #ef4444 0px, #ef4444 5px, transparent 5px, transparent 8px)' }}></div>
-            <span>Max DD (-8%)</span>
+            <span>Max Drawdown (-8%)</span>
           </div>
         </div>
       </CardContent>
