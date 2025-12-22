@@ -537,130 +537,127 @@ debugLog.scrollTop=debugLog.scrollHeight;
 }
 }
 
-function setWsStatus(connected){
-const el=document.getElementById('wsStatus');
-if(el){
-if(wsConnected || wsNewConnected){
-el.classList.add('connected');
-}else{
-el.classList.remove('connected');
-}
-}
-}
-
-function startWebSocket(){
-// Close existing connections if any
-if(ws){
-ws.onclose=null;
-ws.close();
-ws=null;
-}
-if(wsNew){
-wsNew.onclose=null;
-wsNew.close();
-wsNew=null;
-}
-
-// Clear any existing timers
+const startKeepalive=()=>{
 if(keepaliveTimer)clearInterval(keepaliveTimer);
-if(keepaliveTimerNew)clearInterval(keepaliveTimerNew);
-if(reconTimer)clearTimeout(reconTimer);
-if(reconTimerNew)clearTimeout(reconTimerNew);
+keepaliveTimer=setInterval(()=>{
+if(ws&&ws.readyState===WebSocket.OPEN){
+try{ws.send(JSON.stringify({type:'ping'}));log('Ping old')}
+catch(e){log(`Keepalive error old: ${e.message}`)}
+}
+},CFG.keepalive);
+};
 
-// Start old server connection for legacy symbols
+const startKeepaliveNew=()=>{
+if(keepaliveTimerNew)clearInterval(keepaliveTimerNew);
+keepaliveTimerNew=setInterval(()=>{
+if(wsNew&&wsNew.readyState===WebSocket.OPEN){
+try{wsNew.send(JSON.stringify({type:'ping'}));log('Ping new')}
+catch(e){log(`Keepalive error new: ${e.message}`)}
+}
+},CFG.keepalive);
+};
+
+const stopKeepalive=()=>{if(keepaliveTimer){clearInterval(keepaliveTimer);keepaliveTimer=null}};
+const stopKeepaliveNew=()=>{if(keepaliveTimerNew){clearInterval(keepaliveTimerNew);keepaliveTimerNew=null}};
+
+const scheduleReconnect=()=>{
+stopKeepalive();
+if(reconTimer)clearTimeout(reconTimer);
+reconAttempts++;
+reconDelay=Math.min(CFG.reconMax,CFG.reconBase*Math.pow(1.5,reconAttempts));
+log(`Reconnect old in ${reconDelay}ms (attempt ${reconAttempts})`);
+reconTimer=setTimeout(startWebSocket,reconDelay);
+};
+
+const scheduleReconnectNew=()=>{
+stopKeepaliveNew();
+if(reconTimerNew)clearTimeout(reconTimerNew);
+reconAttemptsNew++;
+reconDelayNew=Math.min(CFG.reconMax,CFG.reconBase*Math.pow(1.5,reconAttemptsNew));
+log(`Reconnect new in ${reconDelayNew}ms (attempt ${reconAttemptsNew})`);
+reconTimerNew=setTimeout(startWebSocketNew,reconDelayNew);
+};
+
+const setWsStatus=(status)=>{
+const el=document.getElementById('wsStatus');
+const anyConnected=wsConnected||wsNewConnected;
+if(status==='connected'&&anyConnected){
+el.className='status-badge connected';
+el.innerHTML='<div class="status-dot"></div><span>Connecté</span>';
+}else if(status==='connecting'){
+el.className='status-badge connecting';
+el.innerHTML='<div class="status-dot"></div><span>Connexion...</span>';
+}else{
+el.className='status-badge disconnected';
+el.innerHTML='<div class="status-dot"></div><span>Déconnecté</span>';
+}
+};
+
+const startWebSocket=()=>{
+if(ws&&(ws.readyState===WebSocket.CONNECTING||ws.readyState===WebSocket.OPEN))return;
 try{
+log(`Connecting old: ${CFG.ws}`);
+setWsStatus('connecting');
 ws=new WebSocket(CFG.ws);
 ws.onopen=()=>{
 log('Old WS connected');
 wsConnected=true;
-setWsStatus(true);
-reconDelay=CFG.reconBase;
+setWsStatus('connected');
 reconAttempts=0;
-// Subscribe to symbols NOT in NEW_SYMBOLS
-WATCHLIST.forEach(sym=>{
-if(!NEW_SYMBOLS.includes(sym)){
-ws.send(JSON.stringify({type:'subscribe',symbol:`OANDA:${sym}`}));
+reconDelay=CFG.reconBase;
+WATCHLIST.forEach(w=>{
+if(!NEW_SYMBOLS.includes(w)){
+try{ws.send(JSON.stringify({type:'subscribe',symbol:`OANDA:${w}`}))}
+catch(e){log(`Subscribe error old: ${e.message}`)}
 }
 });
-keepaliveTimer=setInterval(()=>{
-if(ws&&ws.readyState===WebSocket.OPEN){
-ws.send(JSON.stringify({type:'ping'}));
-}
-},CFG.keepalive);
+startKeepalive();
 };
-ws.onmessage=(evt)=>{
-try{
-const msg=JSON.parse(evt.data);
-handleWsMessage(msg);
-}catch(err){
-log('Old WS parse error:',err);
-}
-};
-ws.onerror=(err)=>{
-log('Old WS error:',err);
-};
+ws.onmessage=(evt)=>{try{handleWsMessage(JSON.parse(evt.data))}catch(e){log(`Parse error old: ${e.message}`)}};
+ws.onerror=(err)=>{log(`WS error old: ${err}`)};
 ws.onclose=()=>{
 log('Old WS closed');
 wsConnected=false;
-setWsStatus(false);
-if(keepaliveTimer)clearInterval(keepaliveTimer);
-reconAttempts++;
-const delay=Math.min(reconDelay*Math.pow(1.5,reconAttempts-1),CFG.reconMax);
-log(`Old WS reconnect in ${delay}ms (attempt ${reconAttempts})`);
-reconTimer=setTimeout(()=>{
-startWebSocket();
-},delay);
+setWsStatus('disconnected');
+scheduleReconnect();
 };
-}catch(err){
-log('Old WS init error:',err);
+}catch(e){
+log(`Connection error old: ${e.message}`);
+scheduleReconnect();
 }
+};
 
-// Start new server connection for NEW_SYMBOLS
+const startWebSocketNew=()=>{
+if(wsNew&&(wsNew.readyState===WebSocket.CONNECTING||wsNew.readyState===WebSocket.OPEN))return;
 try{
+log(`Connecting new: ${CFG.wsNew}`);
+setWsStatus('connecting');
 wsNew=new WebSocket(CFG.wsNew);
 wsNew.onopen=()=>{
 log('New WS connected');
 wsNewConnected=true;
-setWsStatus(true);
-reconDelayNew=CFG.reconBase;
+setWsStatus('connected');
 reconAttemptsNew=0;
-// Subscribe to symbols IN NEW_SYMBOLS
+reconDelayNew=CFG.reconBase;
 NEW_SYMBOLS.forEach(sym=>{
-wsNew.send(JSON.stringify({type:'subscribe',symbol:`OANDA:${sym}`}));
+try{wsNew.send(JSON.stringify({type:'subscribe',symbol:`OANDA:${sym}`}))}
+catch(e){log(`Subscribe error new: ${e.message}`)}
 });
-keepaliveTimerNew=setInterval(()=>{
-if(wsNew&&wsNew.readyState===WebSocket.OPEN){
-wsNew.send(JSON.stringify({type:'ping'}));
-}
-},CFG.keepalive);
+startKeepaliveNew();
 };
-wsNew.onmessage=(evt)=>{
-try{
-const msg=JSON.parse(evt.data);
-handleWsMessage(msg);
-}catch(err){
-log('New WS parse error:',err);
-}
-};
-wsNew.onerror=(err)=>{
-log('New WS error:',err);
-};
+wsNew.onmessage=(evt)=>{try{handleWsMessage(JSON.parse(evt.data))}catch(e){log(`Parse error new: ${e.message}`)}};
+wsNew.onerror=(err)=>{log(`WS error new: ${err}`)};
 wsNew.onclose=()=>{
 log('New WS closed');
 wsNewConnected=false;
-setWsStatus(false);
-if(keepaliveTimerNew)clearInterval(keepaliveTimerNew);
-reconAttemptsNew++;
-const delay=Math.min(reconDelayNew*Math.pow(1.5,reconAttemptsNew-1),CFG.reconMax);
-log(`New WS reconnect in ${delay}ms (attempt ${reconAttemptsNew})`);
-reconTimerNew=setTimeout(()=>{
-startWebSocket();
-},delay);
+setWsStatus('disconnected');
+scheduleReconnectNew();
 };
-}catch(err){
-log('New WS init error:',err);
+}catch(e){
+log(`Connection error new: ${e.message}`);
+scheduleReconnectNew();
 }
-}
+};
 
 function handleWsMessage(msg){
 if(msg.type==='trade'&&msg.data){
@@ -841,7 +838,7 @@ container.innerHTML=WATCHLIST.map(sym=>`
 function init(){
 log('Initializing ForexSim Pro');
 initWatchlist();
-startWebSocket();
+startWebSocket();startWebSocketNew();
 setInterval(updatePositions,1000);
 }
 
