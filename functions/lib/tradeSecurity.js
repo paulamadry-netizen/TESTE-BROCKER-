@@ -192,13 +192,25 @@ async function validateDailyDrawdown(userId, userData) {
 function calculateMargin(symbol, lots, price) {
     // Leverage 1:20 (comme affiché dans le broker)
     const leverage = 20;
-    // Pour les ETF/actions, 1 lot = 1 action
-    // Pour le forex, 1 lot = 100,000 unités
+    // Taille de contrat par type d'actif:
+    // - ETF/Actions: 1 lot = 100 actions (mini-lot standard)
+    // - Forex: 1 lot = 100,000 unités
+    // - Métaux (XAU/XAG): 1 lot = 100 oz
     const isStock = !symbol.includes('/') && !symbol.includes('XAU') && !symbol.includes('XAG');
-    const contractSize = isStock ? 1 : 100000;
+    const isMetal = symbol.includes('XAU') || symbol.includes('XAG');
+    let contractSize;
+    if (isStock) {
+        contractSize = 100; // 1 lot = 100 actions
+    }
+    else if (isMetal) {
+        contractSize = 100; // 1 lot = 100 oz
+    }
+    else {
+        contractSize = 100000; // Forex: 1 lot = 100,000 unités
+    }
     const notionalValue = contractSize * lots * price;
     const margin = notionalValue / leverage;
-    console.log(`📊 Margin calc: ${symbol} ${lots} lots @ ${price} = ${margin.toFixed(2)} USD (leverage 1:${leverage})`);
+    console.log(`📊 Margin calc: ${symbol} ${lots} lots @ ${price} | Contract=${contractSize} | Notional=${notionalValue.toFixed(2)} | Margin=${margin.toFixed(2)} USD`);
     return margin;
 }
 async function validateMargin(userId, userData, symbol, lots, price) {
