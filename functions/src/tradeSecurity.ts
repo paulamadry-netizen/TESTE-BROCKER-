@@ -84,32 +84,42 @@ async function validateTotalDrawdown(
   userId: string,
   userData: any
 ): Promise<ValidationResult> {
-  // Charger tous les trades fermés pour calculer le peak
+  // S'assurer que initialBalance existe et est valide
+  const initialBalance = userData.initialBalance || userData.accountBalance || 25000;
+  
+  // Si pas de trades fermés, pas de drawdown possible
   const tradesSnapshot = await db.collection('trades')
     .where('userId', '==', userId)
     .where('status', '==', 'closed')
     .orderBy('closedAt', 'asc')
     .get();
 
-  const initialBalance = userData.initialBalance || userData.accountBalance;
-  let balance = initialBalance;
+  // Si aucun trade fermé, le compte est neuf → pas de drawdown
+  if (tradesSnapshot.empty) {
+    console.log(`📊 Aucun trade fermé - drawdown: 0%`);
+    return { allowed: true };
+  }
+
+  // Calculer le solde actuel basé sur initialBalance + somme des PnL
+  let calculatedBalance = initialBalance;
   let peakBalance = initialBalance;
 
   // Calculer le peak balance (pic historique)
   tradesSnapshot.forEach((doc) => {
     const trade = doc.data();
-    balance += trade.pnl || 0;
-    if (balance > peakBalance) {
-      peakBalance = balance;
+    const pnl = Number(trade.pnl) || 0;
+    calculatedBalance += pnl;
+    if (calculatedBalance > peakBalance) {
+      peakBalance = calculatedBalance;
     }
   });
 
-  // Drawdown = peak - current balance
-  const currentBalance = userData.accountBalance;
+  // Utiliser le solde calculé (plus fiable que accountBalance qui peut être désync)
+  const currentBalance = Math.max(calculatedBalance, 0.01); // Éviter division par 0
   const drawdown = peakBalance - currentBalance;
-  const drawdownPercent = (drawdown / peakBalance) * 100;
+  const drawdownPercent = peakBalance > 0 ? (drawdown / peakBalance) * 100 : 0;
 
-  console.log(`📊 Drawdown total: ${drawdownPercent.toFixed(2)}% (max: 8%)`);
+  console.log(`📊 Drawdown total: ${drawdownPercent.toFixed(2)}% (max: 8%) | Initial: ${initialBalance} | Peak: ${peakBalance} | Current: ${currentBalance}`);
 
   if (drawdownPercent > 8) {
     // SUSPENDRE LE COMPTE
@@ -123,7 +133,8 @@ async function validateTotalDrawdown(
       reason: 'total_drawdown_exceeded',
       drawdownPercent: drawdownPercent.toFixed(2),
       peakBalance,
-      currentBalance
+      currentBalance,
+      initialBalance
     });
 
     return {
@@ -143,27 +154,42 @@ async function validateDailyDrawdown(
   userId: string,
   userData: any
 ): Promise<ValidationResult> {
+  // S'assurer que initialBalance existe et est valide
+  const initialBalance = userData.initialBalance || userData.accountBalance || 25000;
+  
   // Début de la journée UTC
   const todayStart = new Date();
   todayStart.setUTCHours(0, 0, 0, 0);
 
-  // Charger les trades d'aujourd'hui
+  // Charger les trades fermés aujourd'hui
   const todayTradesSnapshot = await db.collection('trades')
     .where('userId', '==', userId)
-    .where('closedAt', '>=', todayStart.toISOString())
     .where('status', '==', 'closed')
     .get();
 
+  // Filtrer manuellement par date (évite les problèmes d'index composite)
   let todayPnl = 0;
   todayTradesSnapshot.forEach((doc) => {
-    todayPnl += doc.data().pnl || 0;
+    const trade = doc.data();
+    const closedAt = trade.closedAt;
+    if (closedAt) {
+      const closedDate = closedAt.toDate ? closedAt.toDate() : new Date(closedAt);
+      if (closedDate >= todayStart) {
+        todayPnl += Number(trade.pnl) || 0;
+      }
+    }
   });
 
-  const dailyLoss = todayPnl < 0 ? Math.abs(todayPnl) : 0;
-  const initialBalance = userData.initialBalance || userData.accountBalance;
-  const dailyLossPercent = (dailyLoss / initialBalance) * 100;
+  // Si pas de trades aujourd'hui, pas de perte journalière
+  if (todayPnl >= 0) {
+    console.log(`📊 Perte journalière: 0% (profit: ${todayPnl.toFixed(2)})`);
+    return { allowed: true };
+  }
 
-  console.log(`📊 Perte journalière: ${dailyLossPercent.toFixed(2)}% (max: 3%)`);
+  const dailyLoss = Math.abs(todayPnl);
+  const dailyLossPercent = initialBalance > 0 ? (dailyLoss / initialBalance) * 100 : 0;
+
+  console.log(`📊 Perte journalière: ${dailyLossPercent.toFixed(2)}% (max: 3%) | Perte: ${dailyLoss} | Initial: ${initialBalance}`);
 
   if (dailyLossPercent > 3) {
     // SUSPENDRE LE COMPTE
