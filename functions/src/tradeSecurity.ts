@@ -259,7 +259,7 @@ export const executeTrade = onCall({ secrets: [finnhubApiKey] }, async (request)
     await auditLog('trade_rejected', userId, {
       reason: 'trading_hours',
       detail: hoursCheck.reason
-    }, request.rawRequest.ip);
+    });
     throw new HttpsError('failed-precondition', hoursCheck.reason!);
   }
 
@@ -288,7 +288,7 @@ export const executeTrade = onCall({ secrets: [finnhubApiKey] }, async (request)
     await auditLog('trade_rejected', userId, {
       reason: 'insufficient_margin',
       detail: marginCheck.reason
-    }, request.rawRequest.ip);
+    });
     throw new HttpsError('failed-precondition', marginCheck.reason!);
   }
 
@@ -332,7 +332,7 @@ export const executeTrade = onCall({ secrets: [finnhubApiKey] }, async (request)
       lots,
       entryPrice: price,
       marginUsed
-    }, request.rawRequest.ip);
+    });
 
     console.log(`✅ Trade créé: ${tradeRef.id}`);
 
@@ -424,7 +424,7 @@ export const closeTrade = onCall({ secrets: [finnhubApiKey] }, async (request) =
       closePrice,
       pnl,
       marginReleased
-    }, request.rawRequest.ip);
+    });
 
     // Vérifier les règles après la fermeture
     const userDoc = await db.collection('users').doc(userId).get();

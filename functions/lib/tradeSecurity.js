@@ -214,7 +214,7 @@ exports.executeTrade = (0, https_1.onCall)({ secrets: [priceService_1.finnhubApi
         await auditLog('trade_rejected', userId, {
             reason: 'trading_hours',
             detail: hoursCheck.reason
-        }, request.rawRequest.ip);
+        });
         throw new https_1.HttpsError('failed-precondition', hoursCheck.reason);
     }
     // 5. VALIDATION DRAWDOWN TOTAL
@@ -238,7 +238,7 @@ exports.executeTrade = (0, https_1.onCall)({ secrets: [priceService_1.finnhubApi
         await auditLog('trade_rejected', userId, {
             reason: 'insufficient_margin',
             detail: marginCheck.reason
-        }, request.rawRequest.ip);
+        });
         throw new https_1.HttpsError('failed-precondition', marginCheck.reason);
     }
     // 9. CRÉER LE TRADE (transaction atomique)
@@ -278,7 +278,7 @@ exports.executeTrade = (0, https_1.onCall)({ secrets: [priceService_1.finnhubApi
             lots,
             entryPrice: price,
             marginUsed
-        }, request.rawRequest.ip);
+        });
         console.log(`✅ Trade créé: ${tradeRef.id}`);
         return {
             success: true,
@@ -352,7 +352,7 @@ exports.closeTrade = (0, https_1.onCall)({ secrets: [priceService_1.finnhubApiKe
             closePrice,
             pnl,
             marginReleased
-        }, request.rawRequest.ip);
+        });
         // Vérifier les règles après la fermeture
         const userDoc = await db.collection('users').doc(userId).get();
         const userData = userDoc.data();
