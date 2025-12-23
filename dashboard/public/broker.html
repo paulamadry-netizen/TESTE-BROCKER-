@@ -629,7 +629,8 @@ const computeBB=(data,period)=>{
 };
 
 const ensureIndicatorPanel=()=>{
-  if(indicatorPanelEl)return;
+  if(indicatorPanelEl && indicatorPanelEl.isConnected) return;
+  indicatorPanelEl=null;
   indicatorPanelEl=document.createElement('div');
   indicatorPanelEl.className='ind-panel';
   indicatorPanelEl.innerHTML=`<button class="ind-btn" id="indToggle">Ind</button><div class="ind-menu" id="indMenu" style="display:none"></div>`;
@@ -721,7 +722,7 @@ const initLightweightChart=async()=>{
   
   // Clear container but keep overlay
   const children=Array.from(chartContainer.children);
-  children.forEach(c=>{if(c.id!=='chartOverlay'&&c.id!=='crosshairInfo')c.remove()});
+  children.forEach(c=>{if(c.id!=='chartOverlay'&&c.id!=='crosshairInfo'&&!c.classList.contains('ind-panel'))c.remove()});
   
   // Create chart
   lwChart=LightweightCharts.createChart(chartContainer,{
