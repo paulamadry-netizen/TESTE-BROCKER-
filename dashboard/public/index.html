@@ -170,6 +170,45 @@
     }
   };
 
+  // Load closed trades history from Firestore
+  window.loadTradeHistory = async () => {
+    if (!window.firebaseUser) {
+      console.warn('No user authenticated - cannot load history');
+      return [];
+    }
+
+    try {
+      const tradesRef = collection(db, 'trades');
+      const q = query(tradesRef, where('userId', '==', window.firebaseUser.uid), where('status', '==', 'closed'));
+      const querySnapshot = await getDocs(q);
+
+      const loadedHistory = [];
+      querySnapshot.forEach((docSnap) => {
+        const data = docSnap.data();
+        const closedAt = data.closedAt ? (data.closedAt.toDate ? data.closedAt.toDate() : new Date(data.closedAt)) : new Date();
+        loadedHistory.push({
+          id: docSnap.id,
+          symbol: window.WATCHLIST.find(w => w.api === data.symbolApi) || { label: data.symbol, api: data.symbolApi, tv: data.symbol, type: 'forex' },
+          side: data.side,
+          entry: data.entryPrice,
+          close: data.closePrice,
+          lots: data.lots,
+          pnl: data.pnl || 0,
+          closedAt: closedAt.getTime()
+        });
+      });
+
+      // Sort by closedAt descending (most recent first)
+      loadedHistory.sort((a, b) => b.closedAt - a.closedAt);
+
+      console.log('✅ Loaded trade history:', loadedHistory.length);
+      return loadedHistory;
+    } catch (error) {
+      console.error('❌ Error loading trade history:', error);
+      return [];
+    }
+  };
+
   // Save order to Firestore
   window.saveOrder = async (orderData) => {
     if (!window.firebaseUser) {
@@ -677,7 +716,7 @@ const checkPositionTargets=(symbol)=>{const price=priceCache[symbol];if(price===
 const checkOrdersForSymbol=(symbol)=>{const price=priceCache[symbol];if(price===undefined)return;const matches=[];orders.forEach(o=>{if(o.symbol!==symbol)return;const orderType=o.type||'limit';if(orderType==='limit'){if((o.side==='BUY'&&price<=o.price)||(o.side==='SELL'&&price>=o.price))matches.push(o)}else if(orderType==='stop'){if((o.side==='BUY'&&price>=o.stopPrice)||(o.side==='SELL'&&price<=o.stopPrice))matches.push(o)}else if(orderType==='stop-limit'){if(!o.triggered){if((o.side==='BUY'&&price>=o.stopPrice)||(o.side==='SELL'&&price<=o.stopPrice)){o.triggered=true;debugLog(`Stop-Limit triggered: ${o.id}`)}}else{if((o.side==='BUY'&&price<=o.price)||(o.side==='SELL'&&price>=o.price))matches.push(o)}}});matches.forEach(async m=>{const symObj=WATCHLIST.find(w=>w.api===m.symbol)||{label:m.symbol,tv:m.symbol,api:m.symbol,type:'forex'};const orderType=m.type||'limit';let execPrice=price;if(orderType==='stop-limit')execPrice=m.price;debugLog(`Exec order: ${orderType} ${m.side} ${m.symbol} @ ${execPrice}`);await openPosition(symObj,m.side,m.size,execPrice,m.tp,m.sl);await removeOrder(m.id)})};
 const computePnl=(pos)=>{const current=pos.current!==undefined?pos.current:priceCache[pos.symbol.api];if(current===undefined)return 0;const step=pipStep(pos.symbol.api),pipDiff=(current-pos.entry)/step,pipValue=pipValuePerLot(pos.symbol.api,current),pnlPerLot=pipDiff*pipValue*pos.size;return pos.side==='BUY'?pnlPerLot:-pnlPerLot};
 const getTotalMarginUsed=()=>positions.reduce((sum,pos)=>{const price=pos.current||priceCache[pos.symbol.api]||pos.entry;return sum+marginRequirement(pos.symbol.api,pos.size,price)},0)+orders.reduce((sum,ord)=>sum+ord.margin,0);
-window.loadBrokerData=async()=>{if(!window.loadOpenPositions||!window.loadPendingOrders){debugLog('⚠️ Load functions not available');return}try{debugLog('📥 Loading broker data...');const userDoc=await window.getDoc(window.doc(window.firebaseDb,'users',window.firebaseUser.uid));const userData=userDoc.data();simBalance=userData.accountBalance;availableBalance=userData.availableBalance||userData.accountBalance;const[loadedPositions,loadedOrders]=await Promise.all([window.loadOpenPositions(),window.loadPendingOrders()]);if(loadedPositions&&loadedPositions.length>0){positions.length=0;positions.push(...loadedPositions);debugLog(`✅ Loaded ${loadedPositions.length} positions`)}else{positions.length=0}if(loadedOrders&&loadedOrders.length>0){orders.length=0;orders.push(...loadedOrders);debugLog(`✅ Loaded ${loadedOrders.length} orders`)}else{orders.length=0}renderAll();console.log(`✅ Broker data loaded: ${positions.length} positions, ${orders.length} orders, balance: ${simBalance}`)}catch(error){console.error('❌ Error loading broker data:',error);debugLog(`Error loading: ${error.message}`)}};
+window.loadBrokerData=async()=>{if(!window.loadOpenPositions||!window.loadPendingOrders){debugLog('⚠️ Load functions not available');return}try{debugLog('📥 Loading broker data...');const userDoc=await window.getDoc(window.doc(window.firebaseDb,'users',window.firebaseUser.uid));const userData=userDoc.data();simBalance=userData.accountBalance;availableBalance=userData.availableBalance||userData.accountBalance;const[loadedPositions,loadedOrders,loadedHistory]=await Promise.all([window.loadOpenPositions(),window.loadPendingOrders(),window.loadTradeHistory?window.loadTradeHistory():[]]);if(loadedPositions&&loadedPositions.length>0){positions.length=0;positions.push(...loadedPositions);debugLog(`✅ Loaded ${loadedPositions.length} positions`)}else{positions.length=0}if(loadedOrders&&loadedOrders.length>0){orders.length=0;orders.push(...loadedOrders);debugLog(`✅ Loaded ${loadedOrders.length} orders`)}else{orders.length=0}if(loadedHistory&&loadedHistory.length>0){history.length=0;history.push(...loadedHistory);debugLog(`✅ Loaded ${loadedHistory.length} history`)}else{history.length=0}renderAll();console.log(`✅ Broker data loaded: ${positions.length} positions, ${orders.length} orders, ${history.length} history, balance: ${simBalance}`)}catch(error){console.error('❌ Error loading broker data:',error);debugLog(`Error loading: ${error.message}`)}};
 const openPosition=async(symObj,side,lots=1,forcedEntry=null,tp=null,sl=null)=>{try{const executeTradeFunc=window.httpsCallable(window.firebaseFunctions,'executeTrade');const result=await executeTradeFunc({userId:window.firebaseUser.uid,symbol:symObj.label,symbolApi:symObj.api,side,lots:Number(lots),price:forcedEntry||priceCache[symObj.api],tp:tp||null,sl:sl||null});console.log('✅ Trade validé par le serveur:',result.data);await window.loadBrokerData();showToast(`✅ ${side}: ${symObj.label}`,'success');return true}catch(error){console.error('❌ Trade refusé:',error.message);showToast(`❌ ${error.message}`,'error');if(error.message.includes('suspendu')||error.message.includes('suspended')){accountSuspended=true;alert('⚠️ COMPTE SUSPENDU\n\n'+error.message)}return false}};
 const closePosition=async(id,lotsToSell=null)=>{const pos=positions.find(p=>p.id===id);if(!pos||!pos.firestoreId)return;const closePrice=priceCache[pos.symbol.api]||pos.current;try{const closeTradeFunc=window.httpsCallable(window.firebaseFunctions,'closeTrade');const result=await closeTradeFunc({tradeId:pos.firestoreId,closePrice});console.log('✅ Trade fermé par le serveur:',result.data);await window.loadBrokerData();const pnl=result.data.pnl;showToast(`✅ Fermé: ${formatMoney(pnl)} USD`,pnl>=0?'success':'error')}catch(error){console.error('❌ Erreur fermeture:',error.message);showToast(`❌ ${error.message}`,'error');if(error.message.includes('suspendu')||error.message.includes('suspended')){accountSuspended=true;alert('⚠️ COMPTE SUSPENDU\n\n'+error.message)}}};
 const addOrder=async(type,symbol,side,price,stopPrice,lots,tp,sl)=>{const resolvedLots=Number(lots);if(!resolvedLots||resolvedLots<=0){showToast('❌ Lots requis','error');return}if(type==='market'){await openPosition(WATCHLIST.find(w=>w.api===symbol)||currentSymbol,side,resolvedLots,null,tp?Number(tp):null,sl?Number(sl):null);return}const resolvedPrice=type==='limit'||type==='stop-limit'?Number(price):null;const resolvedStopPrice=type==='stop'||type==='stop-limit'?Number(stopPrice):null;if((type==='limit'||type==='stop-limit')&&!resolvedPrice){showToast('❌ Prix limite requis','error');return}if((type==='stop'||type==='stop-limit')&&!resolvedStopPrice){showToast('❌ Prix stop requis','error');return}const priceForMargin=resolvedPrice||resolvedStopPrice||priceCache[symbol]||1;const required=marginRequirement(symbol,resolvedLots,priceForMargin);if(required>availableBalance){showToast('❌ Solde insuffisant','error');return}availableBalance-=required;const order={id:'ord_'+Date.now()+'_'+Math.random().toString(36).slice(2,7),type,symbol,side,price:resolvedPrice,stopPrice:resolvedStopPrice,size:resolvedLots,tp:tp?Number(tp):null,sl:sl?Number(sl):null,margin:required,createdAt:Date.now(),firestoreId:null};orders.push(order);renderOrders();renderTotals();showToast('✅ Ordre ajouté','success');debugLog(`Order: ${type} ${side} ${symbol}`);if(window.saveOrder){const orderData={type,symbol,side,price:resolvedPrice,stopPrice:resolvedStopPrice,size:resolvedLots,tp:order.tp,sl:order.sl,margin:required};const firestoreId=await window.saveOrder(orderData);if(firestoreId){order.firestoreId=firestoreId;debugLog(`Order synced: ${firestoreId}`)}}};
