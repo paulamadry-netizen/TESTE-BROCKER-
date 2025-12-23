@@ -215,6 +215,12 @@ html,body{height:100%;background:linear-gradient(135deg,var(--bg-primary) 0%,var
 .resize-handle-corner{right:0;bottom:0;width:12px;height:12px;cursor:nwse-resize}
 .resize-handle:hover,.resize-handle.resizing{background:var(--accent);opacity:0.5}
 .watchlist-panel{width:320px;border-right:1px solid var(--border)}
+.wl-filters{display:flex;gap:6px;padding:8px 12px;border-bottom:1px solid var(--border);background:var(--bg-tertiary)}
+.wl-search{flex:1;padding:6px 10px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--bg-primary);color:var(--text-primary);font-size:12px}
+.wl-search:focus{outline:none;border-color:var(--accent)}
+.wl-search::placeholder{color:var(--text-muted)}
+.wl-type-filter{padding:6px 8px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--bg-primary);color:var(--text-primary);font-size:11px;cursor:pointer}
+.wl-type-filter:focus{outline:none;border-color:var(--accent)}
 .wl-item{padding:14px;border-radius:var(--radius-md);cursor:pointer;transition:var(--transition);background:var(--bg-tertiary);border:1px solid transparent;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center}
 .wl-item:hover{background:var(--surface-elevated);border-color:var(--border-light);transform:translateX(4px)}
 .wl-item.active{background:var(--surface-elevated);border-color:var(--accent)}
@@ -377,6 +383,16 @@ html,body{height:100%;background:linear-gradient(135deg,var(--bg-primary) 0%,var
 <div class="workspace">
 <div class="resizable-panel watchlist-panel" id="watchlistPanel">
 <div class="panel-header"><div class="panel-title"><i class="fas fa-list-ul"></i>Watchlist</div><div class="panel-controls"><button class="panel-btn" id="closeWatchlist" title="Fermer"><i class="fas fa-times"></i></button></div></div>
+<div class="wl-filters">
+<input type="text" class="wl-search" id="wlSearch" placeholder="Rechercher..."/>
+<select class="wl-type-filter" id="wlTypeFilter">
+<option value="all">Tous</option>
+<option value="forex">Forex</option>
+<option value="index">Indices</option>
+<option value="commodity">Matieres</option>
+<option value="metal">Metaux</option>
+</select>
+</div>
 <div class="panel-content" id="wlList"></div>
 <div class="resize-handle resize-handle-right"></div>
 </div>
@@ -910,7 +926,29 @@ window.updateUserEmail=(email)=>{const emailEl=document.getElementById('userEmai
 window.checkAccountStatus=(status)=>{if(status==='suspended'){accountSuspended=true;showToast('Compte suspendu - Trading desactive','error',10000);alert('COMPTE DESACTIVE\n\nVotre compte a ete suspendu pour violation des regles de trading.\nVeuillez contacter le support.')}};
 
 const wlList=$('wlList'),ordSymbol=$('ordSymbol');
-WATCHLIST.forEach(w=>{const item=document.createElement('div');item.className='wl-item';item.dataset.symbol=w.api;item.innerHTML=`<div class="wl-left"><div class="wl-symbol">${w.label}</div><div class="wl-label">${w.tv}</div></div><div class="wl-right"><div class="wl-price" id="price_${escapeId(w.api)}">—</div></div>`;item.addEventListener('click',()=>selectSymbol(w));wlList.appendChild(item);const opt=document.createElement('option');opt.value=w.api;opt.text=w.label;ordSymbol.appendChild(opt)});
+const renderWatchlist=(filter='all',search='')=>{
+  wlList.innerHTML='';
+  const searchLower=search.toLowerCase();
+  WATCHLIST.filter(w=>{
+    if(filter!=='all'&&w.type!==filter)return false;
+    if(search&&!w.label.toLowerCase().includes(searchLower)&&!w.tv.toLowerCase().includes(searchLower))return false;
+    return true;
+  }).forEach(w=>{
+    const item=document.createElement('div');
+    item.className='wl-item'+(currentSymbol&&currentSymbol.api===w.api?' active':'');
+    item.dataset.symbol=w.api;
+    item.dataset.type=w.type;
+    const price=priceCache[w.api];
+    const priceText=price!==undefined?(w.type==='forex'?formatPrice(price):price.toFixed(2)):'—';
+    item.innerHTML=`<div class="wl-left"><div class="wl-symbol">${w.label}</div><div class="wl-label">${w.type}</div></div><div class="wl-right"><div class="wl-price" id="price_${escapeId(w.api)}">${priceText}</div></div>`;
+    item.addEventListener('click',()=>selectSymbol(w));
+    wlList.appendChild(item);
+  });
+};
+WATCHLIST.forEach(w=>{const opt=document.createElement('option');opt.value=w.api;opt.text=w.label;ordSymbol.appendChild(opt)});
+renderWatchlist();
+$('wlSearch').addEventListener('input',e=>renderWatchlist($('wlTypeFilter').value,e.target.value));
+$('wlTypeFilter').addEventListener('change',e=>renderWatchlist(e.target.value,$('wlSearch').value));
 const initTradingView=()=>{if(!currentSymbol)return;try{const container=$('tv_chart_container');if(tvWidget){try{tvWidget.remove()}catch(e){}tvWidget=null}container.innerHTML='';if(typeof TradingView==='undefined'){debugLog('TV not loaded');return}setTimeout(()=>{tvWidget=new TradingView.widget({container_id:'tv_chart_container',autosize:true,symbol:currentSymbol.tv,interval:'15',timezone:'Etc/UTC',theme:'dark',locale:'fr',disabled_features:['use_localstorage_for_settings']});debugLog(`TV: ${currentSymbol.label}`)},100)}catch(e){console.error('Chart error:',e);debugLog(`Chart error: ${e.message}`)}};
 const selectSymbol=(sym)=>{currentSymbol=sym;document.querySelectorAll('.wl-item').forEach(item=>item.classList.toggle('active',item.dataset.symbol===sym.api));$('currentSymbolBadge').innerText=sym.label;const price=priceCache[sym.api];if(price!==undefined){const isSimple=sym.type==='etf'||sym.type==='index'||sym.type==='commodity';const formatted=isSimple?price.toFixed(2):formatPrice(price);$('currentPriceValue').innerText=formatted}else $('currentPriceValue').innerText='—';refreshLotInfo();$('timeframeSelector').style.display='flex';initLightweightChart();debugLog(`Selected: ${sym.label}`)};
 const openPositionModal=(id)=>{const pos=positions.find(p=>p.id===id);if(!pos)return;activeModalId=id;$('modalSymbol').innerText=pos.symbol.label;$('modalLots').innerText=pos.size;$('modalTp').value=pos.tp||'';$('modalSl').value=pos.sl||'';$('modalSellLots').value='0';$('positionModal').style.display='flex'};

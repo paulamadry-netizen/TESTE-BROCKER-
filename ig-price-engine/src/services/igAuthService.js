@@ -203,7 +203,7 @@ class IGAuthService {
    * Get configured axios client for API requests
    */
   getClient() {
-    if (!this.isAuthenticated) {
+    if (!this.cst || !this.xSecurityToken) {
       return null;
     }
 
