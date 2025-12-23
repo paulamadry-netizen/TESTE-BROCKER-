@@ -114,8 +114,30 @@ app.get('/api/status', (req, res) => {
   });
 });
 
+// Generate mock historical data based on current price
+const generateMockCandles = (epic, resolution, count, currentPrice) => {
+  const candles = [];
+  const now = Math.floor(Date.now() / 1000);
+  const intervals = { 'MINUTE': 60, 'MINUTE_5': 300, 'MINUTE_15': 900, 'HOUR': 3600, 'HOUR_4': 14400, 'DAY': 86400 };
+  const interval = intervals[resolution] || 3600;
+  const volatility = currentPrice * 0.001; // 0.1% volatility
+  
+  let price = currentPrice * (1 - (Math.random() * 0.02)); // Start slightly lower
+  
+  for (let i = count - 1; i >= 0; i--) {
+    const time = now - (i * interval);
+    const change = (Math.random() - 0.5) * volatility * 2;
+    const open = price;
+    price = price + change;
+    const high = Math.max(open, price) + Math.random() * volatility * 0.5;
+    const low = Math.min(open, price) - Math.random() * volatility * 0.5;
+    candles.push({ time, open, high, low, close: price, volume: Math.floor(Math.random() * 1000) });
+  }
+  return candles;
+};
+
 // Get historical prices for an epic
-// Resolution: MINUTE, MINUTE_2, MINUTE_3, MINUTE_5, MINUTE_10, MINUTE_15, MINUTE_30, HOUR, HOUR_2, HOUR_3, HOUR_4, DAY, WEEK, MONTH
+// Resolution: MINUTE, MINUTE_5, MINUTE_15, HOUR, HOUR_4, DAY
 app.get('/api/history/:epic', async (req, res) => {
   const { epic } = req.params;
   const { resolution = 'HOUR', max = 100 } = req.query;
@@ -123,7 +145,11 @@ app.get('/api/history/:epic', async (req, res) => {
   try {
     const client = igAuthService.getClient();
     if (!client) {
-      return res.status(503).json({ error: 'Not authenticated' });
+      // Fallback to mock data if not authenticated
+      const cachedPrice = priceService.getCachedPrice(epic);
+      const basePrice = cachedPrice?.bid || 1.0;
+      const candles = generateMockCandles(epic, resolution, parseInt(max), basePrice);
+      return res.json({ epic, resolution, count: candles.length, source: 'mock', candles });
     }
     
     // IG API v3 uses query params: /prices/{epic}?resolution=X&max=Y
@@ -154,7 +180,11 @@ app.get('/api/history/:epic', async (req, res) => {
     }
   } catch (error) {
     console.error(`[History] Error fetching ${epic}:`, error.response?.data || error.message);
-    res.status(500).json({ error: error.response?.data?.errorCode || error.message });
+    // Fallback to mock data on API error (rate limit, etc.)
+    const cachedPrice = priceService.getCachedPrice(epic);
+    const basePrice = cachedPrice?.bid || 1.0;
+    const candles = generateMockCandles(epic, resolution, parseInt(max), basePrice);
+    res.json({ epic, resolution, count: candles.length, source: 'mock', error: error.response?.data?.errorCode, candles });
   }
 });
 
