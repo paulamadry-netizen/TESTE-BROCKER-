@@ -221,6 +221,12 @@ html,body{height:100%;background:linear-gradient(135deg,var(--bg-primary) 0%,var
 .wl-search::placeholder{color:var(--text-muted)}
 .wl-type-filter{padding:6px 8px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--bg-primary);color:var(--text-primary);font-size:11px;cursor:pointer}
 .wl-type-filter:focus{outline:none;border-color:var(--accent)}
+.ind-panel{position:absolute;top:10px;right:10px;z-index:50;display:flex;flex-direction:column;gap:6px;align-items:flex-end}
+.ind-btn{height:28px;padding:0 10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,20,25,0.7);color:var(--text-primary);font-size:12px;cursor:pointer}
+.ind-menu{min-width:140px;max-height:220px;overflow:auto;border-radius:12px;border:1px solid var(--border);background:rgba(15,20,25,0.92);backdrop-filter:blur(6px);padding:8px}
+.ind-item{display:flex;gap:8px;align-items:center;font-size:12px;color:var(--text-primary);padding:6px;border-radius:10px;cursor:pointer}
+.ind-item:hover{background:rgba(255,255,255,0.06)}
+.ind-item input{accent-color:var(--accent)}
 .wl-item{padding:14px;border-radius:var(--radius-md);cursor:pointer;transition:var(--transition);background:var(--bg-tertiary);border:1px solid transparent;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center}
 .wl-item:hover{background:var(--surface-elevated);border-color:var(--border-light);transform:translateX(4px)}
 .wl-item.active{background:var(--surface-elevated);border-color:var(--accent)}
@@ -577,6 +583,114 @@ const IG_API_BASE='https://ig-price-engine-44407447466.europe-west1.run.app';
 const TF_TO_RESOLUTION={'1':'MINUTE','5':'MINUTE_5','15':'MINUTE_15','60':'HOUR','240':'HOUR_4','1D':'DAY'};
 const TF_TO_MAX={'1':500,'5':500,'15':500,'60':500,'240':500,'1D':365};
 let chartPriceLines=[],dragState=null,chartContainer=null;
+let indicatorPanelEl=null,indicatorsVisible=false,indicatorSeries={};
+const INDICATORS=[
+  {key:'sma20',label:'SMA 20',type:'sma',period:20,color:'#60a5fa'},
+  {key:'sma50',label:'SMA 50',type:'sma',period:50,color:'#f59e0b'},
+  {key:'ema20',label:'EMA 20',type:'ema',period:20,color:'#34d399'},
+  {key:'bb20',label:'Bollinger 20',type:'bb',period:20,color:'#a78bfa'}
+];
+
+const computeSMA=(data,period)=>{
+  const out=[];let sum=0;
+  for(let i=0;i<data.length;i++){
+    const c=Number(data[i].close);
+    sum+=c;
+    if(i>=period)sum-=Number(data[i-period].close);
+    if(i>=period-1)out.push({time:data[i].time,value:sum/period});
+  }
+  return out;
+};
+const computeEMA=(data,period)=>{
+  const out=[];const k=2/(period+1);
+  let ema=null;
+  for(let i=0;i<data.length;i++){
+    const c=Number(data[i].close);
+    if(!Number.isFinite(c))continue;
+    ema=ema===null?c:(c*k+ema*(1-k));
+    if(i>=period-1)out.push({time:data[i].time,value:ema});
+  }
+  return out;
+};
+const computeBB=(data,period)=>{
+  const mid=computeSMA(data,period);
+  const outUp=[],outDn=[];
+  for(let i=period-1;i<data.length;i++){
+    const slice=data.slice(i-period+1,i+1).map(d=>Number(d.close)).filter(Number.isFinite);
+    if(slice.length!==period)continue;
+    const mean=mid[i-(period-1)].value;
+    const variance=slice.reduce((s,v)=>s+Math.pow(v-mean,2),0)/period;
+    const sd=Math.sqrt(variance);
+    const t=data[i].time;
+    outUp.push({time:t,value:mean+2*sd});
+    outDn.push({time:t,value:mean-2*sd});
+  }
+  return {mid,up:outUp,dn:outDn};
+};
+
+const ensureIndicatorPanel=()=>{
+  if(indicatorPanelEl)return;
+  indicatorPanelEl=document.createElement('div');
+  indicatorPanelEl.className='ind-panel';
+  indicatorPanelEl.innerHTML=`<button class="ind-btn" id="indToggle">Ind</button><div class="ind-menu" id="indMenu" style="display:none"></div>`;
+  const menu=indicatorPanelEl.querySelector('#indMenu');
+  menu.innerHTML=INDICATORS.map(i=>`<label class="ind-item"><input type="checkbox" data-ind="${i.key}"/>${i.label}</label>`).join('');
+  $('lw_chart_container').appendChild(indicatorPanelEl);
+  indicatorPanelEl.querySelector('#indToggle').addEventListener('click',()=>{
+    indicatorsVisible=!indicatorsVisible;
+    menu.style.display=indicatorsVisible?'block':'none';
+  });
+  menu.querySelectorAll('input[type="checkbox"]').forEach(cb=>cb.addEventListener('change',()=>{
+    const key=cb.dataset.ind;
+    if(cb.checked)enableIndicator(key); else disableIndicator(key);
+  }));
+};
+
+const enableIndicator=(key)=>{
+  if(!lwChart||!lwSeries)return;
+  const cfg=INDICATORS.find(i=>i.key===key);
+  if(!cfg||indicatorSeries[key])return;
+  if(cfg.type==='bb'){
+    const mid=lwChart.addLineSeries({color:'#a78bfa',lineWidth:1});
+    const up=lwChart.addLineSeries({color:'#a78bfa',lineWidth:1});
+    const dn=lwChart.addLineSeries({color:'#a78bfa',lineWidth:1});
+    indicatorSeries[key]={mid,up,dn};
+  }else{
+    const s=lwChart.addLineSeries({color:cfg.color,lineWidth:2});
+    indicatorSeries[key]=s;
+  }
+  recalcIndicators();
+};
+const disableIndicator=(key)=>{
+  const s=indicatorSeries[key];
+  if(!s||!lwChart)return;
+  if(typeof s.remove==='function'){try{s.remove()}catch(e){}}
+  else{
+    ['mid','up','dn'].forEach(k=>{if(s[k]&&typeof s[k].remove==='function'){try{s[k].remove()}catch(e){}}});
+  }
+  delete indicatorSeries[key];
+};
+const recalcIndicators=()=>{
+  if(!lwChart||!lwSeries)return;
+  const data=chartHistoryData[currentSymbol.api]||[];
+  if(data.length<30)return;
+  Object.keys(indicatorSeries).forEach(key=>{
+    const cfg=INDICATORS.find(i=>i.key===key);
+    if(!cfg)return;
+    if(cfg.type==='sma'){
+      const pts=computeSMA(data,cfg.period);
+      indicatorSeries[key].setData(pts);
+    }else if(cfg.type==='ema'){
+      const pts=computeEMA(data,cfg.period);
+      indicatorSeries[key].setData(pts);
+    }else if(cfg.type==='bb'){
+      const bb=computeBB(data,cfg.period);
+      indicatorSeries[key].mid.setData(bb.mid);
+      indicatorSeries[key].up.setData(bb.up);
+      indicatorSeries[key].dn.setData(bb.dn);
+    }
+  });
+};
 
 const loadHistoricalData=async(epic,timeframe)=>{
   const resolution=TF_TO_RESOLUTION[timeframe]||'HOUR';
@@ -632,10 +746,13 @@ const initLightweightChart=async()=>{
   if(histData&&histData.length>0){
     chartHistoryData[currentSymbol.api]=histData;
     lwSeries.setData(histData);
+    ensureIndicatorPanel();
+    recalcIndicators();
     lwChart.timeScale().fitContent();
     debugLog(`Chart loaded: ${histData.length} candles`);
   }else{
     debugLog('No historical data available');
+    ensureIndicatorPanel();
   }
   
   // Crosshair move handler for OHLC info
@@ -680,19 +797,31 @@ const updateLightweightChart=(price)=>{
   const candleTime=Math.floor(now/(tfMinutes*60))*tfMinutes*60;
   const currentData=chartHistoryData[currentSymbol.api]||[];
   const lastCandle=currentData[currentData.length-1];
+  const lastClose=lastCandle?Number(lastCandle.close):null;
+  const newPrice=Number(price);
+  if(!Number.isFinite(newPrice)||newPrice<=0)return;
+  if(lastClose&&Number.isFinite(lastClose)&&lastClose>0){
+    const change=Math.abs((newPrice-lastClose)/lastClose);
+    const maxJump=(currentSymbol.type==='forex')?0.02:(currentSymbol.type==='metal')?0.03:(currentSymbol.type==='commodity')?0.05:0.05;
+    if(change>maxJump){
+      debugLog(`Spike filtered: ${currentSymbol.api} last=${lastClose} new=${newPrice} change=${(change*100).toFixed(2)}%`);
+      return;
+    }
+  }
   
   if(!lastCandle||lastCandle.time<candleTime){
-    const newCandle={time:candleTime,open:price,high:price,low:price,close:price};
+    const newCandle={time:candleTime,open:newPrice,high:newPrice,low:newPrice,close:newPrice};
     currentData.push(newCandle);
     chartHistoryData[currentSymbol.api]=currentData;
     lwSeries.update(newCandle);
   }else{
-    lastCandle.high=Math.max(lastCandle.high,price);
-    lastCandle.low=Math.min(lastCandle.low,price);
-    lastCandle.close=price;
+    lastCandle.high=Math.max(lastCandle.high,newPrice);
+    lastCandle.low=Math.min(lastCandle.low,newPrice);
+    lastCandle.close=newPrice;
     lwSeries.update(lastCandle);
   }
   updateChartOverlay();
+  recalcIndicators();
 };
 
 const switchTimeframe=(tf)=>{
@@ -912,7 +1041,10 @@ debugLog(`Closed ${id}: ${pnl}`);
 await checkAllRules();
 };
 
-const addLimitOrder=(symbol,side,price,lots,tp,sl)=>{const resolvedLots=Number(lots),resolvedPrice=Number(price);if(!resolvedLots||!resolvedPrice){showToast('Prix et lots requis','error');return}const required=marginRequirement(symbol,resolvedLots,resolvedPrice);if(required>availableBalance){showToast('Solde insuffisant','error');return}availableBalance-=required;orders.push({id:'ord_'+Date.now()+'_'+Math.random().toString(36).slice(2,7),symbol,side,price:resolvedPrice,size:resolvedLots,tp:tp?Number(tp):null,sl:sl?Number(sl):null,margin:required,createdAt:Date.now()});renderOrders();renderTotals();showToast('Ordre ajoute','success');debugLog(`Order: ${side} ${symbol}`)};
+const addLimitOrder=(symbol,side,price,lots,tp,sl)=>{const resolvedLots=Number(lots),resolvedPrice=Number(price);if(!resolvedLots||!resolvedPrice){showToast('Prix et lots requis','error');return}const required=marginRequirement(symbol,resolvedLots,resolvedPrice);if(required>availableBalance){showToast('Solde insuffisant','error');return}availableBalance-=required;orders.push({id:'ord_'+Date.now()+'_'+Math.random().toString(36).slice(2,7),symbol,side,price:resolvedPrice,size:resolvedLots,tp:tp?Number(tp):null,sl:sl?Number(sl):null,margin:required,createdAt:Date.now()});renderOrders();renderTotals();showToast('Ordre ajoute','success');debugLog(`Order: ${side} ${symbol}`);
+const ordEl=$('ordSymbol');if(ordEl){ordEl.value=symbol}
+};
+
 const removeOrder=(id)=>{const order=orders.find(o=>o.id===id);if(order)availableBalance+=order.margin;orders=orders.filter(o=>o.id!==id);renderOrders();renderTotals();showToast('Ordre annule','info');debugLog(`Removed: ${id}`)};
 const renderPositions=()=>{const tbody=$('positionsBody');tbody.innerHTML='';if(positions.length===0){tbody.innerHTML='<tr><td colspan="7" class="empty-state">Aucune position</td></tr>';return}positions.forEach(pos=>{const current=pos.current!==undefined?pos.current:priceCache[pos.symbol.api];pos.current=current;const pnl=computePnl(pos),pnlClass=pnl>=0?'positive':'negative',tr=document.createElement('tr');tr.innerHTML=`<td><div class="symbol-cell">${pos.symbol.label}</div><div class="symbol-label">${pos.symbol.tv}</div></td><td><span class="side-badge ${pos.side.toLowerCase()}">${pos.side}</span></td><td>${formatPrice(pos.entry)}</td><td>${formatPrice(current)}</td><td>${pos.size}</td><td><span class="pnl-value ${pnlClass}">${formatMoney(pnl)}</span></td><td><div class="action-buttons"><button class="btn-action" data-id="${pos.id}"><i class="fas fa-cog"></i></button><button class="btn-action" data-close="${pos.id}"><i class="fas fa-times"></i></button></div></td>`;tbody.appendChild(tr)});tbody.querySelectorAll('button[data-id]').forEach(btn=>btn.onclick=()=>openPositionModal(btn.dataset.id));tbody.querySelectorAll('button[data-close]').forEach(btn=>btn.onclick=()=>closePosition(btn.dataset.close))};
 const renderHistory=()=>{const tbody=$('historyBody');tbody.innerHTML='';if(history.length===0){tbody.innerHTML='<tr><td colspan="7" class="empty-state">Aucun historique</td></tr>';return}history.slice(0,50).forEach(h=>{const pnlClass=h.pnl>=0?'positive':'negative',tr=document.createElement('tr');tr.innerHTML=`<td><div class="symbol-cell">${h.symbol.label}</div><div class="symbol-label">${h.symbol.tv}</div></td><td><span class="side-badge ${h.side.toLowerCase()}">${h.side}</span></td><td>${formatPrice(h.entry)}</td><td>${formatPrice(h.close)}</td><td>${h.lots}</td><td><span class="pnl-value ${pnlClass}">${formatMoney(h.pnl)}</span></td><td class="symbol-label">${formatDateTime(h.closedAt)}</td>`;tbody.appendChild(tr)})};
@@ -950,7 +1082,7 @@ renderWatchlist();
 $('wlSearch').addEventListener('input',e=>renderWatchlist($('wlTypeFilter').value,e.target.value));
 $('wlTypeFilter').addEventListener('change',e=>renderWatchlist(e.target.value,$('wlSearch').value));
 const initTradingView=()=>{if(!currentSymbol)return;try{const container=$('tv_chart_container');if(tvWidget){try{tvWidget.remove()}catch(e){}tvWidget=null}container.innerHTML='';if(typeof TradingView==='undefined'){debugLog('TV not loaded');return}setTimeout(()=>{tvWidget=new TradingView.widget({container_id:'tv_chart_container',autosize:true,symbol:currentSymbol.tv,interval:'15',timezone:'Etc/UTC',theme:'dark',locale:'fr',disabled_features:['use_localstorage_for_settings']});debugLog(`TV: ${currentSymbol.label}`)},100)}catch(e){console.error('Chart error:',e);debugLog(`Chart error: ${e.message}`)}};
-const selectSymbol=(sym)=>{currentSymbol=sym;document.querySelectorAll('.wl-item').forEach(item=>item.classList.toggle('active',item.dataset.symbol===sym.api));$('currentSymbolBadge').innerText=sym.label;const price=priceCache[sym.api];if(price!==undefined){const isSimple=sym.type==='etf'||sym.type==='index'||sym.type==='commodity';const formatted=isSimple?price.toFixed(2):formatPrice(price);$('currentPriceValue').innerText=formatted}else $('currentPriceValue').innerText='—';refreshLotInfo();$('timeframeSelector').style.display='flex';initLightweightChart();debugLog(`Selected: ${sym.label}`)};
+const selectSymbol=(sym)=>{currentSymbol=sym;document.querySelectorAll('.wl-item').forEach(item=>item.classList.toggle('active',item.dataset.symbol===sym.api));$('currentSymbolBadge').innerText=sym.label;const price=priceCache[sym.api];if(price!==undefined){const isSimple=sym.type==='etf'||sym.type==='index'||sym.type==='commodity';const formatted=isSimple?price.toFixed(2):formatPrice(price);$('currentPriceValue').innerText=formatted}else $('currentPriceValue').innerText='—';const ordEl=$('ordSymbol');if(ordEl){ordEl.value=sym.api}refreshLotInfo();$('timeframeSelector').style.display='flex';initLightweightChart();debugLog(`Selected: ${sym.label}`)};
 const openPositionModal=(id)=>{const pos=positions.find(p=>p.id===id);if(!pos)return;activeModalId=id;$('modalSymbol').innerText=pos.symbol.label;$('modalLots').innerText=pos.size;$('modalTp').value=pos.tp||'';$('modalSl').value=pos.sl||'';$('modalSellLots').value='0';$('positionModal').style.display='flex'};
 const initResizable=()=>{const watchlistPanel=$('watchlistPanel'),watchlistHandle=watchlistPanel.querySelector('.resize-handle-right');let isResizing=false,startX=0,startWidth=0;if(watchlistHandle){watchlistHandle.addEventListener('mousedown',e=>{isResizing=true;startX=e.clientX;startWidth=watchlistPanel.offsetWidth;watchlistHandle.classList.add('resizing');e.preventDefault()})}document.addEventListener('mousemove',e=>{if(isResizing){const diff=e.clientX-startX,newWidth=Math.max(250,Math.min(600,startWidth+diff));watchlistPanel.style.width=newWidth+'px'}});document.addEventListener('mouseup',()=>{if(isResizing){isResizing=false;if(watchlistHandle)watchlistHandle.classList.remove('resizing')}})};
 

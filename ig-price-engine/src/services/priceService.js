@@ -13,6 +13,8 @@ class PriceService {
     this.updateInterval = null;
     this.subscribers = new Set();
     this.isRunning = false;
+    this._consecutiveErrors = 0;
+    this._lastErrorAt = null;
     
     // Configuration
     this.pollIntervalMs = parseInt(process.env.PRICE_POLL_INTERVAL_MS) || 500; // 500ms for faster updates
@@ -68,8 +70,23 @@ class PriceService {
       }
       
       this.lastUpdate = new Date();
+      this._consecutiveErrors = 0;
     } catch (error) {
       console.error('[PriceService] Error fetching prices:', error.message);
+      this._consecutiveErrors += 1;
+      this._lastErrorAt = new Date();
+
+      // Auto-recovery: auth failures or repeated errors
+      const status = error.response?.status;
+      if (status === 401 || status === 403) {
+        try {
+          console.warn('[PriceService] Auth error detected, attempting re-login...');
+          const igAuthService = require('./igAuthService');
+          await igAuthService.login();
+        } catch (e) {
+          console.error('[PriceService] Re-login failed:', e.message);
+        }
+      }
     }
   }
 
@@ -165,18 +182,31 @@ class PriceService {
     const epicInfo = getEpicInfo(epic);
     const snapshot = data.snapshot || data;
     const instrument = data.instrument || {};
+
+    const scalingFactorRaw = instrument.scalingFactor;
+    const scalingFactor = Number.isFinite(Number(scalingFactorRaw)) ? Number(scalingFactorRaw) : 1;
+    const normalize = (v) => {
+      const n = parseFloat(v);
+      if (!Number.isFinite(n)) return 0;
+      // Some IG endpoints return prices as integer-like with scalingFactor.
+      // Only apply scaling if factor looks valid and value is large enough.
+      if (scalingFactor > 1 && Math.abs(n) >= scalingFactor) {
+        return n / scalingFactor;
+      }
+      return n;
+    };
     
     return {
       epic: epic,
       symbol: epicInfo?.symbol || epic,
       name: epicInfo?.name || instrument.name || epic,
-      bid: parseFloat(snapshot.bid) || 0,
-      offer: parseFloat(snapshot.offer) || 0,
-      high: parseFloat(snapshot.high) || 0,
-      low: parseFloat(snapshot.low) || 0,
-      open: parseFloat(snapshot.openPrice) || 0,
-      close: parseFloat(snapshot.closePrice) || 0,
-      change: parseFloat(snapshot.netChange) || 0,
+      bid: normalize(snapshot.bid),
+      offer: normalize(snapshot.offer),
+      high: normalize(snapshot.high),
+      low: normalize(snapshot.low),
+      open: normalize(snapshot.openPrice),
+      close: normalize(snapshot.closePrice),
+      change: normalize(snapshot.netChange),
       changePercent: parseFloat(snapshot.percentageChange) || 0,
       updateTime: snapshot.updateTime || new Date().toISOString(),
       marketStatus: snapshot.marketStatus || 'UNKNOWN',
@@ -222,7 +252,9 @@ class PriceService {
       isRunning: this.isRunning,
       lastUpdate: this.lastUpdate,
       cachedPricesCount: this.priceCache.size,
-      pollIntervalMs: this.pollIntervalMs
+      pollIntervalMs: this.pollIntervalMs,
+      consecutiveErrors: this._consecutiveErrors,
+      lastErrorAt: this._lastErrorAt
     };
   }
 

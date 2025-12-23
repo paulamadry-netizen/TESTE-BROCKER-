@@ -315,6 +315,40 @@ async function startServer() {
   console.log(`Environment: ${NODE_ENV}`);
   console.log(`Port: ${PORT}`);
   console.log('');
+  let retryTimer = null;
+  const ensurePriceServiceRunning = async () => {
+    try {
+      const status = igAuthService.getStatus();
+      const priceStatus = priceService.getStatus();
+      if (status.isAuthenticated && !priceStatus.isRunning) {
+        console.log('[Server] Auth ok but price service not running. Starting...');
+        priceService.start(io);
+      }
+    } catch (e) {
+      console.error('[Server] ensurePriceServiceRunning error:', e.message);
+    }
+  };
+  const scheduleAuthRetryLoop = () => {
+    if (retryTimer) return;
+    retryTimer = setInterval(async () => {
+      try {
+        const status = igAuthService.getStatus();
+        if (!status.isAuthenticated) {
+          console.log('[Server] Retrying authentication...');
+          await igAuthService.login();
+          igAuthService.startHeartbeat();
+        }
+        await ensurePriceServiceRunning();
+        if (igAuthService.getStatus().isAuthenticated && priceService.getStatus().isRunning) {
+          clearInterval(retryTimer);
+          retryTimer = null;
+          console.log('[Server] ✅ Auto-recovery loop complete');
+        }
+      } catch (e) {
+        console.error('[Server] Retry loop failed:', e.message);
+      }
+    }, 30000);
+  };
   
   // Step 1: Start HTTP server FIRST (Cloud Run needs port open quickly)
   server.listen(PORT, '0.0.0.0', () => {
@@ -337,18 +371,8 @@ async function startServer() {
     priceService.start(io);
   } catch (error) {
     console.error('[Server] ⚠️ Authentication failed:', error.message);
-    console.log('[Server] Server running but prices unavailable. Retrying auth in 30s...');
-    
-    // Retry authentication after delay
-    setTimeout(async () => {
-      try {
-        await igAuthService.initialize();
-        priceService.start(io);
-        console.log('[Server] ✅ Retry successful, price service started');
-      } catch (retryError) {
-        console.error('[Server] ❌ Retry failed:', retryError.message);
-      }
-    }, 30000);
+    console.log('[Server] Server running but prices unavailable. Auto-retry loop started (30s).');
+    scheduleAuthRetryLoop();
   }
 }
 
