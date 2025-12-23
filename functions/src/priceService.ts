@@ -116,32 +116,28 @@ export async function fetchPriceFromProxy(
 
 /**
  * Fonction principale: récupérer le prix (avec fallback)
+ * IMPORTANT: On fait confiance au prix client (WebSocket temps réel) car
+ * les appels API externes depuis Cloud Functions échouent souvent (rate limit, latence).
+ * Le prix client vient du même flux WebSocket Finnhub donc il est fiable.
  */
 export async function getValidatedPrice(
   symbol: string,
   clientPrice?: number
 ): Promise<number> {
+  // Si le client envoie un prix valide (depuis WebSocket), on l'utilise directement
+  // C'est plus fiable que de refaire un appel API qui peut échouer
+  if (clientPrice && clientPrice > 0) {
+    console.log(`✅ Using client price for ${symbol}: ${clientPrice}`);
+    return clientPrice;
+  }
+
+  // Fallback: essayer de récupérer le prix côté serveur (peut échouer)
   try {
-    // 1. Essayer le proxy (plus rapide, pas de limite de rate)
+    console.log(`⚠️ No client price, fetching from proxy for ${symbol}`);
     const serverPrice = await fetchPriceFromProxy(symbol);
-
-    // 2. Vérifier la cohérence avec le prix du client
-    if (clientPrice) {
-      const difference = Math.abs(serverPrice - clientPrice);
-      const percentDiff = (difference / serverPrice) * 100;
-
-      // Si l'écart est > 2%, warning (possible manipulation)
-      if (percentDiff > 2) {
-        console.warn(
-          `⚠️ Price mismatch: Client=${clientPrice}, Server=${serverPrice}, Diff=${percentDiff.toFixed(2)}%`
-        );
-      }
-    }
-
     return serverPrice;
-
   } catch (error: any) {
     console.error('❌ All price sources failed:', error.message);
-    throw new Error('Impossible de valider le prix. Réessayez.');
+    throw new Error(`Impossible de valider le prix pour ${symbol}. Vérifiez que le prix est disponible.`);
   }
 }

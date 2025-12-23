@@ -108,14 +108,18 @@ export function PerformanceChart({ data }: PerformanceChartProps) {
   }, [data, initialBalance, maxDrawdown, profitTarget]);
 
   const [yDomain, setYDomain] = useState<[number, number]>(defaultDomain);
+  const [hasUserZoomed, setHasUserZoomed] = useState(false);
 
-  // Keep yDomain synced if the underlying dataset changes significantly
-  // (e.g. switching account or loading trades)
+  // Keep yDomain synced ONLY if user hasn't manually zoomed
+  // This prevents the chart from jumping around on every data update
   useEffect(() => {
-    setYDomain(defaultDomain);
-  }, [defaultDomain]);
+    if (!hasUserZoomed) {
+      setYDomain(defaultDomain);
+    }
+  }, [defaultDomain, hasUserZoomed]);
 
   const zoom = (direction: "in" | "out") => {
+    setHasUserZoomed(true);
     const [min, max] = yDomain;
     const center = (min + max) / 2;
     const range = Math.max(1, max - min);
@@ -124,7 +128,10 @@ export function PerformanceChart({ data }: PerformanceChartProps) {
     setYDomain([center - nextRange / 2, center + nextRange / 2]);
   };
 
-  const resetZoom = () => setYDomain(defaultDomain);
+  const resetZoom = () => {
+    setHasUserZoomed(false);
+    setYDomain(defaultDomain);
+  };
 
   const onWheel: React.WheelEventHandler<HTMLDivElement> = (e) => {
     // Zoom in/out with wheel. Trackpad scroll generates wheel too.
