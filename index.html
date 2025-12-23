@@ -6,6 +6,7 @@
 <title>AmABrocker — Pro Trading Platform</title>
 <script src="https://s3.tradingview.com/tv.js"></script>
 <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <!-- Firebase SDK -->
 <script type="module">
@@ -437,45 +438,52 @@ html,body{height:100%;background:linear-gradient(135deg,var(--bg-primary) 0%,var
 <div id="toast" class="toast"></div>
 <div id="debugPanel" class="debug-panel"></div>
 <script>
-const CFG={ws:'wss://finnhub-proxy-477220862918.europe-west1.run.app',keepalive:2e4,reconBase:2e3,reconMax:3e4,baseLot:1e5,leverage:20};
+const CFG={ws:'wss://ig-price-engine-44407447466.europe-west1.run.app',keepalive:2e4,reconBase:2e3,reconMax:3e4,baseLot:1e5,leverage:20};
 const WATCHLIST=[
-// Top 10 Forex Pairs
-{tv:'OANDA:EURUSD',label:'EUR / USD',api:'EUR_USD',type:'forex',yahoo:'EURUSD=X'},
-{tv:'OANDA:USDJPY',label:'USD / JPY',api:'USD_JPY',type:'forex',yahoo:'USDJPY=X'},
-{tv:'OANDA:GBPUSD',label:'GBP / USD',api:'GBP_USD',type:'forex',yahoo:'GBPUSD=X'},
-{tv:'OANDA:USDCHF',label:'USD / CHF',api:'USD_CHF',type:'forex',yahoo:'USDCHF=X'},
-{tv:'OANDA:AUDUSD',label:'AUD / USD',api:'AUD_USD',type:'forex',yahoo:'AUDUSD=X'},
-{tv:'OANDA:USDCAD',label:'USD / CAD',api:'USD_CAD',type:'forex',yahoo:'USDCAD=X'},
-{tv:'OANDA:NZDUSD',label:'NZD / USD',api:'NZD_USD',type:'forex',yahoo:'NZDUSD=X'},
-{tv:'OANDA:EURGBP',label:'EUR / GBP',api:'EUR_GBP',type:'forex',yahoo:'EURGBP=X'},
-{tv:'OANDA:EURJPY',label:'EUR / JPY',api:'EUR_JPY',type:'forex',yahoo:'EURJPY=X'},
-{tv:'OANDA:GBPJPY',label:'GBP / JPY',api:'GBP_JPY',type:'forex',yahoo:'GBPJPY=X'},
-{tv:'OANDA:AUDCAD',label:'AUD / CAD',api:'AUD_CAD',type:'forex',yahoo:'AUDCAD=X'},
-{tv:'OANDA:AUDNZD',label:'AUD / NZD',api:'AUD_NZD',type:'forex',yahoo:'AUDNZD=X'},
-{tv:'OANDA:NZDJPY',label:'NZD / JPY',api:'NZD_JPY',type:'forex',yahoo:'NZDJPY=X'},
-{tv:'OANDA:CHFJPY',label:'CHF / JPY',api:'CHF_JPY',type:'forex',yahoo:'CHFJPY=X'},
-{tv:'OANDA:EURCHF',label:'EUR / CHF',api:'EUR_CHF',type:'forex',yahoo:'EURCHF=X'},
-{tv:'OANDA:AUDJPY',label:'AUD / JPY',api:'AUD_JPY',type:'forex',yahoo:'AUDJPY=X'},
-{tv:'OANDA:GBPCHF',label:'GBP / CHF',api:'GBP_CHF',type:'forex',yahoo:'GBPCHF=X'},
-{tv:'OANDA:EURAUD',label:'EUR / AUD',api:'EUR_AUD',type:'forex',yahoo:'EURAUD=X'},
-{tv:'OANDA:GBPAUD',label:'GBP / AUD',api:'GBP_AUD',type:'forex',yahoo:'GBPAUD=X'},
-{tv:'OANDA:EURCAD',label:'EUR / CAD',api:'EUR_CAD',type:'forex',yahoo:'EURCAD=X'},
-// Precious Metals
-{tv:'OANDA:XAUUSD',label:'Or / USD',api:'XAU_USD',type:'metal',yahoo:'GC=F'},
-{tv:'OANDA:XAGUSD',label:'Argent / USD',api:'XAG_USD',type:'metal',yahoo:'SI=F'},
-// Industrial Metals
-{tv:'TVC:COPPER',label:'Cuivre',api:'COPPER',type:'commodity',yahoo:'HG=F'},
-{tv:'COMEX:ALI1!',label:'Aluminium',api:'ALUMINUM',type:'commodity',yahoo:'ALI=F'},
-{tv:'TVC:ZINC',label:'Zinc',api:'ZINC',type:'commodity',yahoo:'ZI=F'},
-// Energy & Soft Commodities
-{tv:'TVC:USOIL',label:'Petrole WTI',api:'WTICOUSD',type:'commodity',yahoo:'CL=F'},
-{tv:'ICEUS:KC1!',label:'Cafe',api:'COFFEE',type:'commodity',yahoo:'KC=F'},
-// ETFs
-{tv:'NASDAQ:SPY',label:'SPY (S&P 500)',api:'SPY',type:'etf',yahoo:'SPY'},
-{tv:'NASDAQ:DIA',label:'DIA (Dow Jones)',api:'DIA',type:'etf',yahoo:'DIA'},
-{tv:'NASDAQ:QQQ',label:'QQQ (Nasdaq 100)',api:'QQQ',type:'etf',yahoo:'QQQ'}
+// Forex (20 paires)
+{tv:'OANDA:EURUSD',label:'EUR / USD',api:'CS.D.EURUSD.CFD.IP',epic:'CS.D.EURUSD.CFD.IP',type:'forex'},
+{tv:'OANDA:GBPUSD',label:'GBP / USD',api:'CS.D.GBPUSD.CFD.IP',epic:'CS.D.GBPUSD.CFD.IP',type:'forex'},
+{tv:'OANDA:USDJPY',label:'USD / JPY',api:'CS.D.USDJPY.CFD.IP',epic:'CS.D.USDJPY.CFD.IP',type:'forex'},
+{tv:'OANDA:AUDUSD',label:'AUD / USD',api:'CS.D.AUDUSD.CFD.IP',epic:'CS.D.AUDUSD.CFD.IP',type:'forex'},
+{tv:'OANDA:USDCAD',label:'USD / CAD',api:'CS.D.USDCAD.CFD.IP',epic:'CS.D.USDCAD.CFD.IP',type:'forex'},
+{tv:'OANDA:USDCHF',label:'USD / CHF',api:'CS.D.USDCHF.CFD.IP',epic:'CS.D.USDCHF.CFD.IP',type:'forex'},
+{tv:'OANDA:EURGBP',label:'EUR / GBP',api:'CS.D.EURGBP.CFD.IP',epic:'CS.D.EURGBP.CFD.IP',type:'forex'},
+{tv:'OANDA:EURJPY',label:'EUR / JPY',api:'CS.D.EURJPY.CFD.IP',epic:'CS.D.EURJPY.CFD.IP',type:'forex'},
+{tv:'OANDA:GBPJPY',label:'GBP / JPY',api:'CS.D.GBPJPY.CFD.IP',epic:'CS.D.GBPJPY.CFD.IP',type:'forex'},
+{tv:'OANDA:EURCHF',label:'EUR / CHF',api:'CS.D.EURCHF.CFD.IP',epic:'CS.D.EURCHF.CFD.IP',type:'forex'},
+{tv:'OANDA:AUDJPY',label:'AUD / JPY',api:'CS.D.AUDJPY.CFD.IP',epic:'CS.D.AUDJPY.CFD.IP',type:'forex'},
+{tv:'OANDA:EURAUD',label:'EUR / AUD',api:'CS.D.EURAUD.CFD.IP',epic:'CS.D.EURAUD.CFD.IP',type:'forex'},
+{tv:'OANDA:GBPAUD',label:'GBP / AUD',api:'CS.D.GBPAUD.CFD.IP',epic:'CS.D.GBPAUD.CFD.IP',type:'forex'},
+{tv:'OANDA:NZDUSD',label:'NZD / USD',api:'CS.D.NZDUSD.CFD.IP',epic:'CS.D.NZDUSD.CFD.IP',type:'forex'},
+{tv:'OANDA:CADJPY',label:'CAD / JPY',api:'CS.D.CADJPY.CFD.IP',epic:'CS.D.CADJPY.CFD.IP',type:'forex'},
+{tv:'OANDA:GBPCAD',label:'GBP / CAD',api:'CS.D.GBPCAD.CFD.IP',epic:'CS.D.GBPCAD.CFD.IP',type:'forex'},
+{tv:'OANDA:CHFJPY',label:'CHF / JPY',api:'CS.D.CHFJPY.CFD.IP',epic:'CS.D.CHFJPY.CFD.IP',type:'forex'},
+{tv:'OANDA:EURNZD',label:'EUR / NZD',api:'CS.D.EURNZD.CFD.IP',epic:'CS.D.EURNZD.CFD.IP',type:'forex'},
+{tv:'OANDA:AUDCAD',label:'AUD / CAD',api:'CS.D.AUDCAD.CFD.IP',epic:'CS.D.AUDCAD.CFD.IP',type:'forex'},
+{tv:'OANDA:NZDJPY',label:'NZD / JPY',api:'CS.D.NZDJPY.CFD.IP',epic:'CS.D.NZDJPY.CFD.IP',type:'forex'},
+// Metaux precieux
+{tv:'OANDA:XAUUSD',label:'Or / USD',api:'CS.D.GD.CFD.IP',epic:'CS.D.GD.CFD.IP',type:'metal'},
+{tv:'OANDA:XAGUSD',label:'Argent / USD',api:'CS.D.SI.CFD.IP',epic:'CS.D.SI.CFD.IP',type:'metal'},
+// Matieres premieres
+{tv:'TVC:USOIL',label:'Petrole Brut',api:'CC.D.CL.UMA.IP',epic:'CC.D.CL.UMA.IP',type:'commodity'},
+{tv:'ICEUS:KC1!',label:'Cafe',api:'CC.D.COFFEE.UMA.IP',epic:'CC.D.COFFEE.UMA.IP',type:'commodity'},
+{tv:'TVC:ZINC',label:'Zinc',api:'TM.D.ZINC.CFD.IP',epic:'TM.D.ZINC.CFD.IP',type:'commodity'},
+{tv:'TVC:COPPER',label:'Cuivre',api:'TM.D.COPPER.CFD.IP',epic:'TM.D.COPPER.CFD.IP',type:'commodity'},
+// Indices (12)
+{tv:'PEPPERSTONE:FRA40',label:'France 40 (CAC)',api:'IX.D.CAC.IFD.IP',epic:'IX.D.CAC.IFD.IP',type:'index'},
+{tv:'PEPPERSTONE:GER40',label:'Allemagne 40 (DAX)',api:'IX.D.DAX.IFD.IP',epic:'IX.D.DAX.IFD.IP',type:'index'},
+{tv:'FOREXCOM:DJI',label:'Wall Street (DOW)',api:'IX.D.DOW.IFD.IP',epic:'IX.D.DOW.IFD.IP',type:'index'},
+{tv:'PEPPERSTONE:NAS100',label:'US Tech 100 (NASDAQ)',api:'IX.D.NASDAQ.IFD.IP',epic:'IX.D.NASDAQ.IFD.IP',type:'index'},
+{tv:'FOREXCOM:SPX500',label:'US 500 (S&P)',api:'IX.D.SPTRD.IFD.IP',epic:'IX.D.SPTRD.IFD.IP',type:'index'},
+{tv:'PEPPERSTONE:UK100',label:'UK 100 (FTSE)',api:'IX.D.FTSE.IFD.IP',epic:'IX.D.FTSE.IFD.IP',type:'index'},
+{tv:'PEPPERSTONE:AUS200',label:'Australie 200',api:'IX.D.ASX.IFD.IP',epic:'IX.D.ASX.IFD.IP',type:'index'},
+{tv:'PEPPERSTONE:EUSTX50',label:'Euro Stoxx 50',api:'IX.D.STX.IFD.IP',epic:'IX.D.STX.IFD.IP',type:'index'},
+{tv:'PEPPERSTONE:ESP35',label:'Espagne 35 (IBEX)',api:'IX.D.IBEX.IFD.IP',epic:'IX.D.IBEX.IFD.IP',type:'index'},
+{tv:'PEPPERSTONE:JPN225',label:'Japon 225 (NIKKEI)',api:'IX.D.NIKKEI.IFD.IP',epic:'IX.D.NIKKEI.IFD.IP',type:'index'},
+{tv:'PEPPERSTONE:SUI20',label:'Suisse (SMI)',api:'IX.D.SMI.IFD.IP',epic:'IX.D.SMI.IFD.IP',type:'index'},
+{tv:'PEPPERSTONE:HK50',label:'Hong Kong (HSI)',api:'IX.D.HSI.IFD.IP',epic:'IX.D.HSI.IFD.IP',type:'index'}
 ];
-const PIP_STEPS={default:0.0001,jpy:0.01,xau:0.1,xag:0.01,copper:0.001,oil:0.01,coffee:0.05,aluminum:1,zinc:1,commodity:0.01,etf:0.01};
+const PIP_STEPS={default:0.0001,jpy:0.01,xau:0.1,xag:0.01,copper:0.001,oil:0.01,coffee:0.05,aluminum:1,zinc:1,commodity:0.01,etf:0.01,index:1};
 let ws,wsConnected=false,reconDelay=CFG.reconBase,reconAttempts=0,reconTimer,keepaliveTimer,currentSymbol=WATCHLIST[0],priceCache={},lastPriceUpdate={},positions=[],history=[],orders=[],simBalance=0,availableBalance=0,tvWidget,lwChart,lwSeries,activeModalId,debugMode=false,msgCount=0;
 let currentTimeframe='15',chartHistoryData={};
 let initialBalance=0,startOfDayBalance=0,todayStartDate=new Date().toDateString(),accountSuspended=false;
@@ -492,12 +500,14 @@ const closeAllPositions=async()=>{debugLog('Closing all positions...');const pos
 const suspendAccount=async(reason)=>{accountSuspended=true;showToast(`COMPTE SUSPENDU: ${reason}`,'error',10000);await closeAllPositions();if(window.firebaseUser&&window.firestoreDoc&&window.firestoreUpdateDoc){try{const userDocRef=window.firestoreDoc(window.firebaseDb,'users',window.firebaseUser.uid);await window.firestoreUpdateDoc(userDocRef,{accountStatus:'suspended',suspensionReason:reason,suspendedAt:new Date().toISOString()});debugLog(`Account suspended in Firestore: ${reason}`);alert(`COMPTE DESACTIVE\n\n${reason}\n\nVotre compte a ete suspendu pour violation des regles de trading.\nVeuillez contacter le support.`)}catch(error){console.error('Error suspending account:',error)}}};
 const checkAllRules=async()=>{if(accountSuspended)return true;const hoursCheck=checkTradingHours();if(!hoursCheck.allowed){await suspendAccount(hoursCheck.reason);return true}const dailyCheck=checkDailyDrawdown();if(dailyCheck.violated){await suspendAccount(dailyCheck.reason);return true}const totalCheck=checkTotalDrawdown();if(totalCheck.violated){await suspendAccount(totalCheck.reason);return true}return false};
 
-const escapeId=(v)=>String(v).replace(/[^\w]/g,'_'),formatPrice=(v)=>{if(v===undefined||v===null)return'—';const n=Number(v);if(currentSymbol&&(currentSymbol.type==='etf'||currentSymbol.type==='commodity'))return n.toFixed(2);if(currentSymbol&&currentSymbol.api.includes('XAG'))return n.toFixed(3);return n.toFixed(5).replace(/\.?0+$/,'')},formatMoney=(v)=>v===undefined||v===null?'0.00':Number(v).toFixed(2),formatDateTime=(t)=>new Date(t).toLocaleString('fr-FR');
-const lotUnits=(s)=>{const o=WATCHLIST.find(w=>w.api===s);if(o&&o.type==='etf')return 1;if(o&&o.type==='commodity')return 1000;if(s.includes('XAU'))return 100;if(s.includes('XAG'))return 5000;return CFG.baseLot},isQuoteUsd=(s)=>s.endsWith('USD'),isBaseUsd=(s)=>s.startsWith('USD'),isETF=(s)=>{const o=WATCHLIST.find(w=>w.api===s);return o&&o.type==='etf'},isCommodity=(s)=>{const o=WATCHLIST.find(w=>w.api===s);return o&&o.type==='commodity'},pipStep=(s)=>{if(isETF(s))return PIP_STEPS.etf;if(s.includes('JPY'))return PIP_STEPS.jpy;if(s.includes('XAU'))return PIP_STEPS.xau;if(s.includes('XAG'))return PIP_STEPS.xag;if(s.includes('COPPER')||s.includes('XCU'))return PIP_STEPS.copper;if(s.includes('WTI')||s.includes('OIL')||s.includes('WTICOUSD'))return PIP_STEPS.oil;if(s.includes('COFFEE'))return PIP_STEPS.coffee;if(s.includes('ALUMINUM'))return PIP_STEPS.aluminum;if(s.includes('ZINC'))return PIP_STEPS.zinc;return PIP_STEPS.default};
+const escapeId=(v)=>String(v).replace(/[^\w]/g,'_'),formatPrice=(v)=>{if(v===undefined||v===null)return'—';const n=Number(v);if(currentSymbol&&(currentSymbol.type==='etf'||currentSymbol.type==='index'))return n.toFixed(2);if(currentSymbol&&currentSymbol.type==='commodity')return n.toFixed(2);if(currentSymbol&&currentSymbol.api.includes('SI.CFD'))return n.toFixed(3);return n.toFixed(5).replace(/\.?0+$/,'')},formatMoney=(v)=>v===undefined||v===null?'0.00':Number(v).toFixed(2),formatDateTime=(t)=>new Date(t).toLocaleString('fr-FR');
+const lotUnits=(s)=>{const o=WATCHLIST.find(w=>w.api===s);if(o&&o.type==='etf')return 1;if(o&&o.type==='index')return 1;if(o&&o.type==='commodity')return 1000;if(s.includes('GD.CFD'))return 100;if(s.includes('SI.CFD'))return 5000;return CFG.baseLot},isQuoteUsd=(s)=>s.includes('USD'),isBaseUsd=(s)=>s.includes('USD')&&s.indexOf('USD')<10,isETF=(s)=>{const o=WATCHLIST.find(w=>w.api===s);return o&&o.type==='etf'},isIndex=(s)=>{const o=WATCHLIST.find(w=>w.api===s);return o&&o.type==='index'},isCommodity=(s)=>{const o=WATCHLIST.find(w=>w.api===s);return o&&o.type==='commodity'},isMetal=(s)=>{const o=WATCHLIST.find(w=>w.api===s);return o&&o.type==='metal'},pipStep=(s)=>{if(isETF(s))return PIP_STEPS.etf;if(isIndex(s))return PIP_STEPS.index;if(s.includes('JPY'))return PIP_STEPS.jpy;if(s.includes('GD.CFD'))return PIP_STEPS.xau;if(s.includes('SI.CFD'))return PIP_STEPS.xag;if(s.includes('COPPER'))return PIP_STEPS.copper;if(s.includes('CL.UMA'))return PIP_STEPS.oil;if(s.includes('COFFEE'))return PIP_STEPS.coffee;if(s.includes('ZINC'))return PIP_STEPS.zinc;return PIP_STEPS.default};
 const pipValuePerLot=(s,p)=>{
 const step=pipStep(s),units=lotUnits(s);
 if(isETF(s))return step*units;
+if(isIndex(s))return step*units;
 if(isCommodity(s))return step*units;
+if(isMetal(s))return step*units;
 if(s.includes('JPY')){
 const price=Number(p)||150;
 return(step*units)/price;
@@ -506,14 +516,14 @@ if(s.includes('CHF')&&isBaseUsd(s)){
 const price=Number(p)||0.9;
 return(step*units)/price;
 }
-if(s.includes('XAU'))return step*units;
-if(s.includes('XAG'))return step*units;
+if(s.includes('GD.CFD'))return step*units;
+if(s.includes('SI.CFD'))return step*units;
 if(isQuoteUsd(s))return step*units;
 if(isBaseUsd(s))return units;
 return p>0?(step*units)/p:step*units;
 };
-const describePip=(s,p)=>{const perLot=pipValuePerLot(s,p||priceCache[s]||1);if(isCommodity(s))return `1 contrat ≈ ${formatMoney(perLot)} USD/point`;if(isETF(s))return `1 lot ≈ ${formatMoney(perLot)} USD/point`;return `1 lot ≈ ${formatMoney(perLot)} USD/pip`};
-const marginRequirement=(s,lots,p)=>{const l=Number(lots);if(!l)return 0;if(isETF(s)){const price=Number(p)||0,exp=price*l;return exp/CFG.leverage}if(isCommodity(s)){const price=Number(p)||0,exp=price*lotUnits(s)*l;return exp/CFG.leverage}if(isBaseUsd(s))return(lotUnits(s)*l)/CFG.leverage;const price=Number(p)||0,units=lotUnits(s),exp=price?price*units*l:units*l;return exp/CFG.leverage};
+const describePip=(s,p)=>{const perLot=pipValuePerLot(s,p||priceCache[s]||1);if(isCommodity(s))return `1 contrat ≈ ${formatMoney(perLot)} USD/point`;if(isETF(s))return `1 lot ≈ ${formatMoney(perLot)} USD/point`;if(isIndex(s))return `1 contrat ≈ ${formatMoney(perLot)} USD/point`;if(isMetal(s))return `1 lot ≈ ${formatMoney(perLot)} USD/point`;return `1 lot ≈ ${formatMoney(perLot)} USD/pip`};
+const marginRequirement=(s,lots,p)=>{const l=Number(lots);if(!l)return 0;if(isETF(s)){const price=Number(p)||0,exp=price*l;return exp/CFG.leverage}if(isIndex(s)){const price=Number(p)||0,exp=price*l;return exp/CFG.leverage}if(isCommodity(s)){const price=Number(p)||0,exp=price*lotUnits(s)*l;return exp/CFG.leverage}if(isMetal(s)){const price=Number(p)||0,exp=price*lotUnits(s)*l;return exp/CFG.leverage}if(isBaseUsd(s))return(lotUnits(s)*l)/CFG.leverage;const price=Number(p)||0,units=lotUnits(s),exp=price?price*units*l:units*l;return exp/CFG.leverage};
 
 const getYahooInterval=(tf)=>{if(tf==='1')return '1m';if(tf==='5')return '5m';if(tf==='15')return '15m';if(tf==='60')return '1h';if(tf==='240')return '1h';if(tf==='1D')return '1d';return '15m'};
 const getYahooRange=(tf)=>{if(tf==='1'||tf==='5')return '5d';if(tf==='15')return '1mo';if(tf==='60')return '3mo';if(tf==='240')return '3mo';if(tf==='1D')return '3mo';return '1mo'};
@@ -532,11 +542,11 @@ $('closeOrders').onclick=()=>togglePanel('ordersPanel','toggleOrders');
 $('closePositions').onclick=()=>togglePanel('bottomPanel','togglePositions');
 
 const setWsStatus=(status)=>{const el=$('wsStatus');wsConnected=status==='connected';if(status==='connected'){el.className='status-badge connected';el.innerHTML='<div class="status-dot"></div><span>Connecte</span>'}else if(status==='connecting'){el.className='status-badge connecting';el.innerHTML='<div class="status-dot"></div><span>Connexion...</span>'}else{el.className='status-badge disconnected';el.innerHTML='<div class="status-dot"></div><span>Deconnecte</span>'}};
-const startKeepalive=()=>{stopKeepalive();keepaliveTimer=setInterval(()=>{if(ws&&ws.readyState===WebSocket.OPEN){try{ws.send(JSON.stringify({type:'ping'}));debugLog('Ping')}catch(e){debugLog(`Keepalive error: ${e.message}`)}}},CFG.keepalive)},stopKeepalive=()=>{if(keepaliveTimer){clearInterval(keepaliveTimer);keepaliveTimer=null}};
+const startKeepalive=()=>{stopKeepalive();keepaliveTimer=setInterval(()=>{if(ws&&ws.connected){ws.emit('ping');debugLog('Ping')}},CFG.keepalive)},stopKeepalive=()=>{if(keepaliveTimer){clearInterval(keepaliveTimer);keepaliveTimer=null}};
 const scheduleReconnect=()=>{stopKeepalive();if(reconTimer)clearTimeout(reconTimer);reconAttempts++;reconDelay=Math.min(CFG.reconMax,CFG.reconBase*Math.pow(1.5,reconAttempts));debugLog(`Reconnect #${reconAttempts} in ${reconDelay}ms`);reconTimer=setTimeout(()=>startWebSocket(),reconDelay)};
-const startWebSocket=()=>{if(ws&&(ws.readyState===WebSocket.CONNECTING||ws.readyState===WebSocket.OPEN))return;try{debugLog(`Connecting: ${CFG.ws}`);setWsStatus('connecting');ws=new WebSocket(CFG.ws);ws.addEventListener('open',()=>{debugLog('WS OPEN');setWsStatus('connected');reconAttempts=0;reconDelay=CFG.reconBase;msgCount=0;startKeepalive();showToast('Connecte','success');setTimeout(()=>{WATCHLIST.forEach(w=>{try{ws.send(JSON.stringify({type:'subscribe',symbol:w.api}));debugLog(`Sub: ${w.api}`)}catch(e){debugLog(`Sub error: ${e.message}`)}});debugLog('All subs sent')},500)});ws.addEventListener('message',ev=>{msgCount++;try{const msg=JSON.parse(ev.data);debugLog(`MSG #${msgCount}: ${JSON.stringify(msg).substring(0,100)}`);handleWsMessage(msg)}catch(e){debugLog(`Parse error: ${e.message}`)}});ws.addEventListener('close',evt=>{debugLog(`WS CLOSE: ${evt.code}`);setWsStatus('disconnected');showToast('Deconnecte','error');scheduleReconnect()});ws.addEventListener('error',err=>{debugLog(`WS ERROR: ${err}`);setWsStatus('disconnected')})}catch(e){debugLog(`WS failed: ${e.message}`);setWsStatus('disconnected');scheduleReconnect()}};
-const handleWsMessage=(msg)=>{if(!msg)return;if(Array.isArray(msg)){msg.forEach(m=>handleWsMessage(m));return}if(msg.type==='ping'||msg.type==='pong')return;if(msg.type==='error'){debugLog(`Server error: ${JSON.stringify(msg)}`);showToast(`Erreur: ${msg.message||'Unknown'}`,'error');return}if(msg.type==='trade'&&Array.isArray(msg.data)){msg.data.forEach(d=>{const sym=d.s||d.sym||d.symbol,price=d.p||d.price;if(!sym||price===undefined)return;const oldPrice=priceCache[sym],newPrice=Number(price);priceCache[sym]=newPrice;lastPriceUpdate[sym]=Date.now();debugLog(`Price: ${sym} = ${price}`);updatePriceUI(sym,oldPrice,newPrice);onPriceUpdate(sym)});return}if(msg.data&&typeof msg.data==='object'){const sym=msg.data.s||msg.data.symbol,price=msg.data.p||msg.data.price||msg.data.c;if(sym&&price!==undefined){const oldPrice=priceCache[sym],newPrice=Number(price);priceCache[sym]=newPrice;lastPriceUpdate[sym]=Date.now();debugLog(`Price: ${sym} = ${price}`);updatePriceUI(sym,oldPrice,newPrice);onPriceUpdate(sym)}}};
-const updatePriceUI=(symbol,oldPrice,newPrice)=>{const el=$('price_'+escapeId(symbol));if(el){const symObj=WATCHLIST.find(w=>w.api===symbol);el.innerText=symObj&&symObj.type==='etf'?newPrice.toFixed(2):formatPrice(newPrice);const parentItem=el.closest('.wl-item');if(parentItem&&oldPrice!==undefined&&oldPrice!==newPrice){parentItem.classList.add('updating');setTimeout(()=>parentItem.classList.remove('updating'),500)}}if(symbol===currentSymbol.api){if(currentSymbol.type==='etf')updateLightweightChart(newPrice);const formatted=currentSymbol.type==='etf'?newPrice.toFixed(2):formatPrice(newPrice);$('currentPriceValue').innerText=formatted}};
+const startWebSocket=()=>{if(ws&&ws.connected)return;try{debugLog(`Connecting: ${CFG.ws}`);setWsStatus('connecting');ws=io(CFG.ws,{transports:['websocket','polling'],reconnection:true,reconnectionAttempts:10,reconnectionDelay:2000});ws.on('connect',()=>{debugLog('Socket.io CONNECTED');setWsStatus('connected');reconAttempts=0;reconDelay=CFG.reconBase;msgCount=0;startKeepalive();showToast('Connecte a IG Markets','success');const epics=WATCHLIST.map(w=>w.epic);ws.emit('subscribe',epics);debugLog(`Subscribed to ${epics.length} epics`)});ws.on('prices',(data)=>{msgCount++;debugLog(`MSG #${msgCount}: prices update`);handlePriceUpdate(data)});ws.on('pong',()=>{debugLog('Pong received')});ws.on('disconnect',(reason)=>{debugLog(`Socket.io DISCONNECT: ${reason}`);setWsStatus('disconnected');showToast('Deconnecte','error')});ws.on('connect_error',(err)=>{debugLog(`Socket.io ERROR: ${err.message}`);setWsStatus('disconnected')})}catch(e){debugLog(`Socket.io failed: ${e.message}`);setWsStatus('disconnected');scheduleReconnect()}};
+const handlePriceUpdate=(data)=>{if(!data||!data.data)return;const prices=Array.isArray(data.data)?data.data:[data.data];prices.forEach(p=>{const epic=p.epic,bid=p.bid,offer=p.offer;if(!epic)return;const midPrice=(bid+offer)/2;const oldPrice=priceCache[epic];priceCache[epic]=midPrice;lastPriceUpdate[epic]=Date.now();debugLog(`Price: ${epic} = ${midPrice.toFixed(5)} (bid:${bid} offer:${offer})`);updatePriceUI(epic,oldPrice,midPrice);onPriceUpdate(epic)})};
+const updatePriceUI=(symbol,oldPrice,newPrice)=>{const el=$('price_'+escapeId(symbol));if(el){const symObj=WATCHLIST.find(w=>w.api===symbol);const isSimple=symObj&&(symObj.type==='etf'||symObj.type==='index'||symObj.type==='commodity');el.innerText=isSimple?newPrice.toFixed(2):formatPrice(newPrice);const parentItem=el.closest('.wl-item');if(parentItem&&oldPrice!==undefined&&oldPrice!==newPrice){parentItem.classList.add('updating');setTimeout(()=>parentItem.classList.remove('updating'),500)}}if(symbol===currentSymbol.api){const isSimple=currentSymbol.type==='etf'||currentSymbol.type==='index'||currentSymbol.type==='commodity';const formatted=isSimple?newPrice.toFixed(2):formatPrice(newPrice);$('currentPriceValue').innerText=formatted}};
 const refreshLotInfo=()=>{const price=priceCache[currentSymbol.api],lots=parseFloat($('lotInput').value)||1;if(price!==undefined){let exp;if(isETF(currentSymbol.api))exp=price*lots;else if(isBaseUsd(currentSymbol.api))exp=lotUnits(currentSymbol.api)*lots;else exp=price*lotUnits(currentSymbol.api)*lots;const margin=exp/CFG.leverage,pipInfo=describePip(currentSymbol.api,price);$('lotValueInfo').innerText=`${lots} lots = ${formatMoney(margin)} USD · ${pipInfo} · 1:${CFG.leverage}`;return}$('lotValueInfo').innerText=`1 lot = ${lotUnits(currentSymbol.api)}u · 1:${CFG.leverage}`};
 const onPriceUpdate=(symbol)=>{let updated=false;positions.forEach(pos=>{if(pos.symbol.api===symbol){pos.current=priceCache[symbol];updated=true}});checkPositionTargets(symbol);checkOrdersForSymbol(symbol);if(updated)renderPositions();renderTotals()};
 const checkPositionTargets=(symbol)=>{const price=priceCache[symbol];if(price===undefined)return;const toClose=[];positions.forEach(pos=>{if(pos.symbol.api!==symbol)return;if(pos.side==='BUY'){if(pos.tp!==null&&price>=pos.tp)toClose.push({id:pos.id,reason:'TP'});if(pos.sl!==null&&price<=pos.sl)toClose.push({id:pos.id,reason:'SL'})}else{if(pos.tp!==null&&price<=pos.tp)toClose.push({id:pos.id,reason:'TP'});if(pos.sl!==null&&price>=pos.sl)toClose.push({id:pos.id,reason:'SL'})}});toClose.forEach(({id,reason})=>{debugLog(`Close ${id}: ${reason}`);closePosition(id)})};
