@@ -185,15 +185,49 @@ class PriceService {
 
     const scalingFactorRaw = instrument.scalingFactor;
     const scalingFactor = Number.isFinite(Number(scalingFactorRaw)) ? Number(scalingFactorRaw) : 1;
-    const normalize = (v) => {
-      const n = parseFloat(v);
-      if (!Number.isFinite(n)) return 0;
-      // Some IG endpoints return prices as integer-like with scalingFactor.
-      // Only apply scaling if factor looks valid and value is large enough.
-      if (scalingFactor > 1 && Math.abs(n) >= scalingFactor) {
-        return n / scalingFactor;
+
+    const inferDividerForEpic = (n) => {
+      if (!Number.isFinite(n) || n === 0) return 1;
+
+      // Forex epics: CS.D.*
+      // Some IG responses return forex prices scaled (e.g. EURUSD ~ 13051 instead of 1.3051)
+      if (typeof epic === 'string' && epic.startsWith('CS.D.')) {
+        const isJpy = epic.includes('JPY');
+        if (isJpy) {
+          // USDJPY ~ 156.50; if we see thousands, it's scaled by 100
+          if (Math.abs(n) > 1000) return 100;
+          return 1;
+        }
+        // Non-JPY forex usually ~ 0.5 - 2.0; if we see > 20 it's almost certainly x10000
+        if (Math.abs(n) > 20) return 10000;
+        return 1;
       }
-      return n;
+
+      // Metals / commodities can also be scaled, but less frequently.
+      // Keep conservative heuristics.
+      if (typeof epic === 'string' && epic.startsWith('IX.D.')) {
+        // Indices values are usually 1k-100k. If we see millions, might be x100.
+        if (Math.abs(n) > 2000000) return 100;
+        return 1;
+      }
+
+      return 1;
+    };
+
+    const normalize = (v) => {
+      const raw = parseFloat(v);
+      if (!Number.isFinite(raw)) return 0;
+
+      // 1) Apply IG scalingFactor if it looks reliable
+      if (scalingFactor > 1 && Math.abs(raw) >= scalingFactor) {
+        const scaled = raw / scalingFactor;
+        // If scaled looks sane, keep it
+        if (Number.isFinite(scaled) && scaled !== 0) return scaled;
+      }
+
+      // 2) Fallback: infer divider from epic patterns
+      const divider = inferDividerForEpic(raw);
+      return raw / divider;
     };
     
     return {
