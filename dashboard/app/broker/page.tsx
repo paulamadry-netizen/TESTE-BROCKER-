@@ -4,8 +4,8 @@ import { useEffect } from "react";
 
 export default function BrokerRedirect() {
   useEffect(() => {
-    // Redirect to index.html (broker) in public folder
-    window.location.href = "/index.html";
+    // Redirect to Firebase Hosting broker
+    window.location.href = "https://teste-brocker.web.app";
   }, []);
 
   return (

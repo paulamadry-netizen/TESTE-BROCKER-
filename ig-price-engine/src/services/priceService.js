@@ -15,7 +15,7 @@ class PriceService {
     this.isRunning = false;
     
     // Configuration
-    this.pollIntervalMs = parseInt(process.env.PRICE_POLL_INTERVAL_MS) || 1000; // 1 second
+    this.pollIntervalMs = parseInt(process.env.PRICE_POLL_INTERVAL_MS) || 500; // 500ms for faster updates
     this.batchSize = 50; // IG API allows up to 50 epics per request
   }
 
