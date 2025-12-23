@@ -12,7 +12,7 @@
 <script type="module">
   import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
   import { getAuth, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
-  import { getFirestore, collection, addDoc, updateDoc, doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+  import { getFirestore, collection, addDoc, updateDoc, doc, getDoc, getDocs, query, where, orderBy } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
   const firebaseConfig = {
     apiKey: "AIzaSyBCAeaaJMMw3_Egf-6-4i63IhAUy4EyzBc",
@@ -117,6 +117,9 @@
       console.log('🔐 User authenticated:', user.uid);
       // Load user data from Firestore
       await window.loadUserData(user.uid);
+      if(window.loadUserTrades){
+        await window.loadUserTrades(user.uid);
+      }
     } else {
       console.log('⚠️ No user authenticated');
       // Redirect to login
@@ -163,6 +166,52 @@
     } catch (error) {
       console.error('❌ Error updating trade:', error);
       return false;
+    }
+  };
+
+  window.loadUserTrades = async (userId) => {
+    try {
+      const q = query(collection(db, 'trades'), where('userId','==',userId), orderBy('openedAt','desc'));
+      const snap = await getDocs(q);
+      const open = [];
+      const closed = [];
+      snap.forEach(d => {
+        const t = d.data();
+        if(!t) return;
+        const symObj = (window.WATCHLIST||[]).find(w=>w.api===t.symbolApi) || {label:t.symbol||t.symbolApi,tv:t.symbolApi,api:t.symbolApi,type:'forex'};
+        if(t.status==='open'){
+          open.push({
+            id: 'pos_'+d.id,
+            firestoreId: d.id,
+            symbol: symObj,
+            side: t.side,
+            entry: Number(t.entryPrice),
+            size: Number(t.lots),
+            current: Number(t.currentPrice||t.entryPrice),
+            tp: t.takeProfit!==undefined&&t.takeProfit!==null?Number(t.takeProfit):null,
+            sl: t.stopLoss!==undefined&&t.stopLoss!==null?Number(t.stopLoss):null,
+            openedAt: t.openedAt?new Date(t.openedAt).getTime():Date.now(),
+          });
+        }else if(t.status==='closed'){
+          closed.push({
+            symbol: symObj,
+            side: t.side,
+            entry: Number(t.entryPrice),
+            close: Number(t.closePrice||t.currentPrice||t.entryPrice),
+            pnl: Number(t.pnl||0),
+            lots: Number(t.lots),
+            closedAt: t.closedAt?new Date(t.closedAt).getTime():Date.now(),
+          });
+        }
+      });
+      if(window.positions!==undefined){}
+      window.__loadedTrades = {open,closed};
+      if(typeof window.applyLoadedTrades === 'function'){
+        window.applyLoadedTrades();
+      }
+      console.log('✅ Trades loaded:', open.length, 'open /', closed.length, 'closed');
+    } catch (e) {
+      console.error('❌ Error loading trades:', e);
     }
   };
 </script>
@@ -262,7 +311,7 @@ html,body{height:100%;background:linear-gradient(135deg,var(--bg-primary) 0%,var
 .btn-ghost:hover{background:var(--surface-elevated);border-color:var(--border-light);color:var(--text-primary)}
 #tv_chart_container{display:none}
 #lw_chart_container{width:100%;height:100%;position:relative}
-.chart-overlay{position:absolute;top:0;left:0;right:60px;bottom:30px;pointer-events:none;z-index:10}
+.chart-overlay{position:absolute;top:0;left:0;right:60px;bottom:30px;pointer-events:auto;z-index:10}
 .price-line{position:absolute;left:0;right:0;height:2px;display:flex;align-items:center;pointer-events:auto;cursor:ns-resize}
 .price-line.position-buy{background:linear-gradient(90deg,transparent,rgba(16,185,129,0.8),transparent)}
 .price-line.position-sell{background:linear-gradient(90deg,transparent,rgba(239,68,68,0.8),transparent)}
@@ -414,7 +463,6 @@ html,body{height:100%;background:linear-gradient(135deg,var(--bg-primary) 0%,var
 <button class="icon-btn" id="drawLineBtn" title="Droite">/</button>
 <button class="icon-btn" id="fibRetrBtn" title="Fibonacci Retracement">FibR</button>
 <button class="icon-btn" id="fibExtBtn" title="Fibonacci Extension">FibE</button>
-<button class="icon-btn" id="fibFanBtn" title="Fibonacci Fan">FibF</button>
 <button class="icon-btn" id="deleteDrawBtn" title="Supprimer dessin">Del</button>
 </div>
 <div class="ind-toolbar" id="slTpToolbar" style="gap:6px">
@@ -503,7 +551,7 @@ html,body{height:100%;background:linear-gradient(135deg,var(--bg-primary) 0%,var
 <div id="toast" class="toast"></div>
 <div id="debugPanel" class="debug-panel"></div>
 <script>
-const CFG={ws:'wss://ig-price-engine-44407447466.europe-west1.run.app',keepalive:2e4,reconBase:2e3,reconMax:3e4,baseLot:1e5,leverage:20};
+const CFG={ws:'https://ig-price-engine-44407447466.europe-west1.run.app',keepalive:2e4,reconBase:2e3,reconMax:3e4,baseLot:1e5,leverage:20};
 const WATCHLIST=[
 // Forex (20 paires)
 {tv:'OANDA:EURUSD',label:'EUR / USD',api:'CS.D.EURUSD.CFD.IP',epic:'CS.D.EURUSD.CFD.IP',type:'forex'},
@@ -548,6 +596,7 @@ const WATCHLIST=[
 {tv:'PEPPERSTONE:SUI20',label:'Suisse (SMI)',api:'IX.D.SMI.IFD.IP',epic:'IX.D.SMI.IFD.IP',type:'index'},
 {tv:'PEPPERSTONE:HK50',label:'Hong Kong (HSI)',api:'IX.D.HSI.IFD.IP',epic:'IX.D.HSI.IFD.IP',type:'index'}
 ];
+window.WATCHLIST = WATCHLIST;
 const PIP_STEPS={default:0.0001,jpy:0.01,xau:0.1,xag:0.01,copper:0.001,oil:0.01,coffee:0.05,aluminum:1,zinc:1,commodity:0.01,etf:0.01,index:1};
 let ws,wsConnected=false,reconDelay=CFG.reconBase,reconAttempts=0,reconTimer,keepaliveTimer,currentSymbol=WATCHLIST[0],priceCache={},lastPriceUpdate={},positions=[],history=[],orders=[],simBalance=0,availableBalance=0,tvWidget,lwChart,lwSeries,activeModalId,debugMode=false,msgCount=0;
 let currentTimeframe='15',chartHistoryData={};
@@ -1141,6 +1190,19 @@ const updateChartOverlay=()=>{
       return l;
     };
 
+    const mkText=(x,y,txt,color)=>{
+      const t=document.createElementNS('http://www.w3.org/2000/svg','text');
+      t.setAttribute('x',x);
+      t.setAttribute('y',y);
+      t.setAttribute('fill',color);
+      t.setAttribute('font-size','11');
+      t.setAttribute('font-family','Inter, system-ui, -apple-system, sans-serif');
+      t.setAttribute('text-anchor','end');
+      t.style.pointerEvents='none';
+      t.textContent=txt;
+      return t;
+    };
+
     const drawFibRetr=(d)=>{
       const top=Math.min(d.a.price,d.b.price),bot=Math.max(d.a.price,d.b.price);
       const ratios=[0,0.236,0.382,0.5,0.618,0.786,1];
@@ -1151,6 +1213,8 @@ const updateChartOverlay=()=>{
         const l=mkLine(0,y,w,y,'rgba(167,139,250,0.9)',1,'4 4');
         l.dataset.id=d.id;
         svg.appendChild(l);
+        const label=`${(r*100).toFixed(1)}%  ${formatChartPrice(price)}`;
+        svg.appendChild(mkText(w-6,y-6,label,'rgba(167,139,250,0.95)'));
       });
     };
 
@@ -1164,19 +1228,8 @@ const updateChartOverlay=()=>{
         const l=mkLine(0,y,w,y,'rgba(99,102,241,0.9)',1,'4 4');
         l.dataset.id=d.id;
         svg.appendChild(l);
-      });
-    };
-
-    const drawFibFan=(d)=>{
-      const x1=timeToX(d.a.time),x2=timeToX(d.b.time);
-      const y1=priceToY(d.a.price),y2=priceToY(d.b.price);
-      if(x1===null||x2===null||y1===null||y2===null) return;
-      const ratios=[0.382,0.5,0.618];
-      ratios.forEach(r=>{
-        const yAtX2=y1+(y2-y1)*r;
-        const l=mkLine(x1,y1,x2,yAtX2,'rgba(34,211,238,0.9)',1,null);
-        l.dataset.id=d.id;
-        svg.appendChild(l);
+        const label=`${r.toFixed(3)}  ${formatChartPrice(price)}`;
+        svg.appendChild(mkText(w-6,y-6,label,'rgba(99,102,241,0.95)'));
       });
     };
 
@@ -1192,7 +1245,6 @@ const updateChartOverlay=()=>{
       }
       if(d.type==='fib_retr') drawFibRetr(d);
       if(d.type==='fib_ext') drawFibExt(d);
-      if(d.type==='fib_fan') drawFibFan(d);
     });
   }
   
@@ -1301,6 +1353,10 @@ const endDrag=(e)=>{
     if(type==='tp')pos.tp=newPrice;
     if(type==='sl')pos.sl=newPrice;
     renderPositions();
+    if(pos.firestoreId&&window.updateTrade){
+      const updateData={takeProfit:pos.tp,stopLoss:pos.sl,currentPrice:pos.current||priceCache[pos.symbol.api]||pos.entry};
+      window.updateTrade(pos.firestoreId,updateData);
+    }
     showToast(`${type.toUpperCase()} mis a jour: ${formatChartPrice(newPrice)}`,'success');
     debugLog(`Updated ${type} for position ${id}: ${newPrice}`);
   }
@@ -1319,15 +1375,15 @@ const getPrimaryPositionForSymbol=()=>{
 
 const clearModes=()=>{
   drawMode=null;drawStep=0;drawAnchor1=null;slTpMode=null;
-  ['drawLineBtn','fibRetrBtn','fibExtBtn','fibFanBtn','placeSlBtn','placeTpBtn'].forEach(id=>{const b=$(id);if(b)b.classList.remove('active')});
+  ['drawLineBtn','fibRetrBtn','fibExtBtn','placeSlBtn','placeTpBtn'].forEach(id=>{const b=$(id);if(b)b.classList.remove('active')});
 };
 
 const setMode=(mode)=>{
   clearModes();
   if(!mode) return;
-  if(mode==='line'||mode==='fib_retr'||mode==='fib_ext'||mode==='fib_fan'){
+  if(mode==='line'||mode==='fib_retr'||mode==='fib_ext'){
     drawMode=mode;
-    const map={line:'drawLineBtn',fib_retr:'fibRetrBtn',fib_ext:'fibExtBtn',fib_fan:'fibFanBtn'};
+    const map={line:'drawLineBtn',fib_retr:'fibRetrBtn',fib_ext:'fibExtBtn'};
     const b=$(map[mode]);if(b)b.classList.add('active');
     showToast('Clique 2 points sur le graphique','info');
     return;
@@ -1356,6 +1412,10 @@ const onOverlayClick=(e)=>{
     if(slTpMode==='sl') pos.sl=price;
     if(slTpMode==='tp') pos.tp=price;
     renderPositions();
+    if(pos.firestoreId&&window.updateTrade){
+      const updateData={takeProfit:pos.tp,stopLoss:pos.sl,currentPrice:pos.current||priceCache[pos.symbol.api]||pos.entry};
+      window.updateTrade(pos.firestoreId,updateData);
+    }
     showToast(`${slTpMode.toUpperCase()} place: ${formatChartPrice(price)}`,'success');
     clearModes();
     updateChartOverlay();
@@ -1391,7 +1451,7 @@ $('closePositions').onclick=()=>togglePanel('bottomPanel','togglePositions');
 const setWsStatus=(status)=>{const el=$('wsStatus');wsConnected=status==='connected';if(status==='connected'){el.className='status-badge connected';el.innerHTML='<div class="status-dot"></div><span>Connecte</span>'}else if(status==='connecting'){el.className='status-badge connecting';el.innerHTML='<div class="status-dot"></div><span>Connexion...</span>'}else{el.className='status-badge disconnected';el.innerHTML='<div class="status-dot"></div><span>Deconnecte</span>'}};
 const startKeepalive=()=>{stopKeepalive();keepaliveTimer=setInterval(()=>{if(ws&&ws.connected){ws.emit('ping');debugLog('Ping')}},CFG.keepalive)},stopKeepalive=()=>{if(keepaliveTimer){clearInterval(keepaliveTimer);keepaliveTimer=null}};
 const scheduleReconnect=()=>{stopKeepalive();if(reconTimer)clearTimeout(reconTimer);reconAttempts++;reconDelay=Math.min(CFG.reconMax,CFG.reconBase*Math.pow(1.5,reconAttempts));debugLog(`Reconnect #${reconAttempts} in ${reconDelay}ms`);reconTimer=setTimeout(()=>startWebSocket(),reconDelay)};
-const startWebSocket=()=>{if(ws&&ws.connected)return;try{debugLog(`Connecting: ${CFG.ws}`);setWsStatus('connecting');ws=io(CFG.ws,{transports:['websocket','polling'],reconnection:true,reconnectionAttempts:10,reconnectionDelay:2000});ws.on('connect',()=>{debugLog('Socket.io CONNECTED');setWsStatus('connected');reconAttempts=0;reconDelay=CFG.reconBase;msgCount=0;startKeepalive();showToast('Connecte a IG Markets','success');const epics=WATCHLIST.map(w=>w.epic);ws.emit('subscribe',epics);debugLog(`Subscribed to ${epics.length} epics`)});ws.on('prices',(data)=>{msgCount++;debugLog(`MSG #${msgCount}: prices update`);handlePriceUpdate(data)});ws.on('pong',()=>{debugLog('Pong received')});ws.on('disconnect',(reason)=>{debugLog(`Socket.io DISCONNECT: ${reason}`);setWsStatus('disconnected');showToast('Deconnecte','error')});ws.on('connect_error',(err)=>{debugLog(`Socket.io ERROR: ${err.message}`);setWsStatus('disconnected')})}catch(e){debugLog(`Socket.io failed: ${e.message}`);setWsStatus('disconnected');scheduleReconnect()}};
+const startWebSocket=()=>{if(ws&&ws.connected)return;try{debugLog(`Connecting: ${CFG.ws}`);setWsStatus('connecting');ws=io(CFG.ws,{transports:['websocket','polling'],reconnection:true,reconnectionAttempts:10,reconnectionDelay:2000});ws.on('connect',()=>{debugLog('Socket.io CONNECTED');setWsStatus('connected');reconAttempts=0;reconDelay=CFG.reconBase;msgCount=0;startKeepalive();showToast('Connecte a IG Markets','success');const epics=WATCHLIST.map(w=>w.epic);ws.emit('subscribe',epics);debugLog(`Subscribed to ${epics.length} epics`)});ws.on('prices',(data)=>{msgCount++;debugLog(`MSG #${msgCount}: prices update`);handlePriceUpdate(data)});ws.on('pong',()=>{debugLog('Pong received')});ws.on('disconnect',(reason)=>{debugLog(`Socket.io DISCONNECT: ${reason}`);setWsStatus('disconnected');showToast('Deconnecte','error');scheduleReconnect()});ws.on('connect_error',(err)=>{debugLog(`Socket.io ERROR: ${err.message}`);setWsStatus('disconnected');scheduleReconnect()})}catch(e){debugLog(`Socket.io failed: ${e.message}`);setWsStatus('disconnected');scheduleReconnect()}};
 const handlePriceUpdate=(data)=>{if(!data||!data.data)return;const prices=Array.isArray(data.data)?data.data:[data.data];prices.forEach(p=>{const epic=p.epic,bid=p.bid,offer=p.offer;if(!epic)return;const midPrice=(bid+offer)/2;const oldPrice=priceCache[epic];priceCache[epic]=midPrice;lastPriceUpdate[epic]=Date.now();debugLog(`Price: ${epic} = ${midPrice.toFixed(5)} (bid:${bid} offer:${offer})`);updatePriceUI(epic,oldPrice,midPrice);onPriceUpdate(epic)})};
 const updatePriceUI=(symbol,oldPrice,newPrice)=>{const el=$('price_'+escapeId(symbol));if(el){const symObj=WATCHLIST.find(w=>w.api===symbol);const isSimple=symObj&&(symObj.type==='etf'||symObj.type==='index'||symObj.type==='commodity'||symObj.type==='metal');el.innerText=isSimple?newPrice.toFixed(2):formatPrice(newPrice);const parentItem=el.closest('.wl-item');if(parentItem&&oldPrice!==undefined&&oldPrice!==newPrice){parentItem.classList.add('updating');setTimeout(()=>parentItem.classList.remove('updating'),500)}}if(symbol===currentSymbol.api){const isSimple=currentSymbol.type==='etf'||currentSymbol.type==='index'||currentSymbol.type==='commodity'||currentSymbol.type==='metal';const formatted=isSimple?newPrice.toFixed(2):formatPrice(newPrice);$('currentPriceValue').innerText=formatted;updateLightweightChart(newPrice);updateChartOverlay()}};
 const refreshLotInfo=()=>{const price=priceCache[currentSymbol.api],lots=parseFloat($('lotInput').value)||1;if(price!==undefined){let exp;if(isETF(currentSymbol.api))exp=price*lots;else if(isBaseUsd(currentSymbol.api))exp=lotUnits(currentSymbol.api)*lots;else exp=price*lotUnits(currentSymbol.api)*lots;const margin=exp/CFG.leverage,pipInfo=describePip(currentSymbol.api,price);$('lotValueInfo').innerText=`${lots} lots = ${formatMoney(margin)} USD · ${pipInfo} · 1:${CFG.leverage}`;return}$('lotValueInfo').innerText=`1 lot = ${lotUnits(currentSymbol.api)}u · 1:${CFG.leverage}`};
@@ -1416,6 +1476,7 @@ availableBalance-=required;
 const pos={id:'pos_'+Date.now()+'_'+Math.random().toString(36).slice(2,7),symbol:symObj,side,entry:price,size:resolvedLots,current:price,tp:tp?Number(tp):null,sl:sl?Number(sl):null,openedAt:Date.now(),firestoreId:null};
 positions.unshift(pos);
 renderPositions();renderTotals();
+ updateChartOverlay();
 const displayPrice=symObj.type==='etf'?price.toFixed(2):formatPrice(price);
 showToast(`${side}: ${symObj.label} @ ${displayPrice}`,'success');
 debugLog(`Opened: ${JSON.stringify(pos)}`);
@@ -1452,6 +1513,7 @@ debugLog(`User balance updated in Firestore: ${simBalance}`);
 if(sellLots<pos.size)pos.size-=sellLots;
 else positions.splice(idx,1);
 renderPositions();renderHistory();renderTotals();
+ updateChartOverlay();
 showToast(`Ferme: ${formatMoney(pnl)} USD`,pnl>=0?'success':'error');
 debugLog(`Closed ${id}: ${pnl}`);
 await checkAllRules();
@@ -1461,12 +1523,48 @@ const addLimitOrder=(symbol,side,price,lots,tp,sl)=>{const resolvedLots=Number(l
 const ordEl=$('ordSymbol');if(ordEl){ordEl.value=symbol}
 };
 
-const removeOrder=(id)=>{const order=orders.find(o=>o.id===id);if(order)availableBalance+=order.margin;orders=orders.filter(o=>o.id!==id);renderOrders();renderTotals();showToast('Ordre annule','info');debugLog(`Removed: ${id}`)};
+const removeOrder=(id)=>{const order=orders.find(o=>o.id===id);if(order)availableBalance+=order.margin;orders=orders.filter(o=>o.id!==id);renderOrders();renderTotals();updateChartOverlay();showToast('Ordre annule','info');debugLog(`Removed: ${id}`)};
 const renderPositions=()=>{const tbody=$('positionsBody');tbody.innerHTML='';if(positions.length===0){tbody.innerHTML='<tr><td colspan="7" class="empty-state">Aucune position</td></tr>';return}positions.forEach(pos=>{const current=pos.current!==undefined?pos.current:priceCache[pos.symbol.api];pos.current=current;const pnl=computePnl(pos),pnlClass=pnl>=0?'positive':'negative',tr=document.createElement('tr');tr.innerHTML=`<td><div class="symbol-cell">${pos.symbol.label}</div><div class="symbol-label">${pos.symbol.tv}</div></td><td><span class="side-badge ${pos.side.toLowerCase()}">${pos.side}</span></td><td>${formatPrice(pos.entry)}</td><td>${formatPrice(current)}</td><td>${pos.size}</td><td><span class="pnl-value ${pnlClass}">${formatMoney(pnl)}</span></td><td><div class="action-buttons"><button class="btn-action" data-id="${pos.id}"><i class="fas fa-cog"></i></button><button class="btn-action" data-close="${pos.id}"><i class="fas fa-times"></i></button></div></td>`;tbody.appendChild(tr)});tbody.querySelectorAll('button[data-id]').forEach(btn=>btn.onclick=()=>openPositionModal(btn.dataset.id));tbody.querySelectorAll('button[data-close]').forEach(btn=>btn.onclick=()=>closePosition(btn.dataset.close))};
 const renderHistory=()=>{const tbody=$('historyBody');tbody.innerHTML='';if(history.length===0){tbody.innerHTML='<tr><td colspan="7" class="empty-state">Aucun historique</td></tr>';return}history.slice(0,50).forEach(h=>{const pnlClass=h.pnl>=0?'positive':'negative',tr=document.createElement('tr');tr.innerHTML=`<td><div class="symbol-cell">${h.symbol.label}</div><div class="symbol-label">${h.symbol.tv}</div></td><td><span class="side-badge ${h.side.toLowerCase()}">${h.side}</span></td><td>${formatPrice(h.entry)}</td><td>${formatPrice(h.close)}</td><td>${h.lots}</td><td><span class="pnl-value ${pnlClass}">${formatMoney(h.pnl)}</span></td><td class="symbol-label">${formatDateTime(h.closedAt)}</td>`;tbody.appendChild(tr)})};
 const renderOrders=()=>{const container=$('ordersBody');container.innerHTML='';if(orders.length===0){container.innerHTML='<div class="empty-state">Aucun ordre</div>';return}orders.forEach(o=>{const card=document.createElement('div');card.className='order-card';card.innerHTML=`<div class="order-header"><div class="order-symbol">${o.symbol}</div><div class="order-side ${o.side.toLowerCase()}">${o.side}</div></div><div class="order-details"><div class="order-detail">Prix: <span>${formatPrice(o.price)}</span></div><div class="order-detail">Lots: <span>${o.size}</span></div><div class="order-detail">TP: <span>${o.tp?formatPrice(o.tp):'—'}</span></div><div class="order-detail">SL: <span>${o.sl?formatPrice(o.sl):'—'}</span></div></div><div class="order-actions"><button class="btn btn-remove" data-id="${o.id}"><i class="fas fa-trash-alt"></i>Annuler</button></div>`;container.appendChild(card)});container.querySelectorAll('button[data-id]').forEach(btn=>btn.onclick=()=>removeOrder(btn.dataset.id))};
 const renderTotals=()=>{const total=positions.reduce((sum,p)=>sum+computePnl(p),0),usedMargin=getTotalMarginUsed();$('totalPnl').innerText=formatMoney(total)+' USD';$('totalPnl').className='stat-value total-pnl-value '+(total>=0?'positive':'negative');$('simBalance').innerText=formatMoney(simBalance)+' USD';$('availableBalance').innerText=formatMoney(availableBalance)+' USD';$('usedMargin').innerText=formatMoney(usedMargin)+' USD'};
 const renderAll=()=>{renderPositions();renderHistory();renderOrders();renderTotals()};
+
+ window.applyLoadedTrades=()=>{
+   const pack=window.__loadedTrades;
+   if(!pack) return;
+   try{
+     if(Array.isArray(pack.open)){
+       positions = pack.open.map(p=>({
+         ...p,
+         id: p.id || ('pos_'+Date.now()),
+         entry: Number(p.entry),
+         size: Number(p.size),
+         current: Number(p.current),
+         tp: p.tp!==undefined&&p.tp!==null?Number(p.tp):null,
+         sl: p.sl!==undefined&&p.sl!==null?Number(p.sl):null,
+       }));
+     }
+     if(Array.isArray(pack.closed)){
+       history = pack.closed.map(h=>({
+         ...h,
+         entry: Number(h.entry),
+         close: Number(h.close),
+         pnl: Number(h.pnl),
+         lots: Number(h.lots),
+         closedAt: Number(h.closedAt),
+       }));
+     }
+     renderAll();
+     updateChartOverlay();
+   }catch(e){
+     console.error('applyLoadedTrades failed',e);
+   }
+ };
+
+ if(window.__loadedTrades){
+   window.applyLoadedTrades();
+ }
 
 // Firebase callbacks
 window.updateBrokerBalance=(balance)=>{simBalance=Number(balance);availableBalance=Number(balance);if(initialBalance===0){initialBalance=Number(balance);startOfDayBalance=Number(balance)}console.log('Broker balance updated:',simBalance);renderTotals()};
@@ -1504,7 +1602,7 @@ const initResizable=()=>{const watchlistPanel=$('watchlistPanel'),watchlistHandl
 
 $('lotInput').addEventListener('input',refreshLotInfo);
 $('addOrderBtn').addEventListener('click',()=>{const symbol=$('ordSymbol').value,side=$('ordSide').value,price=$('ordPrice').value,size=parseFloat($('ordSize').value)||1,tp=$('ordTp').value,sl=$('ordSl').value;if(!symbol||!price){showToast('Symbole et prix requis','error');return}addLimitOrder(symbol,side,price,size,tp,sl)});
-$('refreshPricesBtn').addEventListener('click',()=>{if(ws&&ws.readyState===WebSocket.OPEN){WATCHLIST.forEach(w=>{try{ws.send(JSON.stringify({type:'subscribe',symbol:w.api}))}catch(e){}});showToast('Rafraichissement','info')}else showToast('Non connecte','error')});
+$('refreshPricesBtn').addEventListener('click',()=>{if(ws&&ws.connected){const epics=WATCHLIST.map(w=>w.epic);ws.emit('subscribe',epics);showToast('Rafraichissement','info');debugLog(`Manual resubscribe: ${epics.length} epics`)}else showToast('Non connecte','error')});
 $('buyBtn').addEventListener('click',()=>openPosition(currentSymbol,'BUY',parseFloat($('lotInput').value)||1));
 $('sellBtn').addEventListener('click',()=>openPosition(currentSymbol,'SELL',parseFloat($('lotInput').value)||1));
 $('tabPositions').addEventListener('click',()=>{$('tabPositions').classList.add('active');$('tabHistory').classList.remove('active');$('positionsPane').style.display='block';$('historyPane').style.display='none';renderPositions()});
@@ -1517,7 +1615,6 @@ document.querySelectorAll('.timeframe-btn').forEach(btn=>btn.addEventListener('c
 $('drawLineBtn').addEventListener('click',()=>setMode(drawMode==='line'?null:'line'));
 $('fibRetrBtn').addEventListener('click',()=>setMode(drawMode==='fib_retr'?null:'fib_retr'));
 $('fibExtBtn').addEventListener('click',()=>setMode(drawMode==='fib_ext'?null:'fib_ext'));
-$('fibFanBtn').addEventListener('click',()=>setMode(drawMode==='fib_fan'?null:'fib_fan'));
 $('deleteDrawBtn').addEventListener('click',deleteActiveDrawing);
 $('placeSlBtn').addEventListener('click',()=>setMode(slTpMode==='sl'?null:'sl'));
 $('placeTpBtn').addEventListener('click',()=>setMode(slTpMode==='tp'?null:'tp'));
