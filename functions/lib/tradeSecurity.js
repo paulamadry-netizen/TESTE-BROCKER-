@@ -190,15 +190,34 @@ async function validateDailyDrawdown(userId, userData) {
 // VALIDATION 4: MARGE DISPONIBLE
 // ==========================================
 function calculateMargin(symbol, lots, price) {
-    // Leverage 1:100
-    const leverage = 100;
-    const contractSize = symbol.includes('JPY') ? 100000 : 100000;
-    const margin = (contractSize * lots * price) / leverage;
+    // Leverage 1:20 (comme affiché dans le broker)
+    const leverage = 20;
+    // Pour les ETF/actions, 1 lot = 1 action
+    // Pour le forex, 1 lot = 100,000 unités
+    const isStock = !symbol.includes('/') && !symbol.includes('XAU') && !symbol.includes('XAG');
+    const contractSize = isStock ? 1 : 100000;
+    const notionalValue = contractSize * lots * price;
+    const margin = notionalValue / leverage;
+    console.log(`📊 Margin calc: ${symbol} ${lots} lots @ ${price} = ${margin.toFixed(2)} USD (leverage 1:${leverage})`);
     return margin;
 }
-function validateMargin(userData, symbol, lots, price) {
+async function validateMargin(userId, userData, symbol, lots, price) {
     const requiredMargin = calculateMargin(symbol, lots, price);
-    const availableBalance = userData.availableBalance || userData.accountBalance;
+    // Calculer la marge utilisée par les positions ouvertes
+    const openTradesSnapshot = await db.collection('trades')
+        .where('userId', '==', userId)
+        .where('status', '==', 'open')
+        .get();
+    let usedMargin = 0;
+    openTradesSnapshot.forEach((doc) => {
+        const trade = doc.data();
+        const tradeMargin = calculateMargin(trade.symbolApi || trade.symbol, trade.lots, trade.entryPrice);
+        usedMargin += tradeMargin;
+    });
+    // Balance disponible = balance totale - marge utilisée
+    const accountBalance = userData.accountBalance || userData.initialBalance || 25000;
+    const availableBalance = accountBalance - usedMargin;
+    console.log(`📊 Margin check: Account=${accountBalance}, Used=${usedMargin.toFixed(2)}, Available=${availableBalance.toFixed(2)}, Required=${requiredMargin.toFixed(2)}`);
     if (requiredMargin > availableBalance) {
         return {
             allowed: false,
@@ -255,7 +274,7 @@ exports.executeTrade = (0, https_1.onCall)({ secrets: [priceService_1.finnhubApi
     const price = await (0, priceService_1.getValidatedPrice)(symbolApi, clientPrice);
     console.log(`✅ Prix validé serveur: ${symbolApi} = ${price}`);
     // 8. VALIDATION DE LA MARGE
-    const marginCheck = validateMargin(userData, symbolApi, lots, price);
+    const marginCheck = await validateMargin(userId, userData, symbolApi, lots, price);
     if (!marginCheck.allowed) {
         await auditLog('trade_rejected', userId, {
             reason: 'insufficient_margin',
