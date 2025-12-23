@@ -115,10 +115,10 @@ app.get('/api/status', (req, res) => {
 });
 
 // Get historical prices for an epic
-// Resolution: SECOND, MINUTE, MINUTE_2, MINUTE_3, MINUTE_5, MINUTE_10, MINUTE_15, MINUTE_30, HOUR, HOUR_2, HOUR_3, HOUR_4, DAY, WEEK, MONTH
+// Resolution: MINUTE, MINUTE_2, MINUTE_3, MINUTE_5, MINUTE_10, MINUTE_15, MINUTE_30, HOUR, HOUR_2, HOUR_3, HOUR_4, DAY, WEEK, MONTH
 app.get('/api/history/:epic', async (req, res) => {
   const { epic } = req.params;
-  const { resolution = 'HOUR', max = 500 } = req.query;
+  const { resolution = 'HOUR', max = 100 } = req.query;
   
   try {
     const client = igAuthService.getClient();
@@ -126,14 +126,15 @@ app.get('/api/history/:epic', async (req, res) => {
       return res.status(503).json({ error: 'Not authenticated' });
     }
     
-    // Fetch historical prices using numPoints
-    const response = await client.get(`/prices/${epic}/${resolution}/${max}`, {
+    // IG API v3 uses query params: /prices/{epic}?resolution=X&max=Y
+    const response = await client.get(`/prices/${epic}`, {
+      params: { resolution, max, pageSize: max },
       headers: { 'Version': '3' }
     });
     
     if (response.data && response.data.prices) {
       const candles = response.data.prices.map(p => ({
-        time: new Date(p.snapshotTime || p.snapshotTimeUTC).getTime() / 1000,
+        time: new Date(p.snapshotTimeUTC || p.snapshotTime).getTime() / 1000,
         open: (p.openPrice.bid + p.openPrice.ask) / 2,
         high: (p.highPrice.bid + p.highPrice.ask) / 2,
         low: (p.lowPrice.bid + p.lowPrice.ask) / 2,
@@ -149,17 +150,18 @@ app.get('/api/history/:epic', async (req, res) => {
         candles
       });
     } else {
-      res.status(404).json({ error: 'No data available' });
+      res.status(404).json({ error: 'No data available', raw: response.data });
     }
   } catch (error) {
-    console.error(`[History] Error fetching ${epic}:`, error.message);
-    res.status(500).json({ error: error.message });
+    console.error(`[History] Error fetching ${epic}:`, error.response?.data || error.message);
+    res.status(500).json({ error: error.response?.data?.errorCode || error.message });
   }
 });
 
 // Get historical prices with date range
-app.get('/api/history/:epic/:resolution/:from/:to', async (req, res) => {
-  const { epic, resolution, from, to } = req.params;
+app.get('/api/history/:epic/range', async (req, res) => {
+  const { epic } = req.params;
+  const { resolution = 'HOUR', from, to } = req.query;
   
   try {
     const client = igAuthService.getClient();
@@ -167,14 +169,15 @@ app.get('/api/history/:epic/:resolution/:from/:to', async (req, res) => {
       return res.status(503).json({ error: 'Not authenticated' });
     }
     
-    // Format dates for IG API (YYYY-MM-DDTHH:MM:SS)
-    const response = await client.get(`/prices/${epic}/${resolution}/${from}/${to}`, {
+    // IG API v3 uses query params: /prices/{epic}?resolution=X&from=Y&to=Z
+    const response = await client.get(`/prices/${epic}`, {
+      params: { resolution, from, to },
       headers: { 'Version': '3' }
     });
     
     if (response.data && response.data.prices) {
       const candles = response.data.prices.map(p => ({
-        time: new Date(p.snapshotTime || p.snapshotTimeUTC).getTime() / 1000,
+        time: new Date(p.snapshotTimeUTC || p.snapshotTime).getTime() / 1000,
         open: (p.openPrice.bid + p.openPrice.ask) / 2,
         high: (p.highPrice.bid + p.highPrice.ask) / 2,
         low: (p.lowPrice.bid + p.lowPrice.ask) / 2,
@@ -195,8 +198,8 @@ app.get('/api/history/:epic/:resolution/:from/:to', async (req, res) => {
       res.status(404).json({ error: 'No data available' });
     }
   } catch (error) {
-    console.error(`[History] Error fetching ${epic}:`, error.message);
-    res.status(500).json({ error: error.message });
+    console.error(`[History] Error fetching ${epic}:`, error.response?.data || error.message);
+    res.status(500).json({ error: error.response?.data?.errorCode || error.message });
   }
 });
 
