@@ -200,6 +200,29 @@ class IGAuthService {
   }
 
   /**
+   * Get configured axios client for API requests
+   */
+  getClient() {
+    if (!this.isAuthenticated) {
+      return null;
+    }
+
+    const client = axios.create({
+      baseURL: this.baseUrl,
+      timeout: 30000,
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json; charset=UTF-8',
+        'X-IG-API-KEY': this.apiKey,
+        'CST': this.cst,
+        'X-SECURITY-TOKEN': this.xSecurityToken
+      }
+    });
+
+    return client;
+  }
+
+  /**
    * Logout and cleanup
    */
   async logout() {

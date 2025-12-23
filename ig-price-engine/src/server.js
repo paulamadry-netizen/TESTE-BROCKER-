@@ -114,6 +114,92 @@ app.get('/api/status', (req, res) => {
   });
 });
 
+// Get historical prices for an epic
+// Resolution: SECOND, MINUTE, MINUTE_2, MINUTE_3, MINUTE_5, MINUTE_10, MINUTE_15, MINUTE_30, HOUR, HOUR_2, HOUR_3, HOUR_4, DAY, WEEK, MONTH
+app.get('/api/history/:epic', async (req, res) => {
+  const { epic } = req.params;
+  const { resolution = 'HOUR', max = 500 } = req.query;
+  
+  try {
+    const client = igAuthService.getClient();
+    if (!client) {
+      return res.status(503).json({ error: 'Not authenticated' });
+    }
+    
+    // Fetch historical prices using numPoints
+    const response = await client.get(`/prices/${epic}/${resolution}/${max}`, {
+      headers: { 'Version': '3' }
+    });
+    
+    if (response.data && response.data.prices) {
+      const candles = response.data.prices.map(p => ({
+        time: new Date(p.snapshotTime || p.snapshotTimeUTC).getTime() / 1000,
+        open: (p.openPrice.bid + p.openPrice.ask) / 2,
+        high: (p.highPrice.bid + p.highPrice.ask) / 2,
+        low: (p.lowPrice.bid + p.lowPrice.ask) / 2,
+        close: (p.closePrice.bid + p.closePrice.ask) / 2,
+        volume: p.lastTradedVolume || 0
+      }));
+      
+      res.json({
+        epic,
+        resolution,
+        count: candles.length,
+        allowance: response.data.allowance,
+        candles
+      });
+    } else {
+      res.status(404).json({ error: 'No data available' });
+    }
+  } catch (error) {
+    console.error(`[History] Error fetching ${epic}:`, error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get historical prices with date range
+app.get('/api/history/:epic/:resolution/:from/:to', async (req, res) => {
+  const { epic, resolution, from, to } = req.params;
+  
+  try {
+    const client = igAuthService.getClient();
+    if (!client) {
+      return res.status(503).json({ error: 'Not authenticated' });
+    }
+    
+    // Format dates for IG API (YYYY-MM-DDTHH:MM:SS)
+    const response = await client.get(`/prices/${epic}/${resolution}/${from}/${to}`, {
+      headers: { 'Version': '3' }
+    });
+    
+    if (response.data && response.data.prices) {
+      const candles = response.data.prices.map(p => ({
+        time: new Date(p.snapshotTime || p.snapshotTimeUTC).getTime() / 1000,
+        open: (p.openPrice.bid + p.openPrice.ask) / 2,
+        high: (p.highPrice.bid + p.highPrice.ask) / 2,
+        low: (p.lowPrice.bid + p.lowPrice.ask) / 2,
+        close: (p.closePrice.bid + p.closePrice.ask) / 2,
+        volume: p.lastTradedVolume || 0
+      }));
+      
+      res.json({
+        epic,
+        resolution,
+        from,
+        to,
+        count: candles.length,
+        allowance: response.data.allowance,
+        candles
+      });
+    } else {
+      res.status(404).json({ error: 'No data available' });
+    }
+  } catch (error) {
+    console.error(`[History] Error fetching ${epic}:`, error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Force re-authentication (admin endpoint)
 app.post('/api/auth/refresh', async (req, res) => {
   try {
