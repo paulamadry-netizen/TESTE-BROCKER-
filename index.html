@@ -522,7 +522,7 @@ const toastEl=$('toast');let toastTimer;
 const showToast=(msg,type='info',dur=2500)=>{if(toastTimer)clearTimeout(toastTimer);toastEl.textContent=msg;toastEl.className=`toast visible ${type}`;toastTimer=setTimeout(()=>toastEl.classList.remove('visible'),dur);debugLog(`Toast: ${msg}`)};
 
 // Trading rules - Server enforced via Firebase
-const checkTradingHours=()=>{const now=new Date(),hours=now.getHours(),day=now.getDay();if(hours>=22||hours<0){return{allowed:false,reason:'Positions interdites entre 22h et 00h'}}if(day===0||day===6){return{allowed:false,reason:'Positions interdites le week-end'}}return{allowed:true}};
+const checkTradingHours=()=>{const now=new Date(),hours=now.getHours(),day=now.getDay();if(hours>=23||hours<0){return{allowed:false,reason:'Positions interdites entre 23h et 00h'}}if(day===0||day===6){return{allowed:false,reason:'Positions interdites le week-end'}}return{allowed:true}};
 const checkDailyDrawdown=()=>{const todayDate=new Date().toDateString();if(todayDate!==todayStartDate){todayStartDate=todayDate;startOfDayBalance=simBalance}const dailyLoss=startOfDayBalance-simBalance,dailyLossPercent=(dailyLoss/startOfDayBalance)*100;if(dailyLossPercent>3){return{violated:true,reason:`Perte journaliere de ${dailyLossPercent.toFixed(2)}% (max: 3%)`}}return{violated:false}};
 const checkTotalDrawdown=()=>{const totalLoss=initialBalance-simBalance,totalLossPercent=(totalLoss/initialBalance)*100;if(totalLossPercent>8){return{violated:true,reason:`Perte totale de ${totalLossPercent.toFixed(2)}% (max: 8%)`}}return{violated:false}};
 const closeAllPositions=async()=>{debugLog('Closing all positions...');const positionsCopy=[...positions];for(const pos of positionsCopy){await closePosition(pos.id)}debugLog('All positions closed')};
