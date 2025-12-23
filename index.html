@@ -410,6 +410,17 @@ html,body{height:100%;background:linear-gradient(135deg,var(--bg-primary) 0%,var
 <button class="icon-btn" id="indicatorsBtn" title="Indicateurs">Ind</button>
 <div class="ind-dropdown" id="indicatorsMenu" style="display:none"></div>
 </div>
+<div class="ind-toolbar" id="drawToolbar" style="gap:6px">
+<button class="icon-btn" id="drawLineBtn" title="Droite">/</button>
+<button class="icon-btn" id="fibRetrBtn" title="Fibonacci Retracement">FibR</button>
+<button class="icon-btn" id="fibExtBtn" title="Fibonacci Extension">FibE</button>
+<button class="icon-btn" id="fibFanBtn" title="Fibonacci Fan">FibF</button>
+<button class="icon-btn" id="deleteDrawBtn" title="Supprimer dessin">Del</button>
+</div>
+<div class="ind-toolbar" id="slTpToolbar" style="gap:6px">
+<button class="icon-btn" id="placeSlBtn" title="Placer SL">SL</button>
+<button class="icon-btn" id="placeTpBtn" title="Placer TP">TP</button>
+</div>
 <div class="timeframe-selector" id="timeframeSelector">
 <button class="timeframe-btn" data-tf="1">1m</button>
 <button class="timeframe-btn" data-tf="5">5m</button>
@@ -586,13 +597,38 @@ const IG_API_BASE='https://ig-price-engine-44407447466.europe-west1.run.app';
 const TF_TO_RESOLUTION={'1':'MINUTE','5':'MINUTE_5','15':'MINUTE_15','60':'HOUR','240':'HOUR_4','1D':'DAY'};
 const TF_TO_MAX={'1':500,'5':500,'15':500,'60':500,'240':500,'1D':365};
 let chartPriceLines=[],dragState=null,chartContainer=null;
-let indicatorsVisible=false,indicatorSeries={};
+let indicatorsVisible=false,indicatorSeries={},indicatorState={};
+let drawMode=null,drawStep=0,drawAnchor1=null,activeDrawingId=null,drawings=[];
+let slTpMode=null;
 const INDICATORS=[
-  {key:'sma20',label:'SMA 20',type:'sma',period:20,color:'#60a5fa'},
-  {key:'sma50',label:'SMA 50',type:'sma',period:50,color:'#f59e0b'},
-  {key:'ema20',label:'EMA 20',type:'ema',period:20,color:'#34d399'},
-  {key:'bb20',label:'Bollinger 20',type:'bb',period:20,color:'#a78bfa'}
+  {key:'sma20',label:'SMA',type:'sma',params:{period:20},color:'#60a5fa'},
+  {key:'sma50',label:'SMA',type:'sma',params:{period:50},color:'#f59e0b'},
+  {key:'sma100',label:'SMA',type:'sma',params:{period:100},color:'#f97316'},
+  {key:'sma200',label:'SMA',type:'sma',params:{period:200},color:'#fb7185'},
+  {key:'ema20',label:'EMA',type:'ema',params:{period:20},color:'#34d399'},
+  {key:'ema50',label:'EMA',type:'ema',params:{period:50},color:'#22c55e'},
+  {key:'ema100',label:'EMA',type:'ema',params:{period:100},color:'#16a34a'},
+  {key:'ema200',label:'EMA',type:'ema',params:{period:200},color:'#15803d'},
+  {key:'bb20',label:'Bollinger',type:'bb',params:{period:20,mult:2},color:'#a78bfa'},
+  {key:'rsi14',label:'RSI',type:'rsi',params:{period:14},color:'#93c5fd'},
+  {key:'atr14',label:'ATR',type:'atr',params:{period:14},color:'#fda4af'},
+  {key:'macd',label:'MACD',type:'macd',params:{fast:12,slow:26,signal:9},color:'#60a5fa'},
+  {key:'stoch',label:'Stoch',type:'stoch',params:{k:14,d:3},color:'#fde047'},
+  {key:'roc12',label:'ROC',type:'roc',params:{period:12},color:'#a3e635'},
+  {key:'cci20',label:'CCI',type:'cci',params:{period:20},color:'#f472b6'},
+  {key:'willr14',label:'Williams %R',type:'willr',params:{period:14},color:'#67e8f9'},
+  {key:'sma10',label:'SMA',type:'sma',params:{period:10},color:'#7dd3fc'},
+  {key:'ema10',label:'EMA',type:'ema',params:{period:10},color:'#86efac'},
+  {key:'sma30',label:'SMA',type:'sma',params:{period:30},color:'#fbbf24'},
+  {key:'ema30',label:'EMA',type:'ema',params:{period:30},color:'#4ade80'}
 ];
+const getIndicatorCfg=(key)=>INDICATORS.find(i=>i.key===key);
+const getIndicatorParams=(key)=>{
+  const cfg=getIndicatorCfg(key);
+  const base=(cfg&&cfg.params)?cfg.params:{};
+  const st=(indicatorState[key]&&indicatorState[key].params)?indicatorState[key].params:{};
+  return {...base,...st};
+};
 
 const computeSMA=(data,period)=>{
   const out=[];let sum=0;
@@ -615,7 +651,135 @@ const computeEMA=(data,period)=>{
   }
   return out;
 };
-const computeBB=(data,period)=>{
+const computeRSI=(data,period)=>{
+  const out=[];
+  let gain=0,loss=0;
+  for(let i=1;i<data.length;i++){
+    const ch=Number(data[i].close)-Number(data[i-1].close);
+    if(!Number.isFinite(ch))continue;
+    const g=Math.max(0,ch),l=Math.max(0,-ch);
+    if(i<=period){
+      gain+=g;loss+=l;
+      if(i===period){
+        const rs=loss===0?100:gain/loss;
+        out.push({time:data[i].time,value:100-(100/(1+rs))});
+      }
+    }else{
+      gain=(gain*(period-1)+g)/period;
+      loss=(loss*(period-1)+l)/period;
+      const rs=loss===0?100:gain/loss;
+      out.push({time:data[i].time,value:100-(100/(1+rs))});
+    }
+  }
+  return out;
+};
+const computeATR=(data,period)=>{
+  const out=[];
+  const tr=[];
+  for(let i=0;i<data.length;i++){
+    const h=Number(data[i].high),l=Number(data[i].low);
+    const pc=i>0?Number(data[i-1].close):Number(data[i].close);
+    if(!Number.isFinite(h)||!Number.isFinite(l)||!Number.isFinite(pc))continue;
+    tr.push({time:data[i].time,value:Math.max(h-l,Math.abs(h-pc),Math.abs(l-pc))});
+  }
+  if(tr.length<period)return out;
+  let atr=0;
+  for(let i=0;i<tr.length;i++){
+    const v=Number(tr[i].value);
+    if(i<period){
+      atr+=v;
+      if(i===period-1){
+        atr=atr/period;
+        out.push({time:tr[i].time,value:atr});
+      }
+    }else{
+      atr=(atr*(period-1)+v)/period;
+      out.push({time:tr[i].time,value:atr});
+    }
+  }
+  return out;
+};
+const computeROC=(data,period)=>{
+  const out=[];
+  for(let i=period;i<data.length;i++){
+    const c=Number(data[i].close),p=Number(data[i-period].close);
+    if(!Number.isFinite(c)||!Number.isFinite(p)||p===0)continue;
+    out.push({time:data[i].time,value:((c-p)/p)*100});
+  }
+  return out;
+};
+const computeWillR=(data,period)=>{
+  const out=[];
+  for(let i=period-1;i<data.length;i++){
+    let hh=-Infinity,ll=Infinity;
+    for(let j=0;j<period;j++){
+      const h=Number(data[i-j].high),l=Number(data[i-j].low);
+      if(!Number.isFinite(h)||!Number.isFinite(l)){hh=NaN;break;}
+      hh=Math.max(hh,h);ll=Math.min(ll,l);
+    }
+    const c=Number(data[i].close);
+    if(!Number.isFinite(hh)||!Number.isFinite(c)||hh===ll)continue;
+    out.push({time:data[i].time,value:((hh-c)/(hh-ll))*-100});
+  }
+  return out;
+};
+const computeCCI=(data,period)=>{
+  const out=[];
+  const tps=[];
+  for(let i=0;i<data.length;i++){
+    const h=Number(data[i].high),l=Number(data[i].low),c=Number(data[i].close);
+    if(!Number.isFinite(h)||!Number.isFinite(l)||!Number.isFinite(c)){tps.push(NaN);continue;}
+    tps.push((h+l+c)/3);
+  }
+  for(let i=period-1;i<data.length;i++){
+    const slice=tps.slice(i-period+1,i+1);
+    if(slice.some(v=>!Number.isFinite(v)))continue;
+    const sma=slice.reduce((s,v)=>s+v,0)/period;
+    const md=slice.reduce((s,v)=>s+Math.abs(v-sma),0)/period;
+    if(md===0)continue;
+    out.push({time:data[i].time,value:(tps[i]-sma)/(0.015*md)});
+  }
+  return out;
+};
+const computeMACD=(data,fast,slow,signal)=>{
+  const emaFast=computeEMA(data,fast);
+  const emaSlow=computeEMA(data,slow);
+  const slowMap=new Map(emaSlow.map(p=>[p.time,p.value]));
+  const macd=[];
+  emaFast.forEach(p=>{const s=slowMap.get(p.time);if(Number.isFinite(s))macd.push({time:p.time,value:p.value-s});});
+  const signalArr=[];
+  const k=2/(signal+1);
+  let ema=null;
+  for(let i=0;i<macd.length;i++){
+    const v=macd[i].value;
+    ema=ema===null?v:(v*k+ema*(1-k));
+    if(i>=signal-1)signalArr.push({time:macd[i].time,value:ema});
+  }
+  return {macd,signal:signalArr};
+};
+const computeStoch=(data,kPeriod,dPeriod)=>{
+  const k=[];
+  for(let i=kPeriod-1;i<data.length;i++){
+    let hh=-Infinity,ll=Infinity;
+    for(let j=0;j<kPeriod;j++){
+      const h=Number(data[i-j].high),l=Number(data[i-j].low);
+      if(!Number.isFinite(h)||!Number.isFinite(l)){hh=NaN;break;}
+      hh=Math.max(hh,h);ll=Math.min(ll,l);
+    }
+    const c=Number(data[i].close);
+    if(!Number.isFinite(hh)||!Number.isFinite(c)||hh===ll)continue;
+    k.push({time:data[i].time,value:((c-ll)/(hh-ll))*100});
+  }
+  const d=[];
+  let sum=0;
+  for(let i=0;i<k.length;i++){
+    sum+=k[i].value;
+    if(i>=dPeriod)sum-=k[i-dPeriod].value;
+    if(i>=dPeriod-1)d.push({time:k[i].time,value:sum/dPeriod});
+  }
+  return {k,d};
+};
+const computeBB=(data,period,mult=2)=>{
   const mid=computeSMA(data,period);
   const outUp=[],outDn=[];
   for(let i=period-1;i<data.length;i++){
@@ -625,8 +789,8 @@ const computeBB=(data,period)=>{
     const variance=slice.reduce((s,v)=>s+Math.pow(v-mean,2),0)/period;
     const sd=Math.sqrt(variance);
     const t=data[i].time;
-    outUp.push({time:t,value:mean+2*sd});
-    outDn.push({time:t,value:mean-2*sd});
+    outUp.push({time:t,value:mean+mult*sd});
+    outDn.push({time:t,value:mean-mult*sd});
   }
   return {mid,up:outUp,dn:outDn};
 };
@@ -637,7 +801,12 @@ const ensureIndicatorsUI=()=>{
   if(!btn||!menu) return;
   if(menu.dataset.ready==='1') return;
   menu.dataset.ready='1';
-  menu.innerHTML=INDICATORS.map(i=>`<label class="ind-item"><input type="checkbox" data-ind="${i.key}"/>${i.label}</label>`).join('');
+  menu.innerHTML=INDICATORS.map(i=>{
+    const label=i.type==='sma'||i.type==='ema'?`${i.label} ${i.params.period}`:i.label;
+    const params=i.params||{};
+    const fields=Object.keys(params).map(k=>`<input type="number" class="ind-param" data-ind="${i.key}" data-param="${k}" value="${params[k]}" style="width:58px"/>`).join('');
+    return `<div class="ind-item" data-row="${i.key}"><label style="display:flex;align-items:center;gap:8px;flex:1"><input type="checkbox" data-ind="${i.key}"/>${label}</label><div style="display:flex;gap:6px">${fields}</div></div>`;
+  }).join('');
   btn.addEventListener('click',()=>{
     indicatorsVisible=!indicatorsVisible;
     menu.style.display=indicatorsVisible?'block':'none';
@@ -650,52 +819,115 @@ const ensureIndicatorsUI=()=>{
   });
   menu.querySelectorAll('input[type="checkbox"]').forEach(cb=>cb.addEventListener('change',()=>{
     const key=cb.dataset.ind;
+    indicatorState[key]=indicatorState[key]||{enabled:false,params:{}};
+    indicatorState[key].enabled=cb.checked;
     if(cb.checked) enableIndicator(key); else disableIndicator(key);
   }));
+  menu.querySelectorAll('input.ind-param').forEach(inp=>inp.addEventListener('change',()=>{
+    const key=inp.dataset.ind;
+    const param=inp.dataset.param;
+    const v=parseFloat(inp.value);
+    indicatorState[key]=indicatorState[key]||{enabled:false,params:{}};
+    indicatorState[key].params=indicatorState[key].params||{};
+    if(Number.isFinite(v)) indicatorState[key].params[param]=v;
+    recalcIndicators();
+  }));
+};
+
+const syncIndicatorMenuState=()=>{
+  const menu=$('indicatorsMenu');
+  if(!menu) return;
+  menu.querySelectorAll('input[type="checkbox"]').forEach(cb=>{
+    const key=cb.dataset.ind;
+    cb.checked=!!(indicatorState[key]&&indicatorState[key].enabled);
+  });
+  menu.querySelectorAll('input.ind-param').forEach(inp=>{
+    const key=inp.dataset.ind;
+    const param=inp.dataset.param;
+    const p=getIndicatorParams(key);
+    if(p[param]!==undefined) inp.value=p[param];
+  });
 };
 
 const enableIndicator=(key)=>{
   if(!lwChart||!lwSeries)return;
-  const cfg=INDICATORS.find(i=>i.key===key);
+  const cfg=getIndicatorCfg(key);
   if(!cfg||indicatorSeries[key])return;
   if(cfg.type==='bb'){
-    const mid=lwChart.addLineSeries({color:'#a78bfa',lineWidth:1});
-    const up=lwChart.addLineSeries({color:'#a78bfa',lineWidth:1});
-    const dn=lwChart.addLineSeries({color:'#a78bfa',lineWidth:1});
-    indicatorSeries[key]={mid,up,dn};
+    const mid=lwChart.addLineSeries({color:cfg.color,lineWidth:1});
+    const up=lwChart.addLineSeries({color:cfg.color,lineWidth:1});
+    const dn=lwChart.addLineSeries({color:cfg.color,lineWidth:1});
+    indicatorSeries[key]={mid,up,dn,_series:[mid,up,dn]};
+  }else if(cfg.type==='macd'){
+    const macd=lwChart.addLineSeries({color:cfg.color,lineWidth:2});
+    const sig=lwChart.addLineSeries({color:'#f59e0b',lineWidth:1});
+    indicatorSeries[key]={macd,sig,_series:[macd,sig]};
+  }else if(cfg.type==='stoch'){
+    const k=lwChart.addLineSeries({color:cfg.color,lineWidth:2});
+    const d=lwChart.addLineSeries({color:'#f59e0b',lineWidth:1});
+    indicatorSeries[key]={k,d,_series:[k,d]};
   }else{
     const s=lwChart.addLineSeries({color:cfg.color,lineWidth:2});
-    indicatorSeries[key]=s;
+    indicatorSeries[key]={s,_series:[s]};
   }
+  indicatorState[key]=indicatorState[key]||{enabled:true,params:{}};
+  indicatorState[key].enabled=true;
+  indicatorState[key].params=getIndicatorParams(key);
+  syncIndicatorMenuState();
   recalcIndicators();
 };
 const disableIndicator=(key)=>{
-  const s=indicatorSeries[key];
-  if(!s||!lwChart)return;
-  if(typeof s.remove==='function'){try{s.remove()}catch(e){}}
-  else{
-    ['mid','up','dn'].forEach(k=>{if(s[k]&&typeof s[k].remove==='function'){try{s[k].remove()}catch(e){}}});
-  }
+  const wrap=indicatorSeries[key];
+  if(!wrap||!lwChart)return;
+  (wrap._series||[]).forEach(sr=>{try{if(sr&&typeof sr.setData==='function')sr.setData([])}catch(e){};try{lwChart.removeSeries(sr)}catch(e){}});
   delete indicatorSeries[key];
+  indicatorState[key]=indicatorState[key]||{enabled:false,params:{}};
+  indicatorState[key].enabled=false;
+  syncIndicatorMenuState();
 };
 const recalcIndicators=()=>{
   if(!lwChart||!lwSeries)return;
   const data=chartHistoryData[currentSymbol.api]||[];
   if(data.length<30)return;
   Object.keys(indicatorSeries).forEach(key=>{
-    const cfg=INDICATORS.find(i=>i.key===key);
+    const cfg=getIndicatorCfg(key);
     if(!cfg)return;
+    const p=getIndicatorParams(key);
+    const wrap=indicatorSeries[key];
     if(cfg.type==='sma'){
-      const pts=computeSMA(data,cfg.period);
-      indicatorSeries[key].setData(pts);
+      const pts=computeSMA(data,Math.max(1,Math.floor(p.period||20)));
+      wrap.s.setData(pts);
     }else if(cfg.type==='ema'){
-      const pts=computeEMA(data,cfg.period);
-      indicatorSeries[key].setData(pts);
+      const pts=computeEMA(data,Math.max(1,Math.floor(p.period||20)));
+      wrap.s.setData(pts);
     }else if(cfg.type==='bb'){
-      const bb=computeBB(data,cfg.period);
-      indicatorSeries[key].mid.setData(bb.mid);
-      indicatorSeries[key].up.setData(bb.up);
-      indicatorSeries[key].dn.setData(bb.dn);
+      const bb=computeBB(data,Math.max(1,Math.floor(p.period||20)),Number(p.mult||2));
+      wrap.mid.setData(bb.mid);
+      wrap.up.setData(bb.up);
+      wrap.dn.setData(bb.dn);
+    }else if(cfg.type==='rsi'){
+      const pts=computeRSI(data,Math.max(1,Math.floor(p.period||14)));
+      wrap.s.setData(pts);
+    }else if(cfg.type==='atr'){
+      const pts=computeATR(data,Math.max(1,Math.floor(p.period||14)));
+      wrap.s.setData(pts);
+    }else if(cfg.type==='roc'){
+      const pts=computeROC(data,Math.max(1,Math.floor(p.period||12)));
+      wrap.s.setData(pts);
+    }else if(cfg.type==='cci'){
+      const pts=computeCCI(data,Math.max(1,Math.floor(p.period||20)));
+      wrap.s.setData(pts);
+    }else if(cfg.type==='willr'){
+      const pts=computeWillR(data,Math.max(1,Math.floor(p.period||14)));
+      wrap.s.setData(pts);
+    }else if(cfg.type==='macd'){
+      const m=computeMACD(data,Math.max(1,Math.floor(p.fast||12)),Math.max(1,Math.floor(p.slow||26)),Math.max(1,Math.floor(p.signal||9)));
+      wrap.macd.setData(m.macd);
+      wrap.sig.setData(m.signal);
+    }else if(cfg.type==='stoch'){
+      const s=computeStoch(data,Math.max(1,Math.floor(p.k||14)),Math.max(1,Math.floor(p.d||3)));
+      wrap.k.setData(s.k);
+      wrap.d.setData(s.d);
     }
   });
 };
@@ -755,12 +987,18 @@ const initLightweightChart=async()=>{
     chartHistoryData[currentSymbol.api]=histData;
     lwSeries.setData(histData);
     ensureIndicatorsUI();
+    Object.keys(indicatorSeries).forEach(k=>{try{disableIndicator(k)}catch(e){}});
+    Object.keys(indicatorState).forEach(k=>{if(indicatorState[k]&&indicatorState[k].enabled) enableIndicator(k);});
+    syncIndicatorMenuState();
     recalcIndicators();
     lwChart.timeScale().fitContent();
     debugLog(`Chart loaded: ${histData.length} candles`);
   }else{
     debugLog('No historical data available');
     ensureIndicatorsUI();
+    Object.keys(indicatorSeries).forEach(k=>{try{disableIndicator(k)}catch(e){}});
+    Object.keys(indicatorState).forEach(k=>{if(indicatorState[k]&&indicatorState[k].enabled) enableIndicator(k);});
+    syncIndicatorMenuState();
   }
   
   // Crosshair move handler for OHLC info
@@ -785,6 +1023,8 @@ const initLightweightChart=async()=>{
     }
   });
   resizeObserver.observe(chartContainer);
+
+  try{lwChart.timeScale().subscribeVisibleTimeRangeChange(()=>updateChartOverlay())}catch(e){}
   
   // Initial overlay update
   setTimeout(()=>updateChartOverlay(),100);
@@ -853,10 +1093,108 @@ const yToPrice=(y)=>{
   return price;
 };
 
+const timeToX=(time)=>{
+  if(!lwChart) return null;
+  try{return lwChart.timeScale().timeToCoordinate(time)}catch(e){return null}
+};
+
+const xToTime=(x)=>{
+  if(!lwChart) return null;
+  try{return lwChart.timeScale().coordinateToTime(x)}catch(e){return null}
+};
+
+const getOverlaySvg=(overlay)=>{
+  if(!overlay) return null;
+  let svg=overlay.querySelector('svg[data-overlay="1"]');
+  if(!svg){
+    svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
+    svg.setAttribute('data-overlay','1');
+    svg.style.position='absolute';
+    svg.style.left='0';
+    svg.style.top='0';
+    svg.style.width='100%';
+    svg.style.height='100%';
+    svg.style.pointerEvents='auto';
+    overlay.appendChild(svg);
+  }
+  return svg;
+};
+
 const updateChartOverlay=()=>{
   const overlay=$('chartOverlay');
   if(!overlay||!lwChart||!lwSeries)return;
   overlay.innerHTML='';
+  const svg=getOverlaySvg(overlay);
+  if(svg) svg.innerHTML='';
+
+  // Drawings layer
+  if(svg){
+    const w=overlay.clientWidth||1;
+    const mkLine=(x1,y1,x2,y2,stroke,width,dash)=>{
+      const l=document.createElementNS('http://www.w3.org/2000/svg','line');
+      l.setAttribute('x1',x1);l.setAttribute('y1',y1);l.setAttribute('x2',x2);l.setAttribute('y2',y2);
+      l.setAttribute('stroke',stroke);
+      l.setAttribute('stroke-width',width);
+      if(dash) l.setAttribute('stroke-dasharray',dash);
+      l.style.pointerEvents='stroke';
+      l.addEventListener('click',(e)=>{e.stopPropagation();activeDrawingId=l.dataset.id;updateChartOverlay();});
+      return l;
+    };
+
+    const drawFibRetr=(d)=>{
+      const top=Math.min(d.a.price,d.b.price),bot=Math.max(d.a.price,d.b.price);
+      const ratios=[0,0.236,0.382,0.5,0.618,0.786,1];
+      ratios.forEach(r=>{
+        const price=bot-(bot-top)*r;
+        const y=priceToY(price);
+        if(y===null) return;
+        const l=mkLine(0,y,w,y,'rgba(167,139,250,0.9)',1,'4 4');
+        l.dataset.id=d.id;
+        svg.appendChild(l);
+      });
+    };
+
+    const drawFibExt=(d)=>{
+      const move=d.b.price-d.a.price;
+      const ratios=[0,0.618,1,1.618,2.618];
+      ratios.forEach(r=>{
+        const price=d.b.price+move*r;
+        const y=priceToY(price);
+        if(y===null) return;
+        const l=mkLine(0,y,w,y,'rgba(99,102,241,0.9)',1,'4 4');
+        l.dataset.id=d.id;
+        svg.appendChild(l);
+      });
+    };
+
+    const drawFibFan=(d)=>{
+      const x1=timeToX(d.a.time),x2=timeToX(d.b.time);
+      const y1=priceToY(d.a.price),y2=priceToY(d.b.price);
+      if(x1===null||x2===null||y1===null||y2===null) return;
+      const ratios=[0.382,0.5,0.618];
+      ratios.forEach(r=>{
+        const yAtX2=y1+(y2-y1)*r;
+        const l=mkLine(x1,y1,x2,yAtX2,'rgba(34,211,238,0.9)',1,null);
+        l.dataset.id=d.id;
+        svg.appendChild(l);
+      });
+    };
+
+    drawings.forEach(d=>{
+      if(d.type==='line'){
+        const x1=timeToX(d.a.time),x2=timeToX(d.b.time);
+        const y1=priceToY(d.a.price),y2=priceToY(d.b.price);
+        if(x1===null||x2===null||y1===null||y2===null) return;
+        const stroke=d.id===activeDrawingId?'rgba(255,255,255,0.95)':'rgba(148,163,184,0.9)';
+        const l=mkLine(x1,y1,x2,y2,stroke,2,null);
+        l.dataset.id=d.id;
+        svg.appendChild(l);
+      }
+      if(d.type==='fib_retr') drawFibRetr(d);
+      if(d.type==='fib_ext') drawFibExt(d);
+      if(d.type==='fib_fan') drawFibFan(d);
+    });
+  }
   
   // Get current symbol positions
   const symbolPositions=positions.filter(p=>p.symbol.api===currentSymbol.api);
@@ -970,6 +1308,76 @@ const endDrag=(e)=>{
   dragState=null;
   document.removeEventListener('mousemove',onDrag);
   document.removeEventListener('mouseup',endDrag);
+  updateChartOverlay();
+};
+
+const getPrimaryPositionForSymbol=()=>{
+  const list=positions.filter(p=>p.symbol.api===currentSymbol.api);
+  if(list.length===1) return list[0];
+  return null;
+};
+
+const clearModes=()=>{
+  drawMode=null;drawStep=0;drawAnchor1=null;slTpMode=null;
+  ['drawLineBtn','fibRetrBtn','fibExtBtn','fibFanBtn','placeSlBtn','placeTpBtn'].forEach(id=>{const b=$(id);if(b)b.classList.remove('active')});
+};
+
+const setMode=(mode)=>{
+  clearModes();
+  if(!mode) return;
+  if(mode==='line'||mode==='fib_retr'||mode==='fib_ext'||mode==='fib_fan'){
+    drawMode=mode;
+    const map={line:'drawLineBtn',fib_retr:'fibRetrBtn',fib_ext:'fibExtBtn',fib_fan:'fibFanBtn'};
+    const b=$(map[mode]);if(b)b.classList.add('active');
+    showToast('Clique 2 points sur le graphique','info');
+    return;
+  }
+  if(mode==='sl'||mode==='tp'){
+    slTpMode=mode;
+    const b=$(mode==='sl'?'placeSlBtn':'placeTpBtn');if(b)b.classList.add('active');
+    showToast(`Clique sur le graphique pour placer ${mode.toUpperCase()}`,'info');
+  }
+};
+
+const onOverlayClick=(e)=>{
+  if(!lwChart||!lwSeries) return;
+  const overlay=$('chartOverlay');
+  if(!overlay) return;
+  const rect=overlay.getBoundingClientRect();
+  const x=e.clientX-rect.left;
+  const y=e.clientY-rect.top;
+  const time=xToTime(x);
+  const price=yToPrice(y);
+  if(time===null||price===null||!Number.isFinite(price)) return;
+
+  if(slTpMode){
+    const pos=getPrimaryPositionForSymbol();
+    if(!pos){showToast('Il faut 1 seule position sur ce symbole (sinon utilise la modale)','error');clearModes();return;}
+    if(slTpMode==='sl') pos.sl=price;
+    if(slTpMode==='tp') pos.tp=price;
+    renderPositions();
+    showToast(`${slTpMode.toUpperCase()} place: ${formatChartPrice(price)}`,'success');
+    clearModes();
+    updateChartOverlay();
+    return;
+  }
+
+  if(!drawMode) return;
+  if(drawStep===0){drawAnchor1={time,price};drawStep=1;return;}
+  const a=drawAnchor1;
+  const b={time,price};
+  const id=`d_${Date.now()}_${Math.random().toString(36).slice(2,6)}`;
+  drawings.push({id,type:drawMode,a,b});
+  activeDrawingId=id;
+  drawStep=0;drawAnchor1=null;
+  updateChartOverlay();
+};
+
+const deleteActiveDrawing=()=>{
+  if(!activeDrawingId){showToast('Aucun dessin selectionne','info');return;}
+  drawings=drawings.filter(d=>d.id!==activeDrawingId);
+  activeDrawingId=null;
+  updateChartOverlay();
 };
 
 const togglePanel=(panelId,btnId)=>{const panel=$(panelId),btn=$(btnId);const isHidden=panel.classList.contains('hidden');panel.classList.toggle('hidden',!isHidden);btn.classList.toggle('active',!isHidden);if(tvWidget)setTimeout(()=>tvWidget.activeChart&&tvWidget.activeChart().resetData(),100);if(lwChart)setTimeout(()=>{const container=$('lw_chart_container');if(lwChart&&container)lwChart.applyOptions({width:container.clientWidth,height:container.clientHeight})},100)};
@@ -1104,6 +1512,18 @@ $('tabHistory').addEventListener('click',()=>{$('tabHistory').classList.add('act
 $('modalCancel').addEventListener('click',()=>$('positionModal').style.display='none');
 $('modalSave').addEventListener('click',()=>{const pos=positions.find(p=>p.id===activeModalId);if(!pos)return;const tp=$('modalTp').value,sl=$('modalSl').value,sellLots=parseFloat($('modalSellLots').value)||0;pos.tp=tp?Number(tp):null;pos.sl=sl?Number(sl):null;if(sellLots>0)closePosition(pos.id,sellLots);$('positionModal').style.display='none';renderPositions();renderTotals();showToast('Sauvegarde','success')});
 document.querySelectorAll('.timeframe-btn').forEach(btn=>btn.addEventListener('click',()=>switchTimeframe(btn.dataset.tf)));
+
+// Draw + SL/TP tools
+$('drawLineBtn').addEventListener('click',()=>setMode(drawMode==='line'?null:'line'));
+$('fibRetrBtn').addEventListener('click',()=>setMode(drawMode==='fib_retr'?null:'fib_retr'));
+$('fibExtBtn').addEventListener('click',()=>setMode(drawMode==='fib_ext'?null:'fib_ext'));
+$('fibFanBtn').addEventListener('click',()=>setMode(drawMode==='fib_fan'?null:'fib_fan'));
+$('deleteDrawBtn').addEventListener('click',deleteActiveDrawing);
+$('placeSlBtn').addEventListener('click',()=>setMode(slTpMode==='sl'?null:'sl'));
+$('placeTpBtn').addEventListener('click',()=>setMode(slTpMode==='tp'?null:'tp'));
+// Clicks on drawings are handled by SVG line listeners (stopPropagation). Other clicks fall through to overlay.
+$('chartOverlay').addEventListener('click',onOverlayClick);
+document.addEventListener('keydown',(e)=>{if(e.key==='Escape')clearModes();if(e.key==='Delete'||e.key==='Backspace')deleteActiveDrawing();});
 
 window.closePosition=closePosition;window.removeOrder=removeOrder;
 console.log('AmABrocker');
