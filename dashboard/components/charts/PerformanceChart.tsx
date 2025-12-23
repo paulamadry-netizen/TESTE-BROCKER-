@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ComposedChart,
   Line,
@@ -81,10 +82,56 @@ const formatXAxis = (dateStr: string) => {
 };
 
 export function PerformanceChart({ data }: PerformanceChartProps) {
+  const wrapRef = useRef<HTMLDivElement | null>(null);
   // Calculate reference lines
   const initialBalance = data.length > 0 ? data[0].balance : 0;
   const profitTarget = initialBalance * 1.10; // +10% target
   const maxDrawdown = initialBalance * 0.92; // -8% max drawdown
+
+  const { defaultDomain } = useMemo(() => {
+    const values: number[] = [];
+    for (const d of data) {
+      if (Number.isFinite(d.balance)) values.push(d.balance);
+    }
+    if (Number.isFinite(initialBalance)) values.push(initialBalance);
+    if (Number.isFinite(profitTarget)) values.push(profitTarget);
+    if (Number.isFinite(maxDrawdown)) values.push(maxDrawdown);
+
+    const min = values.length ? Math.min(...values) : 0;
+    const max = values.length ? Math.max(...values) : 0;
+    const range = Math.max(1, max - min);
+    const pad = range * 0.15;
+
+    return {
+      defaultDomain: [min - pad, max + pad] as [number, number],
+    };
+  }, [data, initialBalance, maxDrawdown, profitTarget]);
+
+  const [yDomain, setYDomain] = useState<[number, number]>(defaultDomain);
+
+  // Keep yDomain synced if the underlying dataset changes significantly
+  // (e.g. switching account or loading trades)
+  useEffect(() => {
+    setYDomain(defaultDomain);
+  }, [defaultDomain]);
+
+  const zoom = (direction: "in" | "out") => {
+    const [min, max] = yDomain;
+    const center = (min + max) / 2;
+    const range = Math.max(1, max - min);
+    const factor = direction === "in" ? 0.85 : 1.15;
+    const nextRange = range * factor;
+    setYDomain([center - nextRange / 2, center + nextRange / 2]);
+  };
+
+  const resetZoom = () => setYDomain(defaultDomain);
+
+  const onWheel: React.WheelEventHandler<HTMLDivElement> = (e) => {
+    // Zoom in/out with wheel. Trackpad scroll generates wheel too.
+    if (e.ctrlKey) return; // avoid fighting browser zoom
+    e.preventDefault();
+    zoom(e.deltaY < 0 ? "in" : "out");
+  };
 
   // Calculate current balance and performance
   const currentBalance = data.length > 0 ? data[data.length - 1].balance : initialBalance;
@@ -114,15 +161,40 @@ export function PerformanceChart({ data }: PerformanceChartProps) {
                 </span>
               </p>
             </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => zoom("in")}
+                className="h-8 px-3 rounded-md border border-border bg-background hover:bg-accent hover:text-accent-foreground transition"
+              >
+                Zoom +
+              </button>
+              <button
+                type="button"
+                onClick={() => zoom("out")}
+                className="h-8 px-3 rounded-md border border-border bg-background hover:bg-accent hover:text-accent-foreground transition"
+              >
+                Zoom -
+              </button>
+              <button
+                type="button"
+                onClick={resetZoom}
+                className="h-8 px-3 rounded-md border border-border bg-background hover:bg-accent hover:text-accent-foreground transition"
+              >
+                Reset
+              </button>
+            </div>
           </div>
         </div>
       </CardHeader>
       <CardContent className="pl-2">
-        <ResponsiveContainer width="100%" height={380}>
-          <ComposedChart
-            data={data}
-            margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
-          >
+        <div ref={wrapRef} onWheel={onWheel} className="relative">
+          <ResponsiveContainer width="100%" height={380}>
+            <ComposedChart
+              data={data}
+              margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
+            >
             {/* Gradient Definitions */}
             <defs>
               <linearGradient id="colorGreen" x1="0" y1="0" x2="0" y2="1">
@@ -166,6 +238,7 @@ export function PerformanceChart({ data }: PerformanceChartProps) {
               tickLine={false}
               axisLine={{ stroke: 'hsl(var(--border))', strokeWidth: 1 }}
               width={60}
+              domain={yDomain}
             />
 
             {/* Custom Tooltip */}
@@ -220,6 +293,7 @@ export function PerformanceChart({ data }: PerformanceChartProps) {
               dataKey="balance"
               fill={areaFillUrl}
               stroke="none"
+              baseValue="dataMin"
               animationDuration={1000}
               animationEasing="ease-out"
             />
@@ -235,8 +309,13 @@ export function PerformanceChart({ data }: PerformanceChartProps) {
               animationDuration={1000}
               animationEasing="ease-out"
             />
-          </ComposedChart>
-        </ResponsiveContainer>
+            </ComposedChart>
+          </ResponsiveContainer>
+
+          <div className="pointer-events-none absolute right-3 top-3 text-[11px] text-muted-foreground">
+            Molette = zoom
+          </div>
+        </div>
 
         {/* Legend */}
         <div className="flex items-center justify-center gap-6 mt-4 text-xs text-muted-foreground">
