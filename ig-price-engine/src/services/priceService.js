@@ -49,7 +49,7 @@ class PriceService {
   }
 
   /**
-   * Start the price service (polling mode - streaming not available in this build)
+   * Start the price service (streaming preferred, polling fallback)
    */
   async start(io) {
     if (this.isRunning) {
@@ -59,13 +59,58 @@ class PriceService {
 
     this.io = io;
     this.isRunning = true;
-    this.useStreaming = false;
     
-    console.log(`[PriceService] Starting polling mode (every ${this.pollIntervalMs}ms)`);
-    this.fetchAllPrices();
-    this.updateInterval = setInterval(() => {
+    // Try streaming first
+    const streamingStarted = await this._tryStartStreaming();
+    
+    if (!streamingStarted) {
+      // Fallback to polling
+      console.log(`[PriceService] Starting polling fallback (every ${this.pollIntervalMs}ms)`);
+      this.useStreaming = false;
       this.fetchAllPrices();
-    }, this.pollIntervalMs);
+      this.updateInterval = setInterval(() => {
+        this.fetchAllPrices();
+      }, this.pollIntervalMs);
+    }
+  }
+
+  /**
+   * Try to start Lightstreamer streaming
+   */
+  async _tryStartStreaming() {
+    try {
+      const igAuthService = require('./igAuthService');
+      const igStreamingService = require('./igStreamingService');
+      
+      const authStatus = igAuthService.getStatus();
+      if (!authStatus.isAuthenticated || !authStatus.hasTokens) {
+        console.log('[PriceService] Not authenticated, cannot start streaming');
+        return false;
+      }
+
+      const cst = igAuthService.cst;
+      const xst = igAuthService.xSecurityToken;
+      const accountId = igAuthService.accountId || 'DEFAULT';
+
+      await igStreamingService.connect(cst, xst, accountId);
+      igStreamingService.setSocketIO(this.io);
+      
+      const epics = this.subscribedEpics.size > 0 
+        ? Array.from(this.subscribedEpics) 
+        : getAllEpics();
+      
+      igStreamingService.subscribeToEpics(epics, (priceData) => {
+        this.priceCache.set(priceData.epic, priceData);
+        this.lastUpdate = new Date();
+      });
+
+      this.useStreaming = true;
+      console.log('[PriceService] ✅ Streaming mode active (no polling needed)');
+      return true;
+    } catch (error) {
+      console.warn('[PriceService] Streaming failed, will use polling:', error.message);
+      return false;
+    }
   }
 
   /**
@@ -75,6 +120,12 @@ class PriceService {
     if (this.updateInterval) {
       clearInterval(this.updateInterval);
       this.updateInterval = null;
+    }
+    if (this.useStreaming) {
+      try {
+        const igStreamingService = require('./igStreamingService');
+        igStreamingService.disconnect();
+      } catch (e) {}
     }
     this.isRunning = false;
     this.useStreaming = false;

@@ -4,6 +4,9 @@
 # Stage 1: Build
 FROM node:18-alpine AS builder
 
+# Install git (required for some npm packages like lightstreamer-client-node)
+RUN apk add --no-cache git
+
 WORKDIR /app
 
 # Copy package files
