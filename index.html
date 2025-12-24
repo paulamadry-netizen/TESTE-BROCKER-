@@ -313,6 +313,8 @@ html,body{height:100%;background:linear-gradient(135deg,var(--bg-primary) 0%,var
 #lw_chart_container{width:100%;height:100%;position:relative}
 .chart-overlay{position:absolute;top:0;left:0;right:60px;bottom:30px;pointer-events:none;z-index:2}
 .chart-overlay.draw-mode{pointer-events:auto;cursor:crosshair}
+.chart-overlay.interaction-mode{pointer-events:none}
+.chart-overlay.interaction-mode .sltp-handle{pointer-events:auto !important}
 .chart-overlay svg{pointer-events:none}
 .chart-overlay svg line[data-id]{pointer-events:stroke;cursor:pointer}
 .chart-overlay svg text{pointer-events:none}
@@ -471,6 +473,7 @@ html,body{height:100%;background:linear-gradient(135deg,var(--bg-primary) 0%,var
 <div class="ind-dropdown" id="indicatorsMenu" style="display:none"></div>
 </div>
 <div class="ind-toolbar" id="drawToolbar" style="gap:6px">
+<button class="icon-btn active" id="dragModeBtn" title="Mode Navigation (drag graphique)">✋</button>
 <button class="icon-btn" id="fibRetrBtn" title="Fibonacci Retracement">FibR</button>
 <button class="icon-btn" id="fibExtBtn" title="Fibonacci Extension">FibE</button>
 <button class="icon-btn" id="deleteDrawBtn" title="Supprimer dessin">Del</button>
@@ -660,6 +663,7 @@ let chartPriceLines=[],dragState=null,chartContainer=null;
 let indicatorsVisible=false,indicatorSeries={},indicatorState={};
 let drawMode=null,drawStep=0,drawAnchor1=null,drawAnchor2=null,activeDrawingId=null,drawings=[];
 let slTpMode=null;
+let dragModeEnabled=true; // true = can drag chart, false = can interact with SL/TP/Fibo
 const INDICATORS=[
   {key:'sma20',label:'SMA',type:'sma',params:{period:20},color:'#60a5fa'},
   {key:'sma50',label:'SMA',type:'sma',params:{period:50},color:'#f59e0b'},
@@ -1492,13 +1496,44 @@ const getPrimaryPositionForSymbol=()=>{
 
 const clearModes=()=>{
   drawMode=null;drawStep=0;drawAnchor1=null;drawAnchor2=null;slTpMode=null;
-  document.querySelectorAll('.icon-btn').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.icon-btn').forEach(b=>{
+    if(b.id!=='dragModeBtn') b.classList.remove('active');
+  });
   const overlay=$('chartOverlay');if(overlay)overlay.classList.remove('draw-mode');
+};
+
+const toggleDragMode=()=>{
+  dragModeEnabled=!dragModeEnabled;
+  const btn=$('dragModeBtn');
+  if(btn) btn.classList.toggle('active',dragModeEnabled);
+  
+  if(lwChart){
+    // Enable/disable chart scrolling and crosshair
+    lwChart.applyOptions({
+      handleScroll:{mouseWheel:dragModeEnabled,pressedMouseMove:dragModeEnabled},
+      handleScale:{axisPressedMouseMove:dragModeEnabled,mouseWheel:dragModeEnabled,pinch:dragModeEnabled},
+      crosshair:{mode:dragModeEnabled?LightweightCharts.CrosshairMode.Normal:LightweightCharts.CrosshairMode.Hidden}
+    });
+  }
+  
+  // Update overlay interactivity
+  const overlay=$('chartOverlay');
+  if(overlay){
+    overlay.classList.toggle('interaction-mode',!dragModeEnabled);
+  }
+  
+  showToast(dragModeEnabled?'Mode Navigation actif':'Mode Interaction actif (SL/TP/Fibo)','info');
 };
 
 const setMode=(mode)=>{
   clearModes();
   if(!mode) return;
+  
+  // Auto-disable drag mode when using drawing tools
+  if(dragModeEnabled){
+    toggleDragMode();
+  }
+  
   const overlay=$('chartOverlay');
   if(mode==='fib_retr'||mode==='fib_ext'){
     drawMode=mode;
@@ -1507,12 +1542,6 @@ const setMode=(mode)=>{
     if(overlay)overlay.classList.add('draw-mode');
     showToast(mode==='fib_ext'?'Clique 3 points (A,B,C)':'Clique 2 points sur le graphique','info');
     return;
-  }
-  if(mode==='sl'||mode==='tp'){
-    slTpMode=mode;
-    const b=$(mode==='sl'?'placeSlBtn':'placeTpBtn');if(b)b.classList.add('active');
-    if(overlay)overlay.classList.add('draw-mode');
-    showToast(`Clique sur le graphique pour placer ${mode.toUpperCase()}`,'info');
   }
 };
 
@@ -1803,6 +1832,7 @@ $('modalSave').addEventListener('click',()=>{const pos=positions.find(p=>p.id===
 document.querySelectorAll('.timeframe-btn').forEach(btn=>btn.addEventListener('click',()=>switchTimeframe(btn.dataset.tf)));
 
 // Draw + SL/TP tools
+$('dragModeBtn').addEventListener('click',toggleDragMode);
 $('fibRetrBtn').addEventListener('click',()=>setMode(drawMode==='fib_retr'?null:'fib_retr'));
 $('fibExtBtn').addEventListener('click',()=>setMode(drawMode==='fib_ext'?null:'fib_ext'));
 $('deleteDrawBtn').addEventListener('click',deleteActiveDrawing);
