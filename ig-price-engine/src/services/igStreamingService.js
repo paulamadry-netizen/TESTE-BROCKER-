@@ -48,8 +48,8 @@ class IGStreamingService {
       // Connect
       this.client.connect();
       
-      // Wait for connection
-      await this._waitForConnection(10000);
+      // Wait for connection with longer timeout
+      await this._waitForConnection(30000);
       
       console.log('[IGStreaming] ✅ Connected to Lightstreamer');
       return true;
@@ -111,7 +111,7 @@ class IGStreamingService {
           resolved = true;
           reject(new Error('Subscription timeout'));
         }
-      }, 10000);
+      }, 30000);
 
       this.subscription.addListener({
         onSubscription: () => {
