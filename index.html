@@ -1499,6 +1499,51 @@ const scheduleReconnect=()=>{stopKeepalive();if(reconTimer)clearTimeout(reconTim
 const startWebSocket=()=>{if(ws&&ws.connected)return;try{debugLog(`Connecting: ${CFG.ws}`);setWsStatus('connecting');ws=io(CFG.ws,{transports:['websocket','polling'],reconnection:true,reconnectionAttempts:10,reconnectionDelay:2000});ws.on('connect',()=>{debugLog('Socket.io CONNECTED');setWsStatus('connected');reconAttempts=0;reconDelay=CFG.reconBase;msgCount=0;startKeepalive();showToast('Connecte a IG Markets','success');const epics=WATCHLIST.map(w=>w.epic);ws.emit('subscribe',epics);debugLog(`Subscribed to ${epics.length} epics`)});ws.on('prices',(data)=>{msgCount++;debugLog(`MSG #${msgCount}: prices update`);handlePriceUpdate(data)});ws.on('pong',()=>{debugLog('Pong received')});ws.on('disconnect',(reason)=>{debugLog(`Socket.io DISCONNECT: ${reason}`);setWsStatus('disconnected');showToast('Deconnecte','error');scheduleReconnect()});ws.on('connect_error',(err)=>{debugLog(`Socket.io ERROR: ${err.message}`);setWsStatus('disconnected');scheduleReconnect()})}catch(e){debugLog(`Socket.io failed: ${e.message}`);setWsStatus('disconnected');scheduleReconnect()}};
 const handlePriceUpdate=(data)=>{if(!data||!data.data)return;lastAnyPriceMsgAt=Date.now();const prices=Array.isArray(data.data)?data.data:[data.data];prices.forEach(p=>{const epic=p.epic,bid=p.bid,offer=p.offer;if(!epic)return;const midPrice=(bid+offer)/2;const oldPrice=priceCache[epic];priceCache[epic]=midPrice;lastPriceUpdate[epic]=Date.now();debugLog(`Price: ${epic} = ${midPrice.toFixed(5)} (bid:${bid} offer:${offer})`);updatePriceUI(epic,oldPrice,midPrice);onPriceUpdate(epic)})};
 
+// Price smoothing - interpolate between real updates for fluid appearance
+const priceTargets={};
+const priceDisplayed={};
+const startPriceSmoothing=()=>{
+  setInterval(()=>{
+    Object.keys(priceCache).forEach(epic=>{
+      const target=priceCache[epic];
+      const current=priceDisplayed[epic]||target;
+      if(target===undefined||current===undefined)return;
+      
+      // Small random micro-movement for realism (±0.001% of price)
+      const volatility=target*0.00001;
+      const noise=(Math.random()-0.5)*volatility*2;
+      
+      // Smooth interpolation toward target
+      const diff=target-current;
+      const step=diff*0.3+noise;
+      const newDisplayed=current+step;
+      
+      // Only update if change is meaningful
+      if(Math.abs(newDisplayed-current)>0.00001){
+        priceDisplayed[epic]=newDisplayed;
+        const symObj=WATCHLIST.find(w=>w.api===epic);
+        if(symObj){
+          const isSimple=symObj.type==='index'||symObj.type==='commodity'||symObj.type==='metal';
+          const formatted=isSimple?newDisplayed.toFixed(2):newDisplayed.toFixed(5).replace(/\.?0+$/,'');
+          
+          // Update watchlist row
+          document.querySelectorAll('.wl-item').forEach(row=>{
+            if(row.dataset.symbol===epic){
+              const el=row.querySelector('.wl-price');
+              if(el)el.textContent=formatted;
+            }
+          });
+          
+          // Update header if current symbol
+          if(currentSymbol&&currentSymbol.api===epic){
+            $('currentPriceValue').innerText=formatted;
+          }
+        }
+      }
+    });
+  },200); // Update display every 200ms for smooth appearance
+};
+
 const startPriceWatchdog=()=>{
   setInterval(()=>{
     if(!currentSymbol||!ws||!wsConnected) return;
@@ -1724,7 +1769,7 @@ document.addEventListener('keydown',(e)=>{if(e.key==='Escape')clearModes();if(e.
 
 window.closePosition=closePosition;window.removeOrder=removeOrder;
 console.log('AmABrocker');
-initResizable();renderAll();selectSymbol(WATCHLIST[0]);startWebSocket();startPriceWatchdog();
+initResizable();renderAll();selectSymbol(WATCHLIST[0]);startWebSocket();startPriceWatchdog();startPriceSmoothing();
 debugLog('=== INITIALIZED ===');
 </script>
 </body>
