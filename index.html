@@ -613,7 +613,12 @@ const closeAllPositions=async()=>{debugLog('Closing all positions...');const pos
 const suspendAccount=async(reason)=>{accountSuspended=true;showToast(`COMPTE SUSPENDU: ${reason}`,'error',10000);await closeAllPositions();if(window.firebaseUser&&window.firestoreDoc&&window.firestoreUpdateDoc){try{const userDocRef=window.firestoreDoc(window.firebaseDb,'users',window.firebaseUser.uid);await window.firestoreUpdateDoc(userDocRef,{accountStatus:'suspended',suspensionReason:reason,suspendedAt:new Date().toISOString()});debugLog(`Account suspended in Firestore: ${reason}`);alert(`COMPTE DESACTIVE\n\n${reason}\n\nVotre compte a ete suspendu pour violation des regles de trading.\nVeuillez contacter le support.`)}catch(error){console.error('Error suspending account:',error)}}};
 const checkAllRules=async()=>{if(accountSuspended)return true;const hoursCheck=checkTradingHours();if(!hoursCheck.allowed){await suspendAccount(hoursCheck.reason);return true}const dailyCheck=checkDailyDrawdown();if(dailyCheck.violated){await suspendAccount(dailyCheck.reason);return true}const totalCheck=checkTotalDrawdown();if(totalCheck.violated){await suspendAccount(totalCheck.reason);return true}return false};
 
-const escapeId=(v)=>String(v).replace(/[^\w]/g,'_'),formatPrice=(v)=>{if(v===undefined||v===null)return'—';const n=Number(v);if(currentSymbol&&(currentSymbol.type==='etf'||currentSymbol.type==='index'))return n.toFixed(2);if(currentSymbol&&currentSymbol.type==='commodity')return n.toFixed(2);if(currentSymbol&&currentSymbol.api.includes('SI.CFD'))return n.toFixed(3);return n.toFixed(5).replace(/\.?0+$/,'')},formatMoney=(v)=>v===undefined||v===null?'0.00':Number(v).toFixed(2),formatDateTime=(t)=>new Date(t).toLocaleString('fr-FR');
+const escapeId=(v)=>String(v).replace(/[^\w]/g,'_');
+const safeCssEscape=(v)=>{
+  try{if(window.CSS&&typeof window.CSS.escape==='function')return window.CSS.escape(String(v))}catch(e){}
+  return String(v).replace(/"/g,'\\"');
+ };
+const formatPrice=(v)=>{if(v===undefined||v===null)return'—';const n=Number(v);if(currentSymbol&&(currentSymbol.type==='etf'||currentSymbol.type==='index'))return n.toFixed(2);if(currentSymbol&&currentSymbol.type==='commodity')return n.toFixed(2);if(currentSymbol&&currentSymbol.api.includes('SI.CFD'))return n.toFixed(3);return n.toFixed(5).replace(/\.?0+$/,'')},formatMoney=(v)=>v===undefined||v===null?'0.00':Number(v).toFixed(2),formatDateTime=(t)=>new Date(t).toLocaleString('fr-FR');
 const lotUnits=(s)=>{const o=WATCHLIST.find(w=>w.api===s);if(o&&o.type==='etf')return 1;if(o&&o.type==='index')return 1;if(o&&o.type==='commodity')return 1000;if(s.includes('GD.CFD'))return 100;if(s.includes('SI.CFD'))return 5000;return CFG.baseLot},isQuoteUsd=(s)=>s.includes('USD'),isBaseUsd=(s)=>s.includes('USD')&&s.indexOf('USD')<10,isETF=(s)=>{const o=WATCHLIST.find(w=>w.api===s);return o&&o.type==='etf'},isIndex=(s)=>{const o=WATCHLIST.find(w=>w.api===s);return o&&o.type==='index'},isCommodity=(s)=>{const o=WATCHLIST.find(w=>w.api===s);return o&&o.type==='commodity'},isMetal=(s)=>{const o=WATCHLIST.find(w=>w.api===s);return o&&o.type==='metal'},pipStep=(s)=>{if(isETF(s))return PIP_STEPS.etf;if(isIndex(s))return PIP_STEPS.index;if(s.includes('JPY'))return PIP_STEPS.jpy;if(s.includes('GD.CFD'))return PIP_STEPS.xau;if(s.includes('SI.CFD'))return PIP_STEPS.xag;if(s.includes('COPPER'))return PIP_STEPS.copper;if(s.includes('CL.UMA'))return PIP_STEPS.oil;if(s.includes('COFFEE'))return PIP_STEPS.coffee;if(s.includes('ZINC'))return PIP_STEPS.zinc;return PIP_STEPS.default};
 const pipValuePerLot=(s,p)=>{
 const step=pipStep(s),units=lotUnits(s);
@@ -1503,20 +1508,22 @@ const updatePriceUI=(symbol,oldPrice,newPrice)=>{
   const isSimple=!!(symObj&&(symObj.type==='etf'||symObj.type==='index'||symObj.type==='commodity'||symObj.type==='metal'));
   const formatted=isSimple?Number(newPrice).toFixed(2):Number(newPrice).toFixed(5).replace(/\.?0+$/,'');
 
-  let el=$('price_'+escapeId(symbol));
-  if(!el){
-    const row=document.querySelector(`.wl-item[data-symbol="${CSS.escape(symbol)}"]`);
-    if(row) el=row.querySelector('.wl-price');
-  }
+ let el=$('price_'+escapeId(symbol));
+ if(!el){
+   const row=document.querySelector(`.wl-item[data-symbol="${safeCssEscape(symbol)}"]`);
+   if(row) el=row.querySelector('.wl-price');
+ }
 
-  if(el){
-    el.innerText=formatted;
-    const parentItem=el.closest('.wl-item');
-    if(parentItem&&oldPrice!==undefined&&oldPrice!==newPrice){
-      parentItem.classList.add('updating');
-      setTimeout(()=>parentItem.classList.remove('updating'),500);
-    }
-  }
+ if(el){
+   el.innerText=formatted;
+   const parentItem=el.closest('.wl-item');
+   if(parentItem&&oldPrice!==undefined&&oldPrice!==newPrice){
+     parentItem.classList.add('updating');
+     setTimeout(()=>parentItem.classList.remove('updating'),500);
+   }
+ }else{
+   debugLog(`updatePriceUI: element not found for ${symbol}`);
+ }
 
   if(symbol===currentSymbol.api){
     $('currentPriceValue').innerText=formatted;
