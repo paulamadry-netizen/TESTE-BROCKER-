@@ -1924,9 +1924,24 @@ const renderAll=()=>{renderPositions();renderHistory();renderOrders();renderTota
    }
  };
 
+ // Apply loaded trades if already available
  if(window.__loadedTrades){
+   console.log('📦 Applying pre-loaded trades...');
    window.applyLoadedTrades();
  }
+
+ // Also check periodically in case trades load after script init
+ const checkLoadedData = setInterval(() => {
+   if(window.__loadedTrades && positions.length === 0 && window.__loadedTrades.open?.length > 0){
+     console.log('📦 Applying trades from interval check...');
+     window.applyLoadedTrades();
+   }
+   if(window.__loadedOrders && orders.length === 0 && window.__loadedOrders.length > 0){
+     console.log('📦 Applying orders from interval check...');
+     window.applyLoadedOrders();
+   }
+ }, 500);
+ setTimeout(() => clearInterval(checkLoadedData), 10000); // Stop checking after 10s
 
  window.applyLoadedOrders=()=>{
    const loaded=window.__loadedOrders;
