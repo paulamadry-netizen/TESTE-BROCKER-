@@ -66,6 +66,34 @@ app.get('/health', (req, res) => {
   });
 });
 
+// Get IG account info and permissions
+app.get('/api/account', async (req, res) => {
+  try {
+    const client = igAuthService.getClient();
+    if (!client) {
+      return res.status(503).json({ error: 'Not authenticated' });
+    }
+    
+    // Get account details
+    const accountResponse = await client.get('/accounts', { headers: { 'Version': '1' } });
+    
+    // Get session details (includes streaming permissions)
+    const sessionResponse = await client.get('/session', { headers: { 'Version': '1' } });
+    
+    res.json({
+      accounts: accountResponse.data,
+      session: sessionResponse.data,
+      lightstreamerEndpoint: igAuthService.lightstreamerEndpoint,
+      accountId: igAuthService.accountId
+    });
+  } catch (error) {
+    res.status(500).json({ 
+      error: error.message,
+      details: error.response?.data 
+    });
+  }
+});
+
 // Get all available EPICS
 app.get('/api/epics', (req, res) => {
   res.json({
