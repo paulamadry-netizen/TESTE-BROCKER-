@@ -1024,9 +1024,9 @@ const initLightweightChart=async()=>{
   if(lwChart){try{lwChart.remove()}catch(e){}}
   lwChart=null;lwSeries=null;chartPriceLines=[];
   
-  // Clear container but keep overlay
+  // Clear container but keep overlay and handles container
   const children=Array.from(chartContainer.children);
-  children.forEach(c=>{if(c.id!=='chartOverlay'&&c.id!=='crosshairInfo')c.remove()});
+  children.forEach(c=>{if(c.id!=='chartOverlay'&&c.id!=='crosshairInfo'&&c.id!=='sltpHandlesContainer')c.remove()});
   
   // Create chart
   lwChart=LightweightCharts.createChart(chartContainer,{
