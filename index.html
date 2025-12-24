@@ -120,6 +120,9 @@
       if(window.loadUserTrades){
         await window.loadUserTrades(user.uid);
       }
+      if(window.loadUserOrders){
+        await window.loadUserOrders(user.uid);
+      }
     } else {
       console.log('⚠️ No user authenticated');
       // Redirect to login
@@ -166,6 +169,75 @@
     } catch (error) {
       console.error('❌ Error updating trade:', error);
       return false;
+    }
+  };
+
+  // Orders (Limit/Stop) Firestore functions
+  window.saveOrder = async (orderData) => {
+    if (!window.firebaseUser) {
+      console.warn('No user authenticated - order not saved');
+      return null;
+    }
+    try {
+      const ordersRef = collection(db, 'orders');
+      const docRef = await addDoc(ordersRef, {
+        ...orderData,
+        userId: window.firebaseUser.uid,
+        status: 'pending',
+        createdAt: new Date().toISOString()
+      });
+      console.log('✅ Order saved to Firestore:', docRef.id);
+      return docRef.id;
+    } catch (error) {
+      console.error('❌ Error saving order:', error);
+      return null;
+    }
+  };
+
+  window.deleteOrder = async (orderId) => {
+    if (!window.firebaseUser || !orderId) return false;
+    try {
+      const orderRef = doc(db, 'orders', orderId);
+      await updateDoc(orderRef, { status: 'cancelled', updatedAt: new Date().toISOString() });
+      console.log('✅ Order cancelled in Firestore:', orderId);
+      return true;
+    } catch (error) {
+      console.error('❌ Error cancelling order:', error);
+      return false;
+    }
+  };
+
+  window.loadUserOrders = async (userId) => {
+    try {
+      const q = query(collection(db, 'orders'), where('userId','==',userId), where('status','==','pending'), orderBy('createdAt','desc'));
+      const snap = await getDocs(q);
+      const pending = [];
+      snap.forEach(d => {
+        const o = d.data();
+        if(!o) return;
+        const symObj = (window.WATCHLIST||[]).find(w=>w.api===o.symbolApi) || {label:o.symbol||o.symbolApi,tv:o.symbolApi,api:o.symbolApi,type:'forex'};
+        pending.push({
+          id: 'ord_'+d.id,
+          firestoreId: d.id,
+          symbol: o.symbolApi,
+          symObj: symObj,
+          side: o.side,
+          orderType: o.orderType || 'limit',
+          price: Number(o.price),
+          size: Number(o.lots),
+          tp: o.takeProfit!==undefined&&o.takeProfit!==null?Number(o.takeProfit):null,
+          sl: o.stopLoss!==undefined&&o.stopLoss!==null?Number(o.stopLoss):null,
+          margin: Number(o.margin||0),
+          createdAt: o.createdAt?new Date(o.createdAt).getTime():Date.now(),
+        });
+      });
+      window.__loadedOrders = pending;
+      if(typeof window.applyLoadedOrders === 'function'){
+        window.applyLoadedOrders();
+      }
+      console.log('✅ Orders loaded:', pending.length, 'pending');
+    } catch (e) {
+      console.error('❌ Error loading orders:', e);
     }
   };
 
@@ -367,6 +439,7 @@ html,body{height:100%;background:linear-gradient(135deg,var(--bg-primary) 0%,var
 .order-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
 .order-symbol{font-weight:700;font-size:13px}
 .order-side{padding:4px 8px;border-radius:6px;font-size:11px;font-weight:700}
+.order-type{padding:3px 6px;border-radius:4px;font-size:10px;font-weight:600;background:var(--surface);color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.3px}
 .order-side.buy{background:var(--success-bg);color:var(--success)}
 .order-side.sell{background:var(--danger-bg);color:var(--danger)}
 .order-details{display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;color:var(--text-muted)}
@@ -514,10 +587,13 @@ html,body{height:100%;background:linear-gradient(135deg,var(--bg-primary) 0%,var
 <form class="order-form" onsubmit="return false;">
 <div class="form-group"><label class="form-label"><i class="fas fa-coins"></i> Symbole</label><select id="ordSymbol" class="form-select"></select></div>
 <div class="form-row">
-<div class="form-group"><label class="form-label"><i class="fas fa-exchange-alt"></i> Type</label><select id="ordSide" class="form-select"><option value="BUY">BUY</option><option value="SELL">SELL</option></select></div>
-<div class="form-group"><label class="form-label"><i class="fas fa-layer-group"></i> Lots</label><input id="ordSize" class="form-input" type="number" step="0.01" value="1"/></div>
+<div class="form-group"><label class="form-label"><i class="fas fa-list"></i> Type d'ordre</label><select id="ordType" class="form-select"><option value="limit">Limit</option><option value="stop">Stop</option><option value="stop_limit">Stop Limit</option></select></div>
+<div class="form-group"><label class="form-label"><i class="fas fa-exchange-alt"></i> Direction</label><select id="ordSide" class="form-select"><option value="BUY">BUY</option><option value="SELL">SELL</option></select></div>
 </div>
-<div class="form-group"><label class="form-label"><i class="fas fa-bullseye"></i> Prix cible</label><input id="ordPrice" class="form-input" type="number" step="0.00001" placeholder="0.00000"/></div>
+<div class="form-row">
+<div class="form-group"><label class="form-label"><i class="fas fa-layer-group"></i> Lots</label><input id="ordSize" class="form-input" type="number" step="0.01" value="1"/></div>
+<div class="form-group"><label class="form-label"><i class="fas fa-bullseye"></i> Prix</label><input id="ordPrice" class="form-input" type="number" step="0.00001" placeholder="0.00000"/></div>
+</div>
 <div class="form-row">
 <div class="form-group"><label class="form-label"><i class="fas fa-check-circle"></i> Take Profit</label><input id="ordTp" class="form-input" type="number" step="0.00001" placeholder="Optionnel"/></div>
 <div class="form-group"><label class="form-label"><i class="fas fa-times-circle"></i> Stop Loss</label><input id="ordSl" class="form-input" type="number" step="0.00001" placeholder="Optionnel"/></div>
@@ -1797,14 +1873,22 @@ debugLog(`Closed ${id}: ${pnl}`);
 await checkAllRules();
 };
 
-const addLimitOrder=(symbol,side,price,lots,tp,sl)=>{const resolvedLots=Number(lots),resolvedPrice=Number(price);if(!resolvedLots||!resolvedPrice){showToast('Prix et lots requis','error');return}const required=marginRequirement(symbol,resolvedLots,resolvedPrice);if(required>availableBalance){showToast('Solde insuffisant','error');return}availableBalance-=required;orders.push({id:'ord_'+Date.now()+'_'+Math.random().toString(36).slice(2,7),symbol,side,price:resolvedPrice,size:resolvedLots,tp:tp?Number(tp):null,sl:sl?Number(sl):null,margin:required,createdAt:Date.now()});renderOrders();renderTotals();showToast('Ordre ajoute','success');debugLog(`Order: ${side} ${symbol}`);
+const addLimitOrder=async(symbol,side,price,lots,tp,sl,orderType='limit')=>{const resolvedLots=Number(lots),resolvedPrice=Number(price);if(!resolvedLots||!resolvedPrice){showToast('Prix et lots requis','error');return}const required=marginRequirement(symbol,resolvedLots,resolvedPrice);if(required>availableBalance){showToast('Solde insuffisant','error');return}availableBalance-=required;const order={id:'ord_'+Date.now()+'_'+Math.random().toString(36).slice(2,7),symbol,side,orderType,price:resolvedPrice,size:resolvedLots,tp:tp?Number(tp):null,sl:sl?Number(sl):null,margin:required,createdAt:Date.now(),firestoreId:null};orders.push(order);renderOrders();renderTotals();showToast('Ordre ajoute','success');debugLog(`Order: ${side} ${symbol}`);
+// Sync to Firebase
+if(window.saveOrder){
+const orderData={symbolApi:symbol,side,orderType,price:resolvedPrice,lots:resolvedLots,takeProfit:order.tp,stopLoss:order.sl,margin:required};
+const firestoreId=await window.saveOrder(orderData);
+if(firestoreId){order.firestoreId=firestoreId;debugLog(`Order synced: ${firestoreId}`)}
+}
 const ordEl=$('ordSymbol');if(ordEl){ordEl.value=symbol}
 };
 
-const removeOrder=(id)=>{const order=orders.find(o=>o.id===id);if(order)availableBalance+=order.margin;orders=orders.filter(o=>o.id!==id);renderOrders();renderTotals();updateChartOverlay();showToast('Ordre annule','info');debugLog(`Removed: ${id}`)};
+const removeOrder=async(id)=>{const order=orders.find(o=>o.id===id);if(!order)return;availableBalance+=order.margin;orders=orders.filter(o=>o.id!==id);renderOrders();renderTotals();updateChartOverlay();showToast('Ordre annule','info');debugLog(`Removed: ${id}`);
+// Sync to Firebase
+if(order.firestoreId&&window.deleteOrder){await window.deleteOrder(order.firestoreId)}};
 const renderPositions=()=>{const tbody=$('positionsBody');tbody.innerHTML='';if(positions.length===0){tbody.innerHTML='<tr><td colspan="7" class="empty-state">Aucune position</td></tr>';return}positions.forEach(pos=>{const current=pos.current!==undefined?pos.current:priceCache[pos.symbol.api];pos.current=current;const pnl=computePnl(pos),pnlClass=pnl>=0?'positive':'negative',tr=document.createElement('tr');tr.innerHTML=`<td><div class="symbol-cell">${pos.symbol.label}</div><div class="symbol-label">${pos.symbol.tv}</div></td><td><span class="side-badge ${pos.side.toLowerCase()}">${pos.side}</span></td><td>${formatPrice(pos.entry)}</td><td>${formatPrice(current)}</td><td>${pos.size}</td><td><span class="pnl-value ${pnlClass}">${formatMoney(pnl)}</span></td><td><div class="action-buttons"><button class="btn-action" data-id="${pos.id}"><i class="fas fa-cog"></i></button><button class="btn-action" data-close="${pos.id}"><i class="fas fa-times"></i></button></div></td>`;tbody.appendChild(tr)});tbody.querySelectorAll('button[data-id]').forEach(btn=>btn.onclick=()=>openPositionModal(btn.dataset.id));tbody.querySelectorAll('button[data-close]').forEach(btn=>btn.onclick=()=>closePosition(btn.dataset.close))};
 const renderHistory=()=>{const tbody=$('historyBody');tbody.innerHTML='';if(history.length===0){tbody.innerHTML='<tr><td colspan="7" class="empty-state">Aucun historique</td></tr>';return}history.slice(0,50).forEach(h=>{const pnlClass=h.pnl>=0?'positive':'negative',tr=document.createElement('tr');tr.innerHTML=`<td><div class="symbol-cell">${h.symbol.label}</div><div class="symbol-label">${h.symbol.tv}</div></td><td><span class="side-badge ${h.side.toLowerCase()}">${h.side}</span></td><td>${formatPrice(h.entry)}</td><td>${formatPrice(h.close)}</td><td>${h.lots}</td><td><span class="pnl-value ${pnlClass}">${formatMoney(h.pnl)}</span></td><td class="symbol-label">${formatDateTime(h.closedAt)}</td>`;tbody.appendChild(tr)})};
-const renderOrders=()=>{const container=$('ordersBody');container.innerHTML='';if(orders.length===0){container.innerHTML='<div class="empty-state">Aucun ordre</div>';return}orders.forEach(o=>{const card=document.createElement('div');card.className='order-card';card.innerHTML=`<div class="order-header"><div class="order-symbol">${o.symbol}</div><div class="order-side ${o.side.toLowerCase()}">${o.side}</div></div><div class="order-details"><div class="order-detail">Prix: <span>${formatPrice(o.price)}</span></div><div class="order-detail">Lots: <span>${o.size}</span></div><div class="order-detail">TP: <span>${o.tp?formatPrice(o.tp):'—'}</span></div><div class="order-detail">SL: <span>${o.sl?formatPrice(o.sl):'—'}</span></div></div><div class="order-actions"><button class="btn btn-remove" data-id="${o.id}"><i class="fas fa-trash-alt"></i>Annuler</button></div>`;container.appendChild(card)});container.querySelectorAll('button[data-id]').forEach(btn=>btn.onclick=()=>removeOrder(btn.dataset.id))};
+const renderOrders=()=>{const container=$('ordersBody');container.innerHTML='';if(orders.length===0){container.innerHTML='<div class="empty-state">Aucun ordre</div>';return}orders.forEach(o=>{const typeLabel=(o.orderType||'limit').toUpperCase();const card=document.createElement('div');card.className='order-card';card.innerHTML=`<div class="order-header"><div class="order-symbol">${o.symbol}</div><div class="order-type">${typeLabel}</div><div class="order-side ${o.side.toLowerCase()}">${o.side}</div></div><div class="order-details"><div class="order-detail">Prix: <span>${formatPrice(o.price)}</span></div><div class="order-detail">Lots: <span>${o.size}</span></div><div class="order-detail">TP: <span>${o.tp?formatPrice(o.tp):'—'}</span></div><div class="order-detail">SL: <span>${o.sl?formatPrice(o.sl):'—'}</span></div></div><div class="order-actions"><button class="btn btn-remove" data-id="${o.id}"><i class="fas fa-trash-alt"></i>Annuler</button></div>`;container.appendChild(card)});container.querySelectorAll('button[data-id]').forEach(btn=>btn.onclick=()=>removeOrder(btn.dataset.id))};
 const renderTotals=()=>{const total=positions.reduce((sum,p)=>sum+computePnl(p),0),usedMargin=getTotalMarginUsed();$('totalPnl').innerText=formatMoney(total)+' USD';$('totalPnl').className='stat-value total-pnl-value '+(total>=0?'positive':'negative');$('simBalance').innerText=formatMoney(simBalance)+' USD';$('availableBalance').innerText=formatMoney(availableBalance)+' USD';$('usedMargin').innerText=formatMoney(usedMargin)+' USD'};
 const renderAll=()=>{renderPositions();renderHistory();renderOrders();renderTotals()};
 
@@ -1844,6 +1928,31 @@ const renderAll=()=>{renderPositions();renderHistory();renderOrders();renderTota
    window.applyLoadedTrades();
  }
 
+ window.applyLoadedOrders=()=>{
+   const loaded=window.__loadedOrders;
+   if(!loaded||!Array.isArray(loaded)) return;
+   try{
+     orders = loaded.map(o=>({
+       ...o,
+       id: o.id || ('ord_'+Date.now()),
+       price: Number(o.price),
+       size: Number(o.size),
+       margin: Number(o.margin||0),
+       tp: o.tp!==undefined&&o.tp!==null?Number(o.tp):null,
+       sl: o.sl!==undefined&&o.sl!==null?Number(o.sl):null,
+     }));
+     renderOrders();
+     updateChartOverlay();
+     console.log('✅ Orders applied:', orders.length);
+   }catch(e){
+     console.error('applyLoadedOrders failed',e);
+   }
+ };
+
+ if(window.__loadedOrders){
+   window.applyLoadedOrders();
+ }
+
 // Firebase callbacks
 window.updateBrokerBalance=(balance)=>{simBalance=Number(balance);availableBalance=Number(balance);if(initialBalance===0){initialBalance=Number(balance);startOfDayBalance=Number(balance)}console.log('Broker balance updated:',simBalance);renderTotals()};
 window.updateUserEmail=(email)=>{const emailEl=document.getElementById('userEmail');if(emailEl)emailEl.innerText=email};
@@ -1879,7 +1988,7 @@ const openPositionModal=(id)=>{const pos=positions.find(p=>p.id===id);if(!pos)re
 const initResizable=()=>{const watchlistPanel=$('watchlistPanel'),watchlistHandle=watchlistPanel.querySelector('.resize-handle-right');let isResizing=false,startX=0,startWidth=0;if(watchlistHandle){watchlistHandle.addEventListener('mousedown',e=>{isResizing=true;startX=e.clientX;startWidth=watchlistPanel.offsetWidth;watchlistHandle.classList.add('resizing');e.preventDefault()})}document.addEventListener('mousemove',e=>{if(isResizing){const diff=e.clientX-startX,newWidth=Math.max(250,Math.min(600,startWidth+diff));watchlistPanel.style.width=newWidth+'px'}});document.addEventListener('mouseup',()=>{if(isResizing){isResizing=false;if(watchlistHandle)watchlistHandle.classList.remove('resizing')}})};
 
 $('lotInput').addEventListener('input',refreshLotInfo);
-$('addOrderBtn').addEventListener('click',()=>{const symbol=$('ordSymbol').value,side=$('ordSide').value,price=$('ordPrice').value,size=parseFloat($('ordSize').value)||1,tp=$('ordTp').value,sl=$('ordSl').value;if(!symbol||!price){showToast('Symbole et prix requis','error');return}addLimitOrder(symbol,side,price,size,tp,sl)});
+$('addOrderBtn').addEventListener('click',()=>{const symbol=$('ordSymbol').value,side=$('ordSide').value,orderType=$('ordType').value,price=$('ordPrice').value,size=parseFloat($('ordSize').value)||1,tp=$('ordTp').value,sl=$('ordSl').value;if(!symbol||!price){showToast('Symbole et prix requis','error');return}addLimitOrder(symbol,side,price,size,tp,sl,orderType)});
 $('refreshPricesBtn').addEventListener('click',()=>{if(ws&&ws.connected){const epics=WATCHLIST.map(w=>w.epic);ws.emit('subscribe',epics);showToast('Rafraichissement','info');debugLog(`Manual resubscribe: ${epics.length} epics`)}else showToast('Non connecte','error')});
 $('buyBtn').addEventListener('click',()=>openPosition(currentSymbol,'BUY',parseFloat($('lotInput').value)||1));
 $('sellBtn').addEventListener('click',()=>openPosition(currentSymbol,'SELL',parseFloat($('lotInput').value)||1));
