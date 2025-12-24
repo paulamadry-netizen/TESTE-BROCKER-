@@ -15,6 +15,7 @@ class PriceService {
     this.isRunning = false;
     this._consecutiveErrors = 0;
     this._lastErrorAt = null;
+    this._recoveryInProgress = false;
     
     // Configuration
     this.pollIntervalMs = parseInt(process.env.PRICE_POLL_INTERVAL_MS) || 500; // 500ms for faster updates
@@ -76,15 +77,32 @@ class PriceService {
       this._consecutiveErrors += 1;
       this._lastErrorAt = new Date();
 
-      // Auto-recovery: auth failures or repeated errors
       const status = error.response?.status;
-      if (status === 401 || status === 403) {
+      if ((status === 401 || status === 403) && !this._recoveryInProgress) {
+        this._recoveryInProgress = true;
         try {
-          console.warn('[PriceService] Auth error detected, attempting re-login...');
+          console.warn('[PriceService] Auth error detected (401/403). Forcing immediate recovery...');
+          // Stop polling to avoid hammering IG during invalid session
+          if (this.updateInterval) {
+            clearInterval(this.updateInterval);
+            this.updateInterval = null;
+          }
+
           const igAuthService = require('./igAuthService');
           await igAuthService.login();
+
+          // Resume polling
+          if (this.isRunning && !this.updateInterval) {
+            this.updateInterval = setInterval(() => {
+              this.fetchAllPrices();
+            }, this.pollIntervalMs);
+          }
+
+          console.log('[PriceService] ✅ Recovery complete, polling resumed');
         } catch (e) {
-          console.error('[PriceService] Re-login failed:', e.message);
+          console.error('[PriceService] Recovery failed:', e.message);
+        } finally {
+          this._recoveryInProgress = false;
         }
       }
     }

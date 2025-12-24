@@ -107,9 +107,30 @@ app.get('/api/prices/:epic', async (req, res) => {
 
 // Get auth status (for debugging)
 app.get('/api/status', (req, res) => {
+  const priceStatus = priceService.getStatus();
+  const lastUpdateMs = priceStatus.lastUpdate ? new Date(priceStatus.lastUpdate).getTime() : null;
+  const now = Date.now();
   res.json({
     auth: igAuthService.getStatus(),
-    prices: priceService.getStatus(),
+    prices: {
+      ...priceStatus,
+      lastUpdateAgeMs: lastUpdateMs ? (now - lastUpdateMs) : null,
+    },
+    connections: io.engine.clientsCount
+  });
+});
+
+// Simple alias for quick checks
+app.get('/status', (req, res) => {
+  const priceStatus = priceService.getStatus();
+  const lastUpdateMs = priceStatus.lastUpdate ? new Date(priceStatus.lastUpdate).getTime() : null;
+  const now = Date.now();
+  res.json({
+    auth: igAuthService.getStatus(),
+    prices: {
+      ...priceStatus,
+      lastUpdateAgeMs: lastUpdateMs ? (now - lastUpdateMs) : null,
+    },
     connections: io.engine.clientsCount
   });
 });

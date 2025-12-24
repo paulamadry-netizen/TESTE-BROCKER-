@@ -646,7 +646,7 @@ const TF_TO_RESOLUTION={'1':'MINUTE','5':'MINUTE_5','15':'MINUTE_15','60':'HOUR'
 const TF_TO_MAX={'1':500,'5':500,'15':500,'60':500,'240':500,'1D':365};
 let chartPriceLines=[],dragState=null,chartContainer=null;
 let indicatorsVisible=false,indicatorSeries={},indicatorState={};
-let drawMode=null,drawStep=0,drawAnchor1=null,activeDrawingId=null,drawings=[];
+let drawMode=null,drawStep=0,drawAnchor1=null,drawAnchor2=null,activeDrawingId=null,drawings=[];
 let slTpMode=null;
 const INDICATORS=[
   {key:'sma20',label:'SMA',type:'sma',params:{period:20},color:'#60a5fa'},
@@ -1236,10 +1236,11 @@ const updateChartOverlay=()=>{
     };
 
     const drawFibExt=(d)=>{
+      if(!d.c) return;
       const move=d.b.price-d.a.price;
       const ratios=[0,0.618,1,1.618,2.618];
       ratios.forEach(r=>{
-        const price=d.b.price+move*r;
+        const price=d.c.price+move*r;
         const y=priceToY(price);
         if(y===null) return;
         const l=mkLine(0,y,w,y,'rgba(99,102,241,0.9)',1,'4 4');
@@ -1382,7 +1383,7 @@ const getPrimaryPositionForSymbol=()=>{
 };
 
 const clearModes=()=>{
-  drawMode=null;drawStep=0;drawAnchor1=null;slTpMode=null;
+  drawMode=null;drawStep=0;drawAnchor1=null;drawAnchor2=null;slTpMode=null;
   ['fibRetrBtn','fibExtBtn','placeSlBtn','placeTpBtn'].forEach(id=>{const b=$(id);if(b)b.classList.remove('active')});
 };
 
@@ -1393,7 +1394,7 @@ const setMode=(mode)=>{
     drawMode=mode;
     const map={fib_retr:'fibRetrBtn',fib_ext:'fibExtBtn'};
     const b=$(map[mode]);if(b)b.classList.add('active');
-    showToast('Clique 2 points sur le graphique','info');
+    showToast(mode==='fib_ext'?'Clique 3 points (A,B,C)':'Clique 2 points sur le graphique','info');
     return;
   }
   if(mode==='sl'||mode==='tp'){
@@ -1431,6 +1432,20 @@ const onOverlayClick=(e)=>{
   }
 
   if(!drawMode) return;
+  if(drawMode==='fib_ext'){
+    if(drawStep===0){drawAnchor1={time,price};drawStep=1;return;}
+    if(drawStep===1){drawAnchor2={time,price};drawStep=2;return;}
+    const a=drawAnchor1;
+    const b=drawAnchor2;
+    const c={time,price};
+    const id=`d_${Date.now()}_${Math.random().toString(36).slice(2,6)}`;
+    drawings.push({id,type:drawMode,a,b,c});
+    activeDrawingId=id;
+    drawStep=0;drawAnchor1=null;drawAnchor2=null;
+    updateChartOverlay();
+    return;
+  }
+
   if(drawStep===0){drawAnchor1={time,price};drawStep=1;return;}
   const a=drawAnchor1;
   const b={time,price};
