@@ -161,6 +161,7 @@ async function handleCheckoutCompleted(session, stripeInstance) {
             profitTarget,
             maxDrawdown,
             tradingDays: 0,
+            brokerPassword: randomPassword, // Stocker le mot de passe broker
             createdAt: admin.firestore.FieldValue.serverTimestamp(),
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         };
@@ -171,20 +172,29 @@ async function handleCheckoutCompleted(session, stripeInstance) {
         console.log('✅ Traitement terminé avec succès pour:', customerEmail);
     }
     catch (error) {
-        // Si l'utilisateur existe déjà, mettre à jour ses données
+        // Si l'utilisateur existe déjà, mettre à jour ses données et générer un mot de passe broker
         if (error && typeof error === 'object' && 'code' in error && error.code === 'auth/email-already-exists') {
             console.log('ℹ️ Utilisateur existe déjà:', customerEmail);
             const existingUser = await admin.auth().getUserByEmail(customerEmail);
             const customerId = typeof session.customer === 'string' ? session.customer : '';
             const amountTotal = session.amount_total || 0;
+            const amountInEuros = amountTotal / 100;
+            const tradingCapital = determineTradingCapital(amountInEuros);
+            // Générer un mot de passe unique pour le broker
+            const brokerPassword = generateSecurePassword();
+            console.log('🔐 Mot de passe broker généré pour utilisateur existant');
             await admin.firestore().collection('users').doc(existingUser.uid).update({
                 stripeCustomerId: customerId,
                 stripeSessionId: session.id,
                 accountStatus: 'active',
-                accountBalance: amountTotal / 100,
+                accountBalance: tradingCapital,
+                brokerPassword: brokerPassword, // Stocker le mot de passe broker
                 updatedAt: admin.firestore.FieldValue.serverTimestamp(),
             });
-            console.log('✅ Données utilisateur mises à jour');
+            console.log('✅ Données utilisateur mises à jour avec mot de passe broker');
+            // Envoyer l'email avec les identifiants broker
+            await sendWelcomeEmail(customerEmail, brokerPassword, session);
+            console.log('✅ Email envoyé avec identifiants broker');
         }
         else {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -253,21 +263,28 @@ async function handleSubscriptionDeleted(subscription, stripeInstance) {
 }
 /**
  * Déterminer le capital de trading en fonction du montant payé
+ * Plans:
+ * - 200€ → 25 000$ (Plan Bronze)
+ * - 285€ → 50 000$ (Plan Argent)
+ * - 550€ → 100 000$ (Plan Or)
  * @param amountInEuros - Montant payé en euros
  * @returns Capital de trading (25000, 50000 ou 100000)
  */
 function determineTradingCapital(amountInEuros) {
-    if (amountInEuros >= 150 && amountInEuros <= 230) {
+    // Plan Bronze: 200€ → 25 000$
+    if (amountInEuros >= 180 && amountInEuros <= 220) {
         return 25000;
     }
-    else if (amountInEuros > 230 && amountInEuros <= 330) {
+    // Plan Argent: 285€ → 50 000$
+    else if (amountInEuros >= 260 && amountInEuros <= 310) {
         return 50000;
     }
-    else if (amountInEuros >= 450 && amountInEuros <= 650) {
+    // Plan Or: 550€ → 100 000$
+    else if (amountInEuros >= 500 && amountInEuros <= 600) {
         return 100000;
     }
-    // Par défaut, si le montant ne correspond à aucune tranche, utiliser 25000
-    console.warn(`⚠️ Montant ${amountInEuros}€ ne correspond à aucune tranche connue. Capital par défaut: 25000€`);
+    // Par défaut, si le montant ne correspond à aucune tranche
+    console.warn(`⚠️ Montant ${amountInEuros}€ ne correspond à aucune tranche connue. Capital par défaut: 25000$`);
     return 25000;
 }
 /**
