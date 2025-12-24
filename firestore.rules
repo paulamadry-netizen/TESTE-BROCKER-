@@ -43,9 +43,16 @@ service cloud.firestore {
       allow read: if isAuthenticated() &&
                      (resource.data.userId == request.auth.uid || isAdmin());
 
-      // Écriture: JAMAIS depuis le client
-      // Tous les trades doivent passer par Cloud Functions
-      allow write: if false;
+      // Création: utilisateur authentifié peut créer ses propres trades
+      allow create: if isAuthenticated() &&
+                       request.resource.data.userId == request.auth.uid;
+      
+      // Mise à jour: uniquement ses propres trades
+      allow update: if isAuthenticated() &&
+                       resource.data.userId == request.auth.uid;
+      
+      // Suppression: non autorisée côté client
+      allow delete: if false;
     }
 
     // ==========================================
@@ -56,8 +63,16 @@ service cloud.firestore {
       allow read: if isAuthenticated() &&
                      (resource.data.userId == request.auth.uid || isAdmin());
 
-      // Écriture: JAMAIS depuis le client
-      allow write: if false;
+      // Création: utilisateur authentifié peut créer ses propres ordres
+      allow create: if isAuthenticated() &&
+                       request.resource.data.userId == request.auth.uid;
+      
+      // Mise à jour: uniquement ses propres ordres
+      allow update: if isAuthenticated() &&
+                       resource.data.userId == request.auth.uid;
+      
+      // Suppression: non autorisée côté client
+      allow delete: if false;
     }
 
     // ==========================================
