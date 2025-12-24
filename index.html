@@ -278,10 +278,14 @@
       });
       if(window.positions!==undefined){}
       window.__loadedTrades = {open,closed};
-      if(typeof window.applyLoadedTrades === 'function'){
-        window.applyLoadedTrades();
-      }
       console.log('✅ Trades loaded:', open.length, 'open /', closed.length, 'closed');
+      console.log('📦 __loadedTrades:', window.__loadedTrades);
+      if(typeof window.applyLoadedTrades === 'function'){
+        console.log('🔄 Calling applyLoadedTrades immediately...');
+        window.applyLoadedTrades();
+      } else {
+        console.log('⏳ applyLoadedTrades not ready yet, will be applied by interval check');
+      }
     } catch (e) {
       console.error('❌ Error loading trades:', e);
     }
@@ -1835,11 +1839,14 @@ const displayPrice=symObj.type==='etf'?price.toFixed(2):formatPrice(price);
 showToast(`${side}: ${symObj.label} @ ${displayPrice}`,'success');
 debugLog(`Opened: ${JSON.stringify(pos)}`);
 // Sync to Firebase
+console.log('🔄 Attempting to save trade to Firestore...', window.saveTrade ? 'saveTrade exists' : 'saveTrade MISSING');
 if(window.saveTrade){
 const tradeData={symbol:symObj.label,symbolApi:symObj.api,side,entryPrice:price,currentPrice:price,lots:resolvedLots,takeProfit:pos.tp,stopLoss:pos.sl,status:'open',openedAt:new Date(pos.openedAt).toISOString()};
+console.log('📤 Trade data:', tradeData);
 const firestoreId=await window.saveTrade(tradeData);
+console.log('📥 Firestore response:', firestoreId);
 if(firestoreId){pos.firestoreId=firestoreId;debugLog(`Trade synced: ${firestoreId}`)}
-}
+}else{console.error('❌ window.saveTrade is not defined!')}
 return true;
 };
 
