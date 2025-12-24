@@ -94,10 +94,12 @@ class IGStreamingService {
         } catch (e) {}
       }
 
-      const items = epics.map(epic => `MARKET:${epic}`);
+      // Try L1 format (Level 1 prices) - some accounts require this format
+      const items = epics.map(epic => `L1:${epic}`);
       const fields = ['BID', 'OFFER', 'HIGH', 'LOW', 'MID_OPEN', 'CHANGE', 'CHANGE_PCT', 'UPDATE_TIME', 'MARKET_STATE'];
       
-      console.log(`[IGStreaming] Subscribing to ${epics.length} epics...`);
+      console.log(`[IGStreaming] Subscribing to ${epics.length} epics with L1 format...`);
+      console.log(`[IGStreaming] Sample items: ${items.slice(0, 3).join(', ')}`);
       
       this.subscription = new Subscription('MERGE', items, fields);
       this.subscription.setDataAdapter('DEFAULT');
@@ -144,7 +146,7 @@ class IGStreamingService {
   _handlePriceUpdate(update) {
     try {
       const itemName = update.getItemName();
-      const epic = itemName.replace('MARKET:', '');
+      const epic = itemName.replace('L1:', '').replace('MARKET:', '');
       
       const bid = parseFloat(update.getValue('BID')) || 0;
       const offer = parseFloat(update.getValue('OFFER')) || 0;
