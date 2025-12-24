@@ -319,31 +319,34 @@ html,body{height:100%;background:linear-gradient(135deg,var(--bg-primary) 0%,var
 .chart-overlay svg line[data-id]{pointer-events:stroke;cursor:pointer}
 .chart-overlay svg text{pointer-events:none}
 .chart-overlay .price-line{pointer-events:none}
-.price-line{position:absolute;left:0;right:0;height:2px;display:flex;align-items:center;pointer-events:none;cursor:default;transition:height 0.15s ease}
-.price-line.position-buy{background:linear-gradient(90deg,transparent 0%,rgba(16,185,129,0.4) 10%,rgba(16,185,129,0.9) 50%,rgba(16,185,129,0.4) 90%,transparent 100%)}
-.price-line.position-sell{background:linear-gradient(90deg,transparent 0%,rgba(239,68,68,0.4) 10%,rgba(239,68,68,0.9) 50%,rgba(239,68,68,0.4) 90%,transparent 100%)}
-.price-line.tp-line{background:linear-gradient(90deg,transparent 0%,rgba(34,197,94,0.3) 10%,rgba(34,197,94,0.8) 50%,rgba(34,197,94,0.3) 90%,transparent 100%);border-top:2px dashed #22c55e;pointer-events:none}
-.price-line.sl-line{background:linear-gradient(90deg,transparent 0%,rgba(239,68,68,0.3) 10%,rgba(239,68,68,0.8) 50%,rgba(239,68,68,0.3) 90%,transparent 100%);border-top:2px dashed #ef4444;pointer-events:none}
+.price-line{position:absolute;left:0;right:0;height:1px;display:flex;align-items:center;pointer-events:none;cursor:default;transition:all 0.2s ease}
+.price-line.position-buy{background:linear-gradient(90deg,transparent 0%,rgba(16,185,129,0.2) 5%,#10b981 50%,rgba(16,185,129,0.2) 95%,transparent 100%);height:2px;box-shadow:0 0 8px rgba(16,185,129,0.5)}
+.price-line.position-sell{background:linear-gradient(90deg,transparent 0%,rgba(239,68,68,0.2) 5%,#ef4444 50%,rgba(239,68,68,0.2) 95%,transparent 100%);height:2px;box-shadow:0 0 8px rgba(239,68,68,0.5)}
+.price-line.tp-line{background:none;border:none;height:1px}
+.price-line.tp-line::before{content:'';position:absolute;left:0;right:70px;top:0;border-top:1px dashed rgba(34,197,94,0.6)}
+.price-line.sl-line{background:none;border:none;height:1px}
+.price-line.sl-line::before{content:'';position:absolute;left:0;right:70px;top:0;border-top:1px dashed rgba(239,68,68,0.6)}
 .price-line.tp-line .price-line-label,.price-line.sl-line .price-line-label{pointer-events:auto;cursor:ns-resize}
-.price-line-delete,.price-line-close{position:absolute;right:90px;width:20px;height:20px;border-radius:50%;background:rgba(239,68,68,0.9);color:#fff;font-size:14px;font-weight:700;display:flex;align-items:center;justify-content:center;cursor:pointer;pointer-events:auto;transform:translateY(-50%);opacity:0.8;transition:all 0.2s}
-.price-line-delete:hover,.price-line-close:hover{opacity:1;transform:translateY(-50%) scale(1.2);background:#ef4444}
-.price-line-close{background:rgba(239,68,68,0.9)}
-.price-line.order-buy{background:linear-gradient(90deg,transparent 0%,rgba(59,130,246,0.3) 10%,rgba(59,130,246,0.7) 50%,rgba(59,130,246,0.3) 90%,transparent 100%);border-top:2px dotted #3b82f6}
-.price-line.order-sell{background:linear-gradient(90deg,transparent 0%,rgba(249,115,22,0.3) 10%,rgba(249,115,22,0.7) 50%,rgba(249,115,22,0.3) 90%,transparent 100%);border-top:2px dotted #f97316}
-.price-line-label{position:absolute;right:5px;padding:4px 10px;border-radius:6px;font-size:11px;font-weight:700;white-space:nowrap;transform:translateY(-50%);box-shadow:0 2px 8px rgba(0,0,0,0.3)}
-.price-line.position-buy .price-line-label{background:linear-gradient(135deg,#10b981,#059669);color:#fff}
-.price-line.position-sell .price-line-label{background:linear-gradient(135deg,#ef4444,#dc2626);color:#fff}
-.price-line.tp-line .price-line-label{background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff}
-.price-line.sl-line .price-line-label{background:linear-gradient(135deg,#ef4444,#b91c1c);color:#fff}
-.price-line.order-buy .price-line-label{background:linear-gradient(135deg,#3b82f6,#2563eb);color:#fff}
-.price-line.order-sell .price-line-label{background:linear-gradient(135deg,#f97316,#ea580c);color:#fff}
-.price-line.tp-line:hover,.price-line.sl-line:hover{height:4px;z-index:20;cursor:ns-resize}
-.price-line.dragging{height:5px;z-index:30;opacity:1}
-.sltp-handle{position:absolute;right:70px;padding:6px 12px;border-radius:6px;font-size:11px;font-weight:700;cursor:grab;pointer-events:auto;opacity:0.9;transition:all 0.2s;z-index:25;user-select:none;transform:translateY(-50%)}
-.sltp-handle:hover{opacity:1;transform:translateY(-50%) scale(1.1)}
-.sltp-handle.dragging{opacity:1;transform:translateY(-50%) scale(1.15);z-index:30;cursor:grabbing}
-.tp-handle{background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff;box-shadow:0 2px 8px rgba(34,197,94,0.4)}
-.sl-handle{background:linear-gradient(135deg,#ef4444,#dc2626);color:#fff;box-shadow:0 2px 8px rgba(239,68,68,0.4)}
+.price-line-delete,.price-line-close{position:absolute;right:95px;width:18px;height:18px;border-radius:4px;background:rgba(30,35,45,0.95);border:1px solid rgba(255,255,255,0.1);color:#9ca3af;font-size:12px;font-weight:400;display:flex;align-items:center;justify-content:center;cursor:pointer;pointer-events:auto;transform:translateY(-50%);opacity:0;transition:all 0.15s ease}
+.price-line:hover .price-line-delete,.price-line:hover .price-line-close{opacity:1}
+.price-line-delete:hover,.price-line-close:hover{background:#ef4444;color:#fff;border-color:#ef4444;transform:translateY(-50%) scale(1.1)}
+.price-line.order-buy{background:linear-gradient(90deg,transparent 0%,rgba(59,130,246,0.15) 5%,rgba(59,130,246,0.4) 50%,rgba(59,130,246,0.15) 95%,transparent 100%);border-top:1px dotted rgba(59,130,246,0.7)}
+.price-line.order-sell{background:linear-gradient(90deg,transparent 0%,rgba(249,115,22,0.15) 5%,rgba(249,115,22,0.4) 50%,rgba(249,115,22,0.15) 95%,transparent 100%);border-top:1px dotted rgba(249,115,22,0.7)}
+.price-line-label{position:absolute;right:5px;padding:5px 12px;border-radius:4px;font-size:11px;font-weight:600;white-space:nowrap;transform:translateY(-50%);box-shadow:0 2px 12px rgba(0,0,0,0.4);backdrop-filter:blur(4px);letter-spacing:0.3px}
+.price-line.position-buy .price-line-label{background:rgba(16,185,129,0.95);color:#fff;border:1px solid rgba(255,255,255,0.15)}
+.price-line.position-sell .price-line-label{background:rgba(239,68,68,0.95);color:#fff;border:1px solid rgba(255,255,255,0.15)}
+.price-line.tp-line .price-line-label{background:rgba(22,163,74,0.95);color:#fff;border:1px solid rgba(255,255,255,0.15)}
+.price-line.sl-line .price-line-label{background:rgba(220,38,38,0.95);color:#fff;border:1px solid rgba(255,255,255,0.15)}
+.price-line.order-buy .price-line-label{background:rgba(37,99,235,0.95);color:#fff;border:1px solid rgba(255,255,255,0.15)}
+.price-line.order-sell .price-line-label{background:rgba(234,88,12,0.95);color:#fff;border:1px solid rgba(255,255,255,0.15)}
+.price-line.tp-line:hover,.price-line.sl-line:hover{z-index:20}
+.price-line.tp-line:hover .price-line-label,.price-line.sl-line:hover .price-line-label{transform:translateY(-50%) scale(1.02);box-shadow:0 4px 16px rgba(0,0,0,0.5)}
+.price-line.dragging{z-index:30}
+.sltp-handle{position:absolute;right:5px;padding:6px 14px;border-radius:4px;font-size:11px;font-weight:600;cursor:grab;pointer-events:auto;opacity:0.85;transition:all 0.2s ease;z-index:25;user-select:none;transform:translateY(-50%);backdrop-filter:blur(4px);letter-spacing:0.3px;border:1px solid rgba(255,255,255,0.15)}
+.sltp-handle:hover{opacity:1;transform:translateY(-50%) scale(1.05);box-shadow:0 4px 16px rgba(0,0,0,0.4)}
+.sltp-handle.dragging{opacity:1;transform:translateY(-50%) scale(1.08);z-index:30;cursor:grabbing;box-shadow:0 6px 24px rgba(0,0,0,0.5)}
+.tp-handle{background:rgba(22,163,74,0.9);color:#fff}
+.sl-handle{background:rgba(220,38,38,0.9);color:#fff}
 .crosshair-info{position:absolute;top:10px;left:10px;background:rgba(15,20,25,0.9);padding:8px 12px;border-radius:6px;font-size:11px;color:#e8edf4;pointer-events:none;z-index:5;border:1px solid var(--border)}
 .crosshair-info div{margin:2px 0}
 .crosshair-info .label{color:var(--text-muted)}
