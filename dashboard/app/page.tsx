@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { doc, getDoc, collection, query, where, getDocs } from "firebase/firestore";
+import { collection, query, where, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase/config";
 import { useAuth } from "@/context/AuthContext";
 import { useLanguage } from "@/context/LanguageContext";
+import { useAccount } from "@/context/AccountContext";
 import {
   DollarSign,
   TrendingUp,
@@ -17,47 +18,31 @@ import { StatCard } from "@/components/dashboard/StatCard";
 import { PerformanceChart } from "@/components/charts/PerformanceChart";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { AccountSelector } from "@/components/dashboard/AccountSelector";
 import { formatCurrency, formatPercentage } from "@/lib/utils";
-
-interface UserData {
-  email: string;
-  accountBalance: number;
-  accountStatus: string;
-  challengeType: string;
-  profitTarget: number;
-  maxDrawdown: number;
-  tradingDays: number;
-  stripeCustomerId: string;
-  stripeSessionId?: string;
-}
 
 export default function DashboardPage() {
   const { user, loading: authLoading } = useAuth();
   const { t } = useLanguage();
-  const [userData, setUserData] = useState<UserData | null>(null);
+  const { activeAccount, accounts, loading: accountLoading } = useAccount();
   const [trades, setTrades] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    async function loadUserData() {
-      if (!user) {
+    async function loadTrades() {
+      if (!user || !activeAccount) {
         setLoading(false);
         return;
       }
 
       try {
-        const userDocRef = doc(db, "users", user.uid);
-        const userDocSnap = await getDoc(userDocRef);
-
-        if (userDocSnap.exists()) {
-          setUserData(userDocSnap.data() as UserData);
-        } else {
-          console.error("No user document found in Firestore");
-        }
-
-        // Load trades for performance chart
+        // Load trades for this specific account
         const tradesRef = collection(db, "trades");
-        const q = query(tradesRef, where("userId", "==", user.uid));
+        const q = query(
+          tradesRef, 
+          where("userId", "==", user.uid),
+          where("accountId", "==", activeAccount.id)
+        );
         const querySnapshot = await getDocs(q);
 
         const loadedTrades: any[] = [];
@@ -69,18 +54,18 @@ export default function DashboardPage() {
         loadedTrades.sort((a, b) => new Date(a.openedAt).getTime() - new Date(b.openedAt).getTime());
         setTrades(loadedTrades);
       } catch (error) {
-        console.error("Error loading user data:", error);
+        console.error("Error loading trades:", error);
       } finally {
         setLoading(false);
       }
     }
 
-    if (!authLoading) {
-      loadUserData();
+    if (!authLoading && !accountLoading) {
+      loadTrades();
     }
-  }, [user, authLoading]);
+  }, [user, authLoading, activeAccount, accountLoading]);
 
-  if (loading || authLoading) {
+  if (loading || authLoading || accountLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <Loader2 className="h-8 w-8 animate-spin" />
@@ -88,16 +73,8 @@ export default function DashboardPage() {
     );
   }
 
-  if (!userData) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <p className="text-muted-foreground">{t("common.noData")}</p>
-      </div>
-    );
-  }
-
-  // Check if user has an active trading account
-  if (userData.accountStatus !== 'active' || !userData.accountBalance || userData.accountBalance === 0) {
+  // Check if user has any accounts
+  if (!activeAccount || accounts.length === 0) {
     return (
       <div className="flex flex-col gap-6 p-8">
         <div>
@@ -139,16 +116,15 @@ export default function DashboardPage() {
   // Win Rate: (trades gagnants / trades totaux) * 100
   const winRate = totalTrades > 0 ? ((winningTradesCount / totalTrades) * 100).toFixed(2) : "0.00";
 
-  // Calculate initial balance (before first trade) and current balance
-  const totalPnl = closedTrades.reduce((sum, t) => sum + (t.pnl || 0), 0);
-  const initialBalance = userData.accountBalance - totalPnl; // Reconstruct initial balance
-  const currentBalance = userData.accountBalance;
+  // Use activeAccount data
+  const initialBalance = activeAccount.initialBalance || activeAccount.accountBalance;
+  const currentBalance = activeAccount.accountBalance;
   const profitLoss = currentBalance - initialBalance;
   const profitLossPercentage = initialBalance !== 0
     ? ((profitLoss / initialBalance) * 100).toFixed(2)
     : "0.00";
-  const profitTargetAmount = (initialBalance * userData.profitTarget) / 100;
-  const maxDrawdownAmount = (initialBalance * userData.maxDrawdown) / 100;
+  const profitTargetAmount = (initialBalance * activeAccount.profitTarget) / 100;
+  const maxDrawdownAmount = (initialBalance * activeAccount.maxDrawdown) / 100;
   const dailyMaxLoss = (initialBalance * 3) / 100; // 3% daily max loss
 
   // Calculate Average Win: moyenne des trades gagnants uniquement
@@ -228,12 +204,15 @@ export default function DashboardPage() {
 
   return (
     <div className="flex flex-col gap-6 p-8">
-      {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">{t("dashboard.title")}</h1>
-        <p className="text-muted-foreground">
-          {t("dashboard.subtitle")}
-        </p>
+      {/* Header with Account Selector */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">{t("dashboard.title")}</h1>
+          <p className="text-muted-foreground">
+            {t("dashboard.subtitle")}
+          </p>
+        </div>
+        <AccountSelector />
       </div>
 
       {/* Trading Platform Link */}
@@ -276,7 +255,7 @@ export default function DashboardPage() {
         <StatCard
           title={t("dashboard.currentDrawdown")}
           value={formatCurrency(currentDrawdown)}
-          change={`${t("dashboard.max")}: ${formatCurrency(maxDrawdownAmount)} (${userData.maxDrawdown}%)`}
+          change={`${t("dashboard.max")}: ${formatCurrency(maxDrawdownAmount)} (${activeAccount.maxDrawdown}%)`}
           changeType={currentDrawdown === 0 ? "positive" : currentDrawdown < maxDrawdownAmount ? "neutral" : "negative"}
           icon={TrendingDown}
         />
@@ -323,22 +302,22 @@ export default function DashboardPage() {
             <div>
               <p className="text-sm text-muted-foreground">{t("dashboard.tradingDays")}</p>
               <p className="text-2xl font-bold">
-                {userData.tradingDays}/30
+                {activeAccount.tradingDays}/30
               </p>
             </div>
             <div>
               <p className="text-sm text-muted-foreground">{t("dashboard.accountType")}</p>
               <Badge variant="secondary" className="mt-1">
-                {userData.challengeType.toUpperCase()}
+                {activeAccount.challengeType.toUpperCase()}
               </Badge>
             </div>
             <div>
               <p className="text-sm text-muted-foreground">{t("dashboard.status")}</p>
               <Badge
-                variant={userData.accountStatus === "active" ? "success" : "destructive"}
+                variant={activeAccount.accountStatus === "active" ? "success" : "destructive"}
                 className="mt-1"
               >
-                {t(`status.${userData.accountStatus}`)}
+                {t(`status.${activeAccount.accountStatus}`)}
               </Badge>
             </div>
           </div>

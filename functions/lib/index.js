@@ -45,16 +45,18 @@ const https_1 = require("firebase-functions/v2/https");
 const params_1 = require("firebase-functions/params");
 const admin = __importStar(require("firebase-admin"));
 const stripe_1 = __importDefault(require("stripe"));
+const resend_1 = require("resend");
 // Initialiser Firebase Admin
 admin.initializeApp();
 // Définir les secrets
 const stripeSecretKey = (0, params_1.defineSecret)('STRIPE_SECRET_KEY');
 const stripeWebhookSecret = (0, params_1.defineSecret)('STRIPE_WEBHOOK_SECRET');
+const resendApiKey = (0, params_1.defineSecret)('RESEND_API_KEY');
 /**
  * Webhook Stripe - Écoute les événements de paiement (v2 with Secrets)
  * URL du webhook : https://us-central1-teste-brocker.cloudfunctions.net/stripeWebhookV2
  */
-exports.stripeWebhookV2 = (0, https_1.onRequest)({ secrets: [stripeSecretKey, stripeWebhookSecret] }, async (req, res) => {
+exports.stripeWebhookV2 = (0, https_1.onRequest)({ secrets: [stripeSecretKey, stripeWebhookSecret, resendApiKey] }, async (req, res) => {
     console.log('🔍 Webhook Stripe appelé (v2 with secrets)');
     // Initialiser Stripe avec le secret
     const stripe = new stripe_1.default(stripeSecretKey.value(), {
@@ -117,7 +119,7 @@ exports.stripeWebhookV2 = (0, https_1.onRequest)({ secrets: [stripeSecretKey, st
  * @param stripeInstance - Instance Stripe initialisée
  */
 async function handleCheckoutCompleted(session, stripeInstance) {
-    var _a, _b, _c, _d, _e;
+    var _a, _b;
     console.log('💳 Paiement complété pour la session:', session.id);
     // Récupérer l'email du client (plusieurs sources possibles)
     const customerEmail = ((_a = session.customer_details) === null || _a === void 0 ? void 0 : _a.email) ||
@@ -148,58 +150,90 @@ async function handleCheckoutCompleted(session, stripeInstance) {
         const amountInEuros = amountTotal / 100; // Stripe utilise les centimes
         // Déterminer le capital de trading en fonction du montant payé
         const tradingCapital = determineTradingCapital(amountInEuros);
-        console.log(`💰 Montant payé: ${amountInEuros}€ → Capital de trading: ${tradingCapital}€`);
-        const profitTarget = ((_c = session.metadata) === null || _c === void 0 ? void 0 : _c.profitTarget) ? parseFloat(session.metadata.profitTarget) : 10;
-        const maxDrawdown = ((_d = session.metadata) === null || _d === void 0 ? void 0 : _d.maxDrawdown) ? parseFloat(session.metadata.maxDrawdown) : 5;
-        const userData = {
-            email: customerEmail,
-            stripeCustomerId: customerId,
+        const planName = tradingCapital === 100000 ? 'Or' : tradingCapital === 50000 ? 'Argent' : 'Bronze';
+        const accountName = `Challenge ${planName} #1`;
+        console.log(`💰 Montant payé: ${amountInEuros}€ → Capital de trading: ${tradingCapital}$`);
+        // Créer le premier compte dans la sous-collection accounts
+        const accountRef = await admin.firestore()
+            .collection('users').doc(userRecord.uid)
+            .collection('accounts').add({
+            accountName: accountName,
             stripeSessionId: session.id,
-            challengeType: ((_e = session.metadata) === null || _e === void 0 ? void 0 : _e.challengeType) || 'standard',
-            accountBalance: tradingCapital,
             accountStatus: 'active',
-            profitTarget,
-            maxDrawdown,
+            accountBalance: tradingCapital,
+            initialBalance: tradingCapital,
+            brokerPassword: randomPassword,
+            challengeType: 'standard',
+            planType: planName,
+            profitTarget: 10,
+            maxDrawdown: 5,
             tradingDays: 0,
-            brokerPassword: randomPassword, // Stocker le mot de passe broker
             createdAt: admin.firestore.FieldValue.serverTimestamp(),
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        };
-        await admin.firestore().collection('users').doc(userRecord.uid).set(userData);
-        console.log('✅ Document Firestore créé');
+        });
+        console.log('✅ Premier compte créé:', accountRef.id, '-', accountName);
+        // Créer le document utilisateur principal
+        await admin.firestore().collection('users').doc(userRecord.uid).set({
+            email: customerEmail,
+            stripeCustomerId: customerId,
+            activeAccountId: accountRef.id,
+            totalAccounts: 1,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        console.log('✅ Document utilisateur créé');
         // Envoyer un email de bienvenue au client avec le mot de passe
-        await sendWelcomeEmail(customerEmail, randomPassword, session);
+        await sendWelcomeEmail(customerEmail, randomPassword, session, accountName);
         console.log('✅ Traitement terminé avec succès pour:', customerEmail);
     }
     catch (error) {
-        // Si l'utilisateur existe déjà, mettre à jour ses données et générer un mot de passe broker
+        // Si l'utilisateur existe déjà, créer un nouveau compte (challenge) pour lui
         if (error && typeof error === 'object' && 'code' in error && error.code === 'auth/email-already-exists') {
-            console.log('ℹ️ Utilisateur existe déjà:', customerEmail);
+            console.log('ℹ️ Utilisateur existe déjà, création d\'un nouveau compte:', customerEmail);
             const existingUser = await admin.auth().getUserByEmail(customerEmail);
             const customerId = typeof session.customer === 'string' ? session.customer : '';
             const amountTotal = session.amount_total || 0;
             const amountInEuros = amountTotal / 100;
             const tradingCapital = determineTradingCapital(amountInEuros);
-            // Générer un mot de passe unique pour le broker
+            const planName = tradingCapital === 100000 ? 'Or' : tradingCapital === 50000 ? 'Argent' : 'Bronze';
+            // Générer un mot de passe unique pour ce compte broker
             const brokerPassword = generateSecurePassword();
-            console.log('🔐 Mot de passe broker généré pour utilisateur existant');
-            await admin.firestore().collection('users').doc(existingUser.uid).set({
-                email: customerEmail,
-                stripeCustomerId: customerId,
+            console.log('🔐 Mot de passe broker généré pour nouveau compte');
+            // Compter les comptes existants pour générer un numéro
+            const accountsSnapshot = await admin.firestore()
+                .collection('users').doc(existingUser.uid)
+                .collection('accounts').get();
+            const accountNumber = accountsSnapshot.size + 1;
+            const accountName = `Challenge ${planName} #${accountNumber}`;
+            // Créer un nouveau compte dans la sous-collection accounts
+            const newAccountRef = await admin.firestore()
+                .collection('users').doc(existingUser.uid)
+                .collection('accounts').add({
+                accountName: accountName,
                 stripeSessionId: session.id,
                 accountStatus: 'active',
                 accountBalance: tradingCapital,
+                initialBalance: tradingCapital,
                 brokerPassword: brokerPassword,
                 challengeType: 'standard',
+                planType: planName,
                 profitTarget: 10,
                 maxDrawdown: 5,
                 tradingDays: 0,
-                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
                 createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            });
+            console.log('✅ Nouveau compte créé:', newAccountRef.id, '-', accountName);
+            // Mettre à jour le document utilisateur principal avec le dernier compte actif
+            await admin.firestore().collection('users').doc(existingUser.uid).set({
+                email: customerEmail,
+                stripeCustomerId: customerId,
+                activeAccountId: newAccountRef.id,
+                totalAccounts: accountNumber,
+                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
             }, { merge: true });
-            console.log('✅ Données utilisateur mises à jour avec mot de passe broker');
             // Envoyer l'email avec les identifiants broker
-            await sendWelcomeEmail(customerEmail, brokerPassword, session);
+            await sendWelcomeEmail(customerEmail, brokerPassword, session, accountName);
             console.log('✅ Email envoyé avec identifiants broker');
         }
         else {
@@ -313,11 +347,11 @@ function generateSecurePassword() {
  * @param password - Mot de passe généré automatiquement
  * @param session - Session de checkout Stripe
  */
-async function sendWelcomeEmail(email, password, session) {
+async function sendWelcomeEmail(email, password, session, accountName) {
     const amountTotal = session.amount_total || 0;
     const amountInEuros = amountTotal / 100;
     const tradingCapital = determineTradingCapital(amountInEuros);
-    const planName = tradingCapital === 100000 ? 'Plan Or' : tradingCapital === 50000 ? 'Plan Argent' : 'Plan Bronze';
+    const planName = accountName || (tradingCapital === 100000 ? 'Plan Or' : tradingCapital === 50000 ? 'Plan Argent' : 'Plan Bronze');
     console.log('📧 Email de bienvenue à envoyer à:', email);
     console.log('   - Plan:', planName, '- Capital:', tradingCapital + '$');
     const htmlContent = `
@@ -424,14 +458,19 @@ async function sendWelcomeEmail(email, password, session) {
 </body>
 </html>`;
     try {
-        await admin.firestore().collection('mail').add({
+        const resend = new resend_1.Resend(resendApiKey.value());
+        const { data, error } = await resend.emails.send({
+            from: 'AMA Firm <onboarding@resend.dev>',
             to: email,
-            message: {
-                subject: `🎉 Bienvenue chez AMA Firm - Votre ${planName} est activé !`,
-                html: htmlContent
-            }
+            subject: `🎉 Bienvenue chez AMA Firm - Votre ${planName} est activé !`,
+            html: htmlContent
         });
-        console.log('✅ Email de bienvenue ajouté à la queue');
+        if (error) {
+            console.error('❌ Erreur Resend:', error);
+        }
+        else {
+            console.log('✅ Email envoyé via Resend:', data === null || data === void 0 ? void 0 : data.id);
+        }
     }
     catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
