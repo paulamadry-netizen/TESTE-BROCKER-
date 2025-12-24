@@ -18,9 +18,11 @@ class PriceService {
     this._recoveryInProgress = false;
     this.subscribedEpics = new Set();
     
-    // Configuration
-    this.pollIntervalMs = parseInt(process.env.PRICE_POLL_INTERVAL_MS) || 1500; // safer default for IG rate limits
+    // Configuration - IG API has strict rate limits
+    this.pollIntervalMs = parseInt(process.env.PRICE_POLL_INTERVAL_MS) || 5000; // 5 seconds default
     this.batchSize = 50; // IG API allows up to 50 epics per request
+    this._backoffMs = 0; // Exponential backoff on rate limit
+    this._lastRateLimitAt = null;
   }
 
   setSubscribedEpics(epics) {
@@ -86,30 +88,46 @@ class PriceService {
   async fetchAllPrices() {
     const igAuthService = require('./igAuthService');
     
+    // Rate limit backoff - wait if we hit rate limits recently
+    if (this._backoffMs > 0) {
+      const timeSinceRateLimit = this._lastRateLimitAt ? (Date.now() - this._lastRateLimitAt) : 999999;
+      if (timeSinceRateLimit < this._backoffMs) {
+        return; // Still in backoff period
+      }
+      // Backoff period over, reduce backoff for next time
+      this._backoffMs = Math.max(0, this._backoffMs - 10000);
+    }
+    
     // Check if we need to re-authenticate
     const authStatus = igAuthService.getStatus();
     const staleMs = this.lastUpdate ? (Date.now() - this.lastUpdate.getTime()) : 999999;
-    const needsRecovery = !authStatus.isAuthenticated || staleMs > 60000 || this._consecutiveErrors >= 3;
+    const needsRecovery = !authStatus.isAuthenticated && staleMs > 30000;
     
     if (needsRecovery && !this._recoveryInProgress) {
-      console.warn(`[PriceService] Recovery needed (auth=${authStatus.isAuthenticated}, stale=${Math.round(staleMs/1000)}s, errors=${this._consecutiveErrors})`);
+      console.warn(`[PriceService] Recovery needed (auth=${authStatus.isAuthenticated}, stale=${Math.round(staleMs/1000)}s)`);
       this._recoveryInProgress = true;
       try {
         await igAuthService.login();
         this._consecutiveErrors = 0;
+        this._backoffMs = 0;
         console.log('[PriceService] ✅ Recovery complete');
       } catch (e) {
         console.error('[PriceService] Recovery failed:', e.message);
-        this._consecutiveErrors++;
+        // If rate limited, apply exponential backoff
+        if (e.message?.includes('403') || e.response?.data?.errorCode?.includes('allowance')) {
+          this._backoffMs = Math.min(300000, (this._backoffMs || 10000) * 2); // Max 5 min backoff
+          this._lastRateLimitAt = Date.now();
+          console.warn(`[PriceService] Rate limited, backing off for ${this._backoffMs/1000}s`);
+        }
       } finally {
         this._recoveryInProgress = false;
       }
+      return; // Don't try to fetch prices right after failed recovery
     }
 
-    // Backoff: if we are erroring repeatedly, wait longer between attempts
-    if (this._consecutiveErrors >= 10) {
-      // Still try every 30 seconds even with many errors
-      if (staleMs < 30000) return;
+    // Skip if not authenticated
+    if (!authStatus.isAuthenticated) {
+      return;
     }
 
     const allEpics = this.subscribedEpics.size > 0
@@ -132,29 +150,29 @@ class PriceService {
       this._lastErrorAt = new Date();
 
       const status = error.response?.status;
-      if ((status === 401 || status === 403) && !this._recoveryInProgress) {
+      const errorCode = error.response?.data?.errorCode || '';
+      
+      // Rate limit detection
+      if (status === 403 && errorCode.includes('allowance')) {
+        this._backoffMs = Math.min(300000, (this._backoffMs || 10000) * 2);
+        this._lastRateLimitAt = Date.now();
+        console.warn(`[PriceService] Rate limited! Backing off for ${this._backoffMs/1000}s`);
+        igAuthService.isAuthenticated = false; // Mark as not authenticated
+        return;
+      }
+      
+      // Auth error - try recovery once, with backoff
+      if ((status === 401 || status === 403) && !this._recoveryInProgress && this._consecutiveErrors < 3) {
         this._recoveryInProgress = true;
         try {
-          console.warn('[PriceService] Auth error detected (401/403). Forcing immediate recovery...');
-          // Stop polling to avoid hammering IG during invalid session
-          if (this.updateInterval) {
-            clearInterval(this.updateInterval);
-            this.updateInterval = null;
-          }
-
-          const igAuthService = require('./igAuthService');
+          console.warn('[PriceService] Auth error, attempting recovery...');
           await igAuthService.login();
-
-          // Resume polling
-          if (this.isRunning && !this.updateInterval) {
-            this.updateInterval = setInterval(() => {
-              this.fetchAllPrices();
-            }, this.pollIntervalMs);
-          }
-
-          console.log('[PriceService] ✅ Recovery complete, polling resumed');
+          this._consecutiveErrors = 0;
+          console.log('[PriceService] ✅ Recovery complete');
         } catch (e) {
           console.error('[PriceService] Recovery failed:', e.message);
+          this._backoffMs = Math.min(300000, (this._backoffMs || 30000) * 2);
+          this._lastRateLimitAt = Date.now();
         } finally {
           this._recoveryInProgress = false;
         }
