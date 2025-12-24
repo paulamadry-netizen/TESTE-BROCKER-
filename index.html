@@ -334,6 +334,11 @@ html,body{height:100%;background:linear-gradient(135deg,var(--bg-primary) 0%,var
 .price-line.order-sell .price-line-label{background:linear-gradient(135deg,#f97316,#ea580c);color:#fff}
 .price-line.tp-line:hover,.price-line.sl-line:hover{height:4px;z-index:20;cursor:ns-resize}
 .price-line.dragging{height:5px;z-index:30;opacity:1}
+.sltp-handle{position:absolute;right:5px;padding:4px 10px;border-radius:6px;font-size:10px;font-weight:700;cursor:ns-resize;pointer-events:auto;opacity:0.7;transition:all 0.2s;z-index:15}
+.sltp-handle:hover{opacity:1;transform:scale(1.1)}
+.sltp-handle.dragging{opacity:1;transform:scale(1.15);z-index:30}
+.tp-handle{background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff;box-shadow:0 2px 8px rgba(34,197,94,0.4)}
+.sl-handle{background:linear-gradient(135deg,#ef4444,#dc2626);color:#fff;box-shadow:0 2px 8px rgba(239,68,68,0.4)}
 .crosshair-info{position:absolute;top:10px;left:10px;background:rgba(15,20,25,0.9);padding:8px 12px;border-radius:6px;font-size:11px;color:#e8edf4;pointer-events:none;z-index:5;border:1px solid var(--border)}
 .crosshair-info div{margin:2px 0}
 .crosshair-info .label{color:var(--text-muted)}
@@ -469,10 +474,6 @@ html,body{height:100%;background:linear-gradient(135deg,var(--bg-primary) 0%,var
 <button class="icon-btn" id="fibRetrBtn" title="Fibonacci Retracement">FibR</button>
 <button class="icon-btn" id="fibExtBtn" title="Fibonacci Extension">FibE</button>
 <button class="icon-btn" id="deleteDrawBtn" title="Supprimer dessin">Del</button>
-</div>
-<div class="ind-toolbar" id="slTpToolbar" style="gap:6px">
-<button class="icon-btn" id="placeSlBtn" title="Placer SL">SL</button>
-<button class="icon-btn" id="placeTpBtn" title="Placer TP">TP</button>
 </div>
 <div class="timeframe-selector" id="timeframeSelector">
 <button class="timeframe-btn" data-tf="1">1m</button>
@@ -1291,7 +1292,7 @@ const updateChartOverlay=()=>{
   const symbolPositions=positions.filter(p=>p.symbol.api===currentSymbol.api);
   const symbolOrders=orders.filter(o=>o.symbol===currentSymbol.api);
   
-  // Draw position entry lines
+  // Draw position entry lines with attached SL/TP handles
   symbolPositions.forEach(pos=>{
     const y=priceToY(pos.entry);
     if(y===null||y<0)return;
@@ -1300,20 +1301,28 @@ const updateChartOverlay=()=>{
     createPriceLine(overlay,y,pos.entry,`position-${pos.side.toLowerCase()}`,
       `${pos.side} @ ${formatChartPrice(pos.entry)} (${pos.size} lots)`,pos.id,'entry');
     
-    // TP line
+    // TP line - if set, show at position; if not, show handle attached to entry
     if(pos.tp!==null){
       const tpY=priceToY(pos.tp);
       if(tpY!==null&&tpY>=0){
         createPriceLine(overlay,tpY,pos.tp,'tp-line',`TP @ ${formatChartPrice(pos.tp)}`,pos.id,'tp');
       }
+    }else{
+      // Show TP handle attached to entry line (above for BUY, below for SELL)
+      const tpHandleY=pos.side==='BUY'?y-25:y+25;
+      createSlTpHandle(overlay,tpHandleY,pos.entry,pos.id,'tp',pos.side);
     }
     
-    // SL line
+    // SL line - if set, show at position; if not, show handle attached to entry
     if(pos.sl!==null){
       const slY=priceToY(pos.sl);
       if(slY!==null&&slY>=0){
         createPriceLine(overlay,slY,pos.sl,'sl-line',`SL @ ${formatChartPrice(pos.sl)}`,pos.id,'sl');
       }
+    }else{
+      // Show SL handle attached to entry line (below for BUY, above for SELL)
+      const slHandleY=pos.side==='BUY'?y+25:y-25;
+      createSlTpHandle(overlay,slHandleY,pos.entry,pos.id,'sl',pos.side);
     }
   });
   
@@ -1324,6 +1333,71 @@ const updateChartOverlay=()=>{
     createPriceLine(overlay,y,ord.price,`order-${ord.side.toLowerCase()}`,
       `${ord.side} LIMIT @ ${formatChartPrice(ord.price)} (${ord.size} lots)`,ord.id,'order');
   });
+};
+
+const createSlTpHandle=(container,y,entryPrice,posId,type,side)=>{
+  const handle=document.createElement('div');
+  handle.className=`sltp-handle ${type}-handle`;
+  handle.style.top=`${y}px`;
+  handle.dataset.id=posId;
+  handle.dataset.type=type;
+  handle.dataset.entryPrice=entryPrice;
+  handle.dataset.side=side;
+  handle.innerText=type.toUpperCase();
+  handle.title=`Glisser pour placer ${type.toUpperCase()}`;
+  
+  handle.addEventListener('mousedown',startHandleDrag);
+  container.appendChild(handle);
+};
+
+const startHandleDrag=(e)=>{
+  e.preventDefault();
+  e.stopPropagation();
+  const handle=e.currentTarget;
+  const posId=handle.dataset.id;
+  const type=handle.dataset.type;
+  
+  dragState={handle,posId,type,startY:e.clientY,isHandle:true};
+  handle.classList.add('dragging');
+  
+  document.addEventListener('mousemove',onHandleDrag);
+  document.addEventListener('mouseup',endHandleDrag);
+};
+
+const onHandleDrag=(e)=>{
+  if(!dragState||!dragState.isHandle)return;
+  const overlay=$('chartOverlay');
+  const rect=overlay.getBoundingClientRect();
+  const y=e.clientY-rect.top;
+  dragState.handle.style.top=`${y}px`;
+};
+
+const endHandleDrag=(e)=>{
+  if(!dragState||!dragState.isHandle)return;
+  const overlay=$('chartOverlay');
+  const rect=overlay.getBoundingClientRect();
+  const y=e.clientY-rect.top;
+  const newPrice=yToPrice(y);
+  
+  if(newPrice!==null&&newPrice>0){
+    const pos=positions.find(p=>p.id===dragState.posId);
+    if(pos){
+      if(dragState.type==='tp') pos.tp=newPrice;
+      if(dragState.type==='sl') pos.sl=newPrice;
+      renderPositions();
+      if(pos.firestoreId&&window.updateTrade){
+        const updateData={takeProfit:pos.tp,stopLoss:pos.sl,currentPrice:pos.current||priceCache[pos.symbol.api]||pos.entry};
+        window.updateTrade(pos.firestoreId,updateData);
+      }
+      showToast(`${dragState.type.toUpperCase()} place: ${formatChartPrice(newPrice)}`,'success');
+    }
+  }
+  
+  dragState.handle.classList.remove('dragging');
+  dragState=null;
+  document.removeEventListener('mousemove',onHandleDrag);
+  document.removeEventListener('mouseup',endHandleDrag);
+  updateChartOverlay();
 };
 
 const createPriceLine=(container,y,price,className,label,id,type)=>{
@@ -1732,8 +1806,6 @@ document.querySelectorAll('.timeframe-btn').forEach(btn=>btn.addEventListener('c
 $('fibRetrBtn').addEventListener('click',()=>setMode(drawMode==='fib_retr'?null:'fib_retr'));
 $('fibExtBtn').addEventListener('click',()=>setMode(drawMode==='fib_ext'?null:'fib_ext'));
 $('deleteDrawBtn').addEventListener('click',deleteActiveDrawing);
-$('placeSlBtn').addEventListener('click',()=>setMode(slTpMode==='sl'?null:'sl'));
-$('placeTpBtn').addEventListener('click',()=>setMode(slTpMode==='tp'?null:'tp'));
 // Clicks on drawings are handled by SVG line listeners (stopPropagation). Other clicks fall through to overlay.
 $('chartOverlay').addEventListener('click',onOverlayClick);
 document.addEventListener('keydown',(e)=>{if(e.key==='Escape')clearModes();if(e.key==='Delete'||e.key==='Backspace')deleteActiveDrawing();});
