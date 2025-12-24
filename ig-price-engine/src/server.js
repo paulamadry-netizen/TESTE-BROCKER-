@@ -135,6 +135,32 @@ app.get('/status', (req, res) => {
   });
 });
 
+// Restart polling endpoint (for recovery)
+app.post('/api/restart-polling', async (req, res) => {
+  console.log('[API] Manual restart-polling requested');
+  try {
+    priceService.stopPolling();
+    await igAuthService.login();
+    priceService.startPolling(io);
+    res.json({ success: true, message: 'Polling restarted', timestamp: new Date().toISOString() });
+  } catch (error) {
+    console.error('[API] Restart polling failed:', error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Force re-login endpoint
+app.post('/api/relogin', async (req, res) => {
+  console.log('[API] Manual relogin requested');
+  try {
+    await igAuthService.login();
+    res.json({ success: true, auth: igAuthService.getStatus(), timestamp: new Date().toISOString() });
+  } catch (error) {
+    console.error('[API] Relogin failed:', error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // Generate mock historical data based on current price
 const generateMockCandles = (epic, resolution, count, currentPrice) => {
   const candles = [];
