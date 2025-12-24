@@ -1408,7 +1408,9 @@ const updateChartOverlay=()=>{
     if(hasTP&&handlesContainer){
       const tpY=priceToY(pos.tp);
       if(tpY!==null&&tpY>=0){
-        createPriceLine(handlesContainer,tpY,pos.tp,'tp-line',`TP @ ${formatChartPrice(pos.tp)}`,pos.id,'tp');
+        const tpPnl=calculatePnlAtPrice(pos,pos.tp);
+        const tpLabel=`TP @ ${formatChartPrice(pos.tp)} | +${formatMoney(tpPnl)}`;
+        createPriceLine(handlesContainer,tpY,pos.tp,'tp-line',tpLabel,pos.id,'tp');
       }
     }else if(handlesContainer){
       // Show TP handle attached to entry line (above for BUY, below for SELL)
@@ -1420,7 +1422,9 @@ const updateChartOverlay=()=>{
     if(hasSL&&handlesContainer){
       const slY=priceToY(pos.sl);
       if(slY!==null&&slY>=0){
-        createPriceLine(handlesContainer,slY,pos.sl,'sl-line',`SL @ ${formatChartPrice(pos.sl)}`,pos.id,'sl');
+        const slPnl=calculatePnlAtPrice(pos,pos.sl);
+        const slLabel=`SL @ ${formatChartPrice(pos.sl)} | ${formatMoney(slPnl)}`;
+        createPriceLine(handlesContainer,slY,pos.sl,'sl-line',slLabel,pos.id,'sl');
       }
     }else if(handlesContainer){
       // Show SL handle attached to entry line (below for BUY, above for SELL)
@@ -1474,10 +1478,17 @@ const onHandleDrag=(e)=>{
   const rect=container.getBoundingClientRect();
   const y=e.clientY-rect.top;
   dragState.handle.style.top=`${y}px`;
-  // Show current price while dragging
+  // Show current price and PnL while dragging
   const currentPrice=yToPrice(y);
   if(currentPrice!==null){
-    dragState.handle.innerText=`${dragState.type.toUpperCase()} ${formatChartPrice(currentPrice)}`;
+    const pos=positions.find(p=>p.id===dragState.posId);
+    if(pos){
+      const pnl=calculatePnlAtPrice(pos,currentPrice);
+      const pnlStr=pnl>=0?`+${formatMoney(pnl)}`:formatMoney(pnl);
+      dragState.handle.innerText=`${dragState.type.toUpperCase()} ${formatChartPrice(currentPrice)} | ${pnlStr}`;
+    }else{
+      dragState.handle.innerText=`${dragState.type.toUpperCase()} ${formatChartPrice(currentPrice)}`;
+    }
   }
 };
 
@@ -1820,6 +1831,7 @@ const refreshLotInfo=()=>{const price=priceCache[currentSymbol.api],lots=parseFl
 const onPriceUpdate=(symbol)=>{let updated=false;positions.forEach(pos=>{if(pos.symbol.api===symbol){pos.current=priceCache[symbol];updated=true}});checkPositionTargets(symbol);checkOrdersForSymbol(symbol);if(updated)renderPositions();renderTotals()};
 const checkPositionTargets=(symbol)=>{const price=priceCache[symbol];if(price===undefined)return;const toClose=[];positions.forEach(pos=>{if(pos.symbol.api!==symbol)return;if(pos.side==='BUY'){if(pos.tp!==null&&price>=pos.tp)toClose.push({id:pos.id,reason:'TP'});if(pos.sl!==null&&price<=pos.sl)toClose.push({id:pos.id,reason:'SL'})}else{if(pos.tp!==null&&price<=pos.tp)toClose.push({id:pos.id,reason:'TP'});if(pos.sl!==null&&price>=pos.sl)toClose.push({id:pos.id,reason:'SL'})}});toClose.forEach(({id,reason})=>{debugLog(`Close ${id}: ${reason}`);closePosition(id)})};
 const checkOrdersForSymbol=(symbol)=>{const price=priceCache[symbol];if(price===undefined)return;const matches=orders.filter(o=>o.symbol===symbol&&((o.side==='BUY'&&price<=o.price)||(o.side==='SELL'&&price>=o.price)));matches.forEach(async m=>{const symObj=WATCHLIST.find(w=>w.api===m.symbol)||{label:m.symbol,tv:m.symbol,api:m.symbol,type:'forex'};debugLog(`Exec order: ${m.side} ${m.symbol}`);await openPosition(symObj,m.side,m.size,price,m.tp,m.sl);removeOrder(m.id)})};
+const calculatePnlAtPrice=(pos,targetPrice)=>{if(targetPrice===undefined||targetPrice===null)return 0;const step=pipStep(pos.symbol.api),pipDiff=(targetPrice-pos.entry)/step,pipValue=pipValuePerLot(pos.symbol.api,targetPrice),pnlPerLot=pipDiff*pipValue*pos.size;return pos.side==='BUY'?pnlPerLot:-pnlPerLot};
 const computePnl=(pos)=>{const current=pos.current!==undefined?pos.current:priceCache[pos.symbol.api];if(current===undefined)return 0;const step=pipStep(pos.symbol.api),pipDiff=(current-pos.entry)/step,pipValue=pipValuePerLot(pos.symbol.api,current),pnlPerLot=pipDiff*pipValue*pos.size;return pos.side==='BUY'?pnlPerLot:-pnlPerLot};
 const getTotalMarginUsed=()=>positions.reduce((sum,pos)=>{const price=pos.current||priceCache[pos.symbol.api]||pos.entry;return sum+marginRequirement(pos.symbol.api,pos.size,price)},0)+orders.reduce((sum,ord)=>sum+ord.margin,0);
 
