@@ -215,6 +215,18 @@ app.get('/api/history/:epic', async (req, res) => {
         volume: p.lastTradedVolume || 0
       }));
       
+      // Adjust last candle to match current live price if available
+      const cachedPrice = priceService.getCachedPrice(epic);
+      if (cachedPrice && candles.length > 0) {
+        const currentPrice = (cachedPrice.bid + cachedPrice.offer) / 2;
+        const lastCandle = candles[candles.length - 1];
+        // Update close to current price
+        lastCandle.close = currentPrice;
+        // Adjust high/low if needed
+        if (currentPrice > lastCandle.high) lastCandle.high = currentPrice;
+        if (currentPrice < lastCandle.low) lastCandle.low = currentPrice;
+      }
+      
       res.json({
         epic,
         resolution,
