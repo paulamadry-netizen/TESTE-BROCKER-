@@ -1511,21 +1511,25 @@ const updatePriceUI=(symbol,oldPrice,newPrice)=>{
 
   let didUpdate=false;
   const rows=document.querySelectorAll('.wl-item');
-  rows.forEach((row)=>{
-    const ds=row.dataset.symbol;
+  for(let i=0;i<rows.length;i++){
+    const row=rows[i];
+    const ds=row.dataset?row.dataset.symbol:'';
     if(ds===targetKey||ds===symbol){
       const el=row.querySelector('.wl-price');
-      if(!el) return;
-      el.innerText=formatted;
-      didUpdate=true;
-      if(oldPrice!==undefined&&oldPrice!==newPrice){
-        row.classList.add('updating');
-        setTimeout(()=>row.classList.remove('updating'),500);
+      if(el){
+        el.textContent=formatted;
+        didUpdate=true;
+        if(oldPrice!==undefined&&oldPrice!==newPrice){
+          row.classList.add('updating');
+          setTimeout(()=>row.classList.remove('updating'),500);
+        }
       }
+      break;
     }
-  });
+  }
   if(!didUpdate&&rows.length>0){
-    debugLog(`updatePriceUI: no match for ${symbol} (rows=${rows.length}, first ds=${rows[0]?.dataset?.symbol})`);
+    const sample=rows[0].dataset?rows[0].dataset.symbol:'none';
+    debugLog(`WL miss: "${symbol}" vs DOM "${sample}" (${rows.length} rows)`);
   }
 
   if(symbol===currentSymbol.api){
