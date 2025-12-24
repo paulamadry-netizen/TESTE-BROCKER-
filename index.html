@@ -1500,6 +1500,7 @@ const startWebSocket=()=>{if(ws&&ws.connected)return;try{debugLog(`Connecting: $
 const handlePriceUpdate=(data)=>{if(!data||!data.data)return;lastAnyPriceMsgAt=Date.now();const prices=Array.isArray(data.data)?data.data:[data.data];prices.forEach(p=>{const epic=p.epic,bid=p.bid,offer=p.offer;if(!epic)return;const midPrice=(bid+offer)/2;const oldPrice=priceCache[epic];priceCache[epic]=midPrice;lastPriceUpdate[epic]=Date.now();debugLog(`Price: ${epic} = ${midPrice.toFixed(5)} (bid:${bid} offer:${offer})`);updatePriceUI(epic,oldPrice,midPrice);onPriceUpdate(epic)})};
 
 // Price smoothing - max 2 micro-fluctuations between real 5s updates
+// Only for assets that are actively trading (received update in last 10s)
 const priceDisplayed={};
 const lastSmoothUpdate={};
 const smoothUpdateCount={};
@@ -1513,11 +1514,15 @@ const startPriceSmoothing=()=>{
       const now=Date.now();
       const timeSinceReal=now-lastReal;
       
+      // Skip if no recent real update (market closed or not trading)
+      if(timeSinceReal>10000)return;
+      
       // Reset counter when new real price arrives
       if(!lastSmoothUpdate[epic]||lastReal>lastSmoothUpdate[epic]){
         smoothUpdateCount[epic]=0;
         priceDisplayed[epic]=target;
         lastSmoothUpdate[epic]=now;
+        return; // Don't fluctuate on the same tick as real update
       }
       
       // Max 2 smooth updates per 5s interval, spaced ~2s apart
