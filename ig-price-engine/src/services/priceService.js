@@ -84,26 +84,32 @@ class PriceService {
    * Fetch prices for all configured EPICS
    */
   async fetchAllPrices() {
-    // Auto-recovery: if prices are stale (>2min) or too many errors, force re-login
+    const igAuthService = require('./igAuthService');
+    
+    // Check if we need to re-authenticate
+    const authStatus = igAuthService.getStatus();
     const staleMs = this.lastUpdate ? (Date.now() - this.lastUpdate.getTime()) : 999999;
-    if ((staleMs > 120000 || this._consecutiveErrors >= 5) && !this._recoveryInProgress) {
-      console.warn(`[PriceService] Auto-recovery triggered (stale=${Math.round(staleMs/1000)}s, errors=${this._consecutiveErrors})`);
+    const needsRecovery = !authStatus.isAuthenticated || staleMs > 60000 || this._consecutiveErrors >= 3;
+    
+    if (needsRecovery && !this._recoveryInProgress) {
+      console.warn(`[PriceService] Recovery needed (auth=${authStatus.isAuthenticated}, stale=${Math.round(staleMs/1000)}s, errors=${this._consecutiveErrors})`);
       this._recoveryInProgress = true;
       try {
-        const igAuthService = require('./igAuthService');
         await igAuthService.login();
         this._consecutiveErrors = 0;
-        console.log('[PriceService] ✅ Auto-recovery complete');
+        console.log('[PriceService] ✅ Recovery complete');
       } catch (e) {
-        console.error('[PriceService] Auto-recovery failed:', e.message);
+        console.error('[PriceService] Recovery failed:', e.message);
+        this._consecutiveErrors++;
       } finally {
         this._recoveryInProgress = false;
       }
     }
 
-    // Backoff: if we are erroring repeatedly, don't hammer IG
+    // Backoff: if we are erroring repeatedly, wait longer between attempts
     if (this._consecutiveErrors >= 10) {
-      return;
+      // Still try every 30 seconds even with many errors
+      if (staleMs < 30000) return;
     }
 
     const allEpics = this.subscribedEpics.size > 0

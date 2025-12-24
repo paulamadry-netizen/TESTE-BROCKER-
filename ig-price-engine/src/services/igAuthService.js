@@ -138,15 +138,24 @@ class IGAuthService {
       clearInterval(this.heartbeatInterval);
     }
 
-    console.log(`[IGAuth] Starting heartbeat (every ${this.refreshIntervalMs / 1000 / 60} minutes)`);
+    // More aggressive heartbeat - every 5 minutes
+    const heartbeatMs = Math.min(this.refreshIntervalMs, 300000);
+    console.log(`[IGAuth] Starting heartbeat (every ${heartbeatMs / 1000 / 60} minutes)`);
     
     this.heartbeatInterval = setInterval(async () => {
       try {
-        await this.refreshSession();
+        // If not authenticated, do full login instead of refresh
+        if (!this.isAuthenticated) {
+          console.log('[IGAuth] Heartbeat: not authenticated, performing login...');
+          await this.login();
+        } else {
+          await this.refreshSession();
+        }
       } catch (error) {
         console.error('[IGAuth] Heartbeat failed:', error.message);
+        this.isAuthenticated = false;
       }
-    }, this.refreshIntervalMs);
+    }, heartbeatMs);
   }
 
   /**
