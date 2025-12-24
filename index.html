@@ -313,8 +313,8 @@ html,body{height:100%;background:linear-gradient(135deg,var(--bg-primary) 0%,var
 #lw_chart_container{width:100%;height:100%;position:relative}
 .chart-overlay{position:absolute;top:0;left:0;right:60px;bottom:30px;pointer-events:none;z-index:2}
 .chart-overlay.draw-mode{pointer-events:auto;cursor:crosshair}
-.chart-overlay.interaction-mode{pointer-events:none}
-.chart-overlay.interaction-mode .sltp-handle{pointer-events:auto !important}
+.sltp-handles-container{position:absolute;top:0;left:0;right:60px;bottom:30px;pointer-events:none;z-index:20}
+.sltp-handles-container.interaction-mode{pointer-events:auto}
 .chart-overlay svg{pointer-events:none}
 .chart-overlay svg line[data-id]{pointer-events:stroke;cursor:pointer}
 .chart-overlay svg text{pointer-events:none}
@@ -494,6 +494,7 @@ html,body{height:100%;background:linear-gradient(135deg,var(--bg-primary) 0%,var
 <div id="tv_chart_container"></div>
 <div id="lw_chart_container">
 <div class="chart-overlay" id="chartOverlay"></div>
+<div class="sltp-handles-container" id="sltpHandlesContainer"></div>
 <div class="crosshair-info" id="crosshairInfo" style="display:none">
 <div><span class="label">O:</span><span class="value" id="infoOpen">-</span></div>
 <div><span class="label">H:</span><span class="value" id="infoHigh">-</span></div>
@@ -1190,6 +1191,8 @@ const updateChartOverlay=()=>{
   const overlay=$('chartOverlay');
   if(!overlay||!lwChart||!lwSeries)return;
   overlay.innerHTML='';
+  const handlesContainer=$('sltpHandlesContainer');
+  if(handlesContainer) handlesContainer.innerHTML='';
   const svg=getOverlaySvg(overlay);
   if(svg) svg.innerHTML='';
 
@@ -1306,15 +1309,16 @@ const updateChartOverlay=()=>{
       `${pos.side} @ ${formatChartPrice(pos.entry)} (${pos.size} lots)`,pos.id,'entry');
     
     // TP line - if set, show at position; if not, show handle attached to entry
+    const handlesContainer=$('sltpHandlesContainer');
     if(pos.tp!==null){
       const tpY=priceToY(pos.tp);
       if(tpY!==null&&tpY>=0){
         createPriceLine(overlay,tpY,pos.tp,'tp-line',`TP @ ${formatChartPrice(pos.tp)}`,pos.id,'tp');
       }
-    }else{
+    }else if(handlesContainer){
       // Show TP handle attached to entry line (above for BUY, below for SELL)
       const tpHandleY=pos.side==='BUY'?y-25:y+25;
-      createSlTpHandle(overlay,tpHandleY,pos.entry,pos.id,'tp',pos.side);
+      createSlTpHandle(handlesContainer,tpHandleY,pos.entry,pos.id,'tp',pos.side);
     }
     
     // SL line - if set, show at position; if not, show handle attached to entry
@@ -1323,10 +1327,10 @@ const updateChartOverlay=()=>{
       if(slY!==null&&slY>=0){
         createPriceLine(overlay,slY,pos.sl,'sl-line',`SL @ ${formatChartPrice(pos.sl)}`,pos.id,'sl');
       }
-    }else{
+    }else if(handlesContainer){
       // Show SL handle attached to entry line (below for BUY, above for SELL)
       const slHandleY=pos.side==='BUY'?y+25:y-25;
-      createSlTpHandle(overlay,slHandleY,pos.entry,pos.id,'sl',pos.side);
+      createSlTpHandle(handlesContainer,slHandleY,pos.entry,pos.id,'sl',pos.side);
     }
   });
   
@@ -1516,10 +1520,10 @@ const toggleDragMode=()=>{
     });
   }
   
-  // Update overlay interactivity
-  const overlay=$('chartOverlay');
-  if(overlay){
-    overlay.classList.toggle('interaction-mode',!dragModeEnabled);
+  // Update handles container interactivity
+  const handlesContainer=$('sltpHandlesContainer');
+  if(handlesContainer){
+    handlesContainer.classList.toggle('interaction-mode',!dragModeEnabled);
   }
   
   showToast(dragModeEnabled?'Mode Navigation actif':'Mode Interaction actif (SL/TP/Fibo)','info');
