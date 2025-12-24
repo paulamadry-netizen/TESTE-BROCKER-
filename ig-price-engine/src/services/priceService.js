@@ -1,10 +1,14 @@
 /**
  * Price Service
- * Fetches real-time prices from IG Markets API
+ * Fetches real-time prices from IG Markets API + Finnhub for missing assets
  */
 
 const igApiClient = require('./igApiClient');
 const { getAllEpics, getEpicInfo } = require('../config/epics');
+const { FinnhubService } = require('./finnhubService');
+
+// Finnhub API Key
+const FINNHUB_API_KEY = process.env.FINNHUB_API_KEY || 'd4os009r01qnosaacr50d4os009r01qnosaacr5g';
 
 class PriceService {
   constructor() {
@@ -23,6 +27,9 @@ class PriceService {
     this.batchSize = 50; // IG API allows up to 50 epics per request
     this._backoffMs = 0; // Exponential backoff on rate limit
     this._lastRateLimitAt = null;
+    
+    // Finnhub service for assets not available on IG
+    this.finnhubService = new FinnhubService(FINNHUB_API_KEY);
   }
 
   setSubscribedEpics(epics) {
@@ -72,6 +79,26 @@ class PriceService {
         this.fetchAllPrices();
       }, this.pollIntervalMs);
     }
+    
+    // Start Finnhub for assets not available on IG
+    this._startFinnhub();
+  }
+  
+  /**
+   * Start Finnhub WebSocket for missing assets
+   */
+  _startFinnhub() {
+    console.log('[PriceService] Starting Finnhub for missing assets...');
+    
+    this.finnhubService.connect((priceData) => {
+      // Update cache with Finnhub price
+      this.priceCache.set(priceData.epic, priceData);
+      
+      // Broadcast to WebSocket clients
+      if (this.io) {
+        this.io.emit('price', priceData);
+      }
+    });
   }
 
   /**
@@ -431,7 +458,8 @@ class PriceService {
       pollIntervalMs: this.pollIntervalMs,
       subscribedEpicsCount: this.subscribedEpics.size,
       consecutiveErrors: this._consecutiveErrors,
-      lastErrorAt: this._lastErrorAt
+      lastErrorAt: this._lastErrorAt,
+      finnhub: this.finnhubService ? this.finnhubService.getStatus() : null
     };
   }
 
