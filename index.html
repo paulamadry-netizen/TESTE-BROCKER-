@@ -311,7 +311,11 @@ html,body{height:100%;background:linear-gradient(135deg,var(--bg-primary) 0%,var
 .btn-ghost:hover{background:var(--surface-elevated);border-color:var(--border-light);color:var(--text-primary)}
 #tv_chart_container{display:none}
 #lw_chart_container{width:100%;height:100%;position:relative}
-.chart-overlay{position:absolute;top:0;left:0;right:60px;bottom:30px;pointer-events:auto;z-index:10}
+.chart-overlay{position:absolute;top:0;left:0;right:60px;bottom:30px;pointer-events:none;z-index:10}
+.chart-overlay.draw-mode{pointer-events:auto;cursor:crosshair}
+.chart-overlay svg{pointer-events:none}
+.chart-overlay svg line[data-id]{pointer-events:stroke;cursor:pointer}
+.chart-overlay svg text{pointer-events:none}
 .price-line{position:absolute;left:0;right:0;height:2px;display:flex;align-items:center;pointer-events:auto;cursor:ns-resize;transition:height 0.15s ease}
 .price-line.position-buy{background:linear-gradient(90deg,transparent 0%,rgba(16,185,129,0.4) 10%,rgba(16,185,129,0.9) 50%,rgba(16,185,129,0.4) 90%,transparent 100%);cursor:default}
 .price-line.position-sell{background:linear-gradient(90deg,transparent 0%,rgba(239,68,68,0.4) 10%,rgba(239,68,68,0.9) 50%,rgba(239,68,68,0.4) 90%,transparent 100%);cursor:default}
@@ -1079,8 +1083,10 @@ const initLightweightChart=async()=>{
 
   try{lwChart.timeScale().subscribeVisibleTimeRangeChange(()=>updateChartOverlay())}catch(e){}
   
-  // Initial overlay update
+  // Initial overlay update - multiple attempts to ensure positions show after chart is ready
   setTimeout(()=>updateChartOverlay(),100);
+  setTimeout(()=>updateChartOverlay(),500);
+  setTimeout(()=>updateChartOverlay(),1000);
 };
 
 const formatChartPrice=(v)=>{
@@ -1406,22 +1412,26 @@ const getPrimaryPositionForSymbol=()=>{
 
 const clearModes=()=>{
   drawMode=null;drawStep=0;drawAnchor1=null;drawAnchor2=null;slTpMode=null;
-  ['fibRetrBtn','fibExtBtn','placeSlBtn','placeTpBtn'].forEach(id=>{const b=$(id);if(b)b.classList.remove('active')});
+  document.querySelectorAll('.drawing-tools .btn').forEach(b=>b.classList.remove('active'));
+  const overlay=$('chartOverlay');if(overlay)overlay.classList.remove('draw-mode');
 };
 
 const setMode=(mode)=>{
   clearModes();
   if(!mode) return;
+  const overlay=$('chartOverlay');
   if(mode==='fib_retr'||mode==='fib_ext'){
     drawMode=mode;
     const map={fib_retr:'fibRetrBtn',fib_ext:'fibExtBtn'};
     const b=$(map[mode]);if(b)b.classList.add('active');
+    if(overlay)overlay.classList.add('draw-mode');
     showToast(mode==='fib_ext'?'Clique 3 points (A,B,C)':'Clique 2 points sur le graphique','info');
     return;
   }
   if(mode==='sl'||mode==='tp'){
     slTpMode=mode;
     const b=$(mode==='sl'?'placeSlBtn':'placeTpBtn');if(b)b.classList.add('active');
+    if(overlay)overlay.classList.add('draw-mode');
     showToast(`Clique sur le graphique pour placer ${mode.toUpperCase()}`,'info');
   }
 };
