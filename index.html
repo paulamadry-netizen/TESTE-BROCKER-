@@ -1499,66 +1499,6 @@ const scheduleReconnect=()=>{stopKeepalive();if(reconTimer)clearTimeout(reconTim
 const startWebSocket=()=>{if(ws&&ws.connected)return;try{debugLog(`Connecting: ${CFG.ws}`);setWsStatus('connecting');ws=io(CFG.ws,{transports:['websocket','polling'],reconnection:true,reconnectionAttempts:10,reconnectionDelay:2000});ws.on('connect',()=>{debugLog('Socket.io CONNECTED');setWsStatus('connected');reconAttempts=0;reconDelay=CFG.reconBase;msgCount=0;startKeepalive();showToast('Connecte a IG Markets','success');const epics=WATCHLIST.map(w=>w.epic);ws.emit('subscribe',epics);debugLog(`Subscribed to ${epics.length} epics`)});ws.on('prices',(data)=>{msgCount++;debugLog(`MSG #${msgCount}: prices update`);handlePriceUpdate(data)});ws.on('pong',()=>{debugLog('Pong received')});ws.on('disconnect',(reason)=>{debugLog(`Socket.io DISCONNECT: ${reason}`);setWsStatus('disconnected');showToast('Deconnecte','error');scheduleReconnect()});ws.on('connect_error',(err)=>{debugLog(`Socket.io ERROR: ${err.message}`);setWsStatus('disconnected');scheduleReconnect()})}catch(e){debugLog(`Socket.io failed: ${e.message}`);setWsStatus('disconnected');scheduleReconnect()}};
 const handlePriceUpdate=(data)=>{if(!data||!data.data)return;lastAnyPriceMsgAt=Date.now();const prices=Array.isArray(data.data)?data.data:[data.data];prices.forEach(p=>{const epic=p.epic,bid=p.bid,offer=p.offer;if(!epic)return;const midPrice=(bid+offer)/2;const oldPrice=priceCache[epic];priceCache[epic]=midPrice;lastPriceUpdate[epic]=Date.now();debugLog(`Price: ${epic} = ${midPrice.toFixed(5)} (bid:${bid} offer:${offer})`);updatePriceUI(epic,oldPrice,midPrice);onPriceUpdate(epic)})};
 
-// Price smoothing - max 2 micro-fluctuations between real 5s updates
-// Only for assets that are actively trading (received update in last 10s)
-const priceDisplayed={};
-const lastSmoothUpdate={};
-const smoothUpdateCount={};
-const startPriceSmoothing=()=>{
-  setInterval(()=>{
-    Object.keys(priceCache).forEach(epic=>{
-      const target=priceCache[epic];
-      if(target===undefined)return;
-      
-      const lastReal=lastPriceUpdate[epic]||0;
-      const now=Date.now();
-      const timeSinceReal=now-lastReal;
-      
-      // Skip if no recent real update (market closed or not trading)
-      if(timeSinceReal>10000)return;
-      
-      // Reset counter when new real price arrives
-      if(!lastSmoothUpdate[epic]||lastReal>lastSmoothUpdate[epic]){
-        smoothUpdateCount[epic]=0;
-        priceDisplayed[epic]=target;
-        lastSmoothUpdate[epic]=now;
-        return; // Don't fluctuate on the same tick as real update
-      }
-      
-      // Max 2 smooth updates per 5s interval, spaced ~2s apart
-      if(smoothUpdateCount[epic]>=2)return;
-      if(timeSinceReal<1500)return; // Wait 1.5s after real update
-      if(smoothUpdateCount[epic]===1&&timeSinceReal<3500)return; // Second update at ~3.5s
-      
-      // Small realistic fluctuation (±0.002% for indices, ±0.0001% for forex)
-      const symObj=WATCHLIST.find(w=>w.api===epic);
-      const isSimple=symObj&&(symObj.type==='index'||symObj.type==='commodity'||symObj.type==='metal');
-      const volatility=isSimple?target*0.00002:target*0.000001;
-      const fluctuation=(Math.random()-0.5)*volatility*2;
-      
-      const newDisplayed=target+fluctuation;
-      priceDisplayed[epic]=newDisplayed;
-      smoothUpdateCount[epic]++;
-      lastSmoothUpdate[epic]=now;
-      
-      const formatted=isSimple?newDisplayed.toFixed(2):newDisplayed.toFixed(5).replace(/\.?0+$/,'');
-      
-      // Update watchlist row
-      document.querySelectorAll('.wl-item').forEach(row=>{
-        if(row.dataset.symbol===epic){
-          const el=row.querySelector('.wl-price');
-          if(el)el.textContent=formatted;
-        }
-      });
-      
-      // Update header if current symbol
-      if(currentSymbol&&currentSymbol.api===epic){
-        $('currentPriceValue').innerText=formatted;
-      }
-    });
-  },500); // Check every 500ms
-};
-
 const startPriceWatchdog=()=>{
   setInterval(()=>{
     if(!currentSymbol||!ws||!wsConnected) return;
@@ -1784,7 +1724,7 @@ document.addEventListener('keydown',(e)=>{if(e.key==='Escape')clearModes();if(e.
 
 window.closePosition=closePosition;window.removeOrder=removeOrder;
 console.log('AmABrocker');
-initResizable();renderAll();selectSymbol(WATCHLIST[0]);startWebSocket();startPriceWatchdog();startPriceSmoothing();
+initResizable();renderAll();selectSymbol(WATCHLIST[0]);startWebSocket();startPriceWatchdog();
 debugLog('=== INITIALIZED ===');
 </script>
 </body>
