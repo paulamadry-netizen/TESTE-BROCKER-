@@ -21,10 +21,14 @@ const FINNHUB_SYMBOLS = {
   'IX.D.HSI.IFD.IP': 'OANDA:HK33_HKD',     // Hong Kong HSI
 };
 
-// Assets that Finnhub doesn't support - we'll use mock prices
+// Assets that need mock prices (Finnhub rate limits or unsupported)
 const UNSUPPORTED_ASSETS = {
   'TM.D.ZINC.CFD.IP': { name: 'Zinc', basePrice: 2500 },
+  'TM.D.COPPER.CFD.IP': { name: 'Copper', basePrice: 4.20 },
   'CC.D.COFFEE.UMA.IP': { name: 'Coffee', basePrice: 180 },
+  'IX.D.FTSE.IFD.IP': { name: 'UK 100', basePrice: 8150 },
+  'IX.D.STX.IFD.IP': { name: 'Euro Stoxx 50', basePrice: 4950 },
+  'IX.D.HSI.IFD.IP': { name: 'Hong Kong HSI', basePrice: 19800 },
 };
 
 // Reverse mapping for quick lookup
