@@ -132,22 +132,28 @@
 
   // Firebase sync functions - available globally
   window.saveTrade = async (tradeData) => {
+    console.log('🔵 saveTrade called with:', tradeData);
+    console.log('🔵 firebaseUser:', window.firebaseUser ? window.firebaseUser.uid : 'NULL');
+    
     if (!window.firebaseUser) {
-      console.warn('No user authenticated - trade not saved');
+      console.error('❌ No user authenticated - trade not saved');
       return null;
     }
 
     try {
       const tradesRef = collection(db, 'trades');
-      const docRef = await addDoc(tradesRef, {
+      const dataToSave = {
         ...tradeData,
         userId: window.firebaseUser.uid,
         createdAt: new Date().toISOString()
-      });
+      };
+      console.log('🔵 Saving to Firestore:', dataToSave);
+      const docRef = await addDoc(tradesRef, dataToSave);
       console.log('✅ Trade saved to Firestore:', docRef.id);
       return docRef.id;
     } catch (error) {
       console.error('❌ Error saving trade:', error);
+      console.error('❌ Error details:', error.code, error.message);
       return null;
     }
   };
@@ -246,8 +252,10 @@
   window.loadUserTrades = async (userId) => {
     try {
       console.log('🔄 Loading trades for user:', userId);
+      console.log('🔄 Firestore db:', db ? 'OK' : 'NULL');
       // Simple query without orderBy to avoid index issues
       const q = query(collection(db, 'trades'), where('userId','==',userId));
+      console.log('🔄 Query created, executing...');
       const snap = await getDocs(q);
       const open = [];
       const closed = [];
