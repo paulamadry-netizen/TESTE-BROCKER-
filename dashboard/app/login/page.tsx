@@ -115,7 +115,7 @@ export default function LoginPage() {
             <p>
               Pas encore de compte ?{" "}
               <a
-                href="https://amafirm.framer.website"
+                href="https://teste-brocker.web.app"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="font-medium text-primary hover:underline"

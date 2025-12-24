@@ -163,7 +163,8 @@ body {
 
 <script type="module">
   import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-  import { getAuth, signInWithEmailAndPassword } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+  import { getAuth, signInWithCustomToken } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+  import { getFirestore, collection, query, where, getDocs } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
   const firebaseConfig = {
     apiKey: "AIzaSyBCAeaaJMMw3_Egf-6-4i63IhAUy4EyzBc",
@@ -177,6 +178,7 @@ body {
 
   const app = initializeApp(firebaseConfig);
   const auth = getAuth(app);
+  const db = getFirestore(app);
 
   const loginForm = document.getElementById('loginForm');
   const emailInput = document.getElementById('email');
@@ -196,7 +198,7 @@ body {
   loginForm.addEventListener('submit', async (e) => {
     e.preventDefault();
 
-    const email = emailInput.value.trim();
+    const email = emailInput.value.trim().toLowerCase();
     const password = passwordInput.value;
 
     if (!email || !password) {
@@ -208,26 +210,63 @@ body {
     btnText.innerHTML = '<span class="loading"></span>';
 
     try {
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      console.log('✅ Login successful:', userCredential.user.uid);
+      // Chercher l'utilisateur dans Firestore par email
+      const usersRef = collection(db, 'users');
+      const q = query(usersRef, where('email', '==', email));
+      const querySnapshot = await getDocs(q);
+
+      if (querySnapshot.empty) {
+        showError('No account found with this email');
+        loginBtn.disabled = false;
+        btnText.textContent = 'Login';
+        return;
+      }
+
+      // Vérifier le mot de passe broker
+      let userFound = false;
+      let userData = null;
+      let userId = null;
+
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        if (data.brokerPassword === password) {
+          userFound = true;
+          userData = data;
+          userId = doc.id;
+        }
+      });
+
+      if (!userFound) {
+        showError('Incorrect password');
+        loginBtn.disabled = false;
+        btnText.textContent = 'Login';
+        return;
+      }
+
+      // Vérifier que le compte est actif
+      if (userData.accountStatus !== 'active') {
+        showError('Your account is not active. Please purchase a plan first.');
+        loginBtn.disabled = false;
+        btnText.textContent = 'Login';
+        return;
+      }
+
+      console.log('✅ Broker login successful for:', email);
+
+      // Stocker les infos de session dans localStorage
+      localStorage.setItem('brokerUser', JSON.stringify({
+        uid: userId,
+        email: userData.email,
+        accountBalance: userData.accountBalance,
+        accountStatus: userData.accountStatus,
+        challengeType: userData.challengeType
+      }));
 
       // Redirect to broker
       window.location.href = '/index.html';
     } catch (error) {
       console.error('❌ Login error:', error);
-
-      let errorMsg = 'Login failed. Please try again.';
-      if (error.code === 'auth/user-not-found') {
-        errorMsg = 'No account found with this email';
-      } else if (error.code === 'auth/wrong-password') {
-        errorMsg = 'Incorrect password';
-      } else if (error.code === 'auth/invalid-email') {
-        errorMsg = 'Invalid email address';
-      } else if (error.code === 'auth/too-many-requests') {
-        errorMsg = 'Too many failed attempts. Please try again later';
-      }
-
-      showError(errorMsg);
+      showError('Login failed. Please try again.');
       loginBtn.disabled = false;
       btnText.textContent = 'Login';
     }

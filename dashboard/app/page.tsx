@@ -96,6 +96,37 @@ export default function DashboardPage() {
     );
   }
 
+  // Check if user has an active trading account
+  if (userData.accountStatus !== 'active' || !userData.accountBalance || userData.accountBalance === 0) {
+    return (
+      <div className="flex flex-col gap-6 p-8">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">{t("dashboard.title")}</h1>
+          <p className="text-muted-foreground">{t("dashboard.subtitle")}</p>
+        </div>
+        
+        <Card className="bg-gradient-to-r from-orange-500/10 to-yellow-500/10 border-orange-500/20">
+          <CardContent className="flex flex-col items-center justify-center p-12 text-center">
+            <Target className="h-16 w-16 text-orange-500 mb-4" />
+            <h2 className="text-2xl font-bold mb-2">{t("dashboard.noActiveAccount") || "Pas de compte actif"}</h2>
+            <p className="text-muted-foreground mb-6 max-w-md">
+              {t("dashboard.purchaseAccountMessage") || "Vous n'avez pas encore de compte de trading actif. Achetez un plan pour commencer à trader et accéder à votre capital."}
+            </p>
+            <a
+              href="/#pricing"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none ring-offset-background bg-primary text-primary-foreground hover:bg-primary/90 h-12 py-3 px-8"
+            >
+              <DollarSign className="mr-2 h-5 w-5" />
+              {t("dashboard.purchasePlan") || "Acheter un plan"}
+            </a>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   // Calculate stats from real trades
   const closedTrades = trades.filter(t => t.status === 'closed');
   const recentTrades = closedTrades.slice(-5).reverse(); // Last 5 trades

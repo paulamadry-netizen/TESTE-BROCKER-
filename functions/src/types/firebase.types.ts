@@ -14,6 +14,7 @@ export interface UserDocument {
   profitTarget: number;
   maxDrawdown: number;
   tradingDays: number;
+  brokerPassword?: string;
   createdAt: FieldValue;
   updatedAt: FieldValue;
   subscriptionId?: string;

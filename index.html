@@ -102,33 +102,49 @@
   // Logout function
   window.logoutBroker = async () => {
     try {
-      await signOut(auth);
-      console.log('✅ Logged out');
+      localStorage.removeItem('brokerUser');
+      console.log('✅ Logged out from broker');
       window.location.href = '/login.html';
     } catch (error) {
       console.error('❌ Logout error:', error);
     }
   };
 
-  // Listen for auth state changes
-  onAuthStateChanged(auth, async (user) => {
-    window.firebaseUser = user;
-    if (user) {
-      console.log('🔐 User authenticated:', user.uid);
-      // Load user data from Firestore
-      await window.loadUserData(user.uid);
+  // Check broker session from localStorage
+  const checkBrokerSession = async () => {
+    const brokerUserStr = localStorage.getItem('brokerUser');
+    
+    if (!brokerUserStr) {
+      console.log('⚠️ No broker session found');
+      window.location.href = '/login.html';
+      return;
+    }
+
+    try {
+      const brokerUser = JSON.parse(brokerUserStr);
+      console.log('🔐 Broker user from localStorage:', brokerUser.uid);
+      
+      // Set as firebaseUser for compatibility
+      window.firebaseUser = { uid: brokerUser.uid, email: brokerUser.email };
+      
+      // Load full user data from Firestore
+      await window.loadUserData(brokerUser.uid);
+      
       if(window.loadUserTrades){
-        await window.loadUserTrades(user.uid);
+        await window.loadUserTrades(brokerUser.uid);
       }
       if(window.loadUserOrders){
-        await window.loadUserOrders(user.uid);
+        await window.loadUserOrders(brokerUser.uid);
       }
-    } else {
-      console.log('⚠️ No user authenticated');
-      // Redirect to login
+    } catch (error) {
+      console.error('❌ Error parsing broker session:', error);
+      localStorage.removeItem('brokerUser');
       window.location.href = '/login.html';
     }
-  });
+  };
+
+  // Initialize broker session check
+  checkBrokerSession();
 
   // Firebase sync functions - available globally
   window.saveTrade = async (tradeData) => {
