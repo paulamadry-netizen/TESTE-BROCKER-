@@ -319,8 +319,9 @@ html,body{height:100%;background:linear-gradient(135deg,var(--bg-primary) 0%,var
 .price-line{position:absolute;left:0;right:0;height:2px;display:flex;align-items:center;pointer-events:none;cursor:default;transition:height 0.15s ease}
 .price-line.position-buy{background:linear-gradient(90deg,transparent 0%,rgba(16,185,129,0.4) 10%,rgba(16,185,129,0.9) 50%,rgba(16,185,129,0.4) 90%,transparent 100%)}
 .price-line.position-sell{background:linear-gradient(90deg,transparent 0%,rgba(239,68,68,0.4) 10%,rgba(239,68,68,0.9) 50%,rgba(239,68,68,0.4) 90%,transparent 100%)}
-.price-line.tp-line{background:linear-gradient(90deg,transparent 0%,rgba(34,197,94,0.3) 10%,rgba(34,197,94,0.8) 50%,rgba(34,197,94,0.3) 90%,transparent 100%);border-top:2px dashed #22c55e;pointer-events:auto;cursor:ns-resize}
-.price-line.sl-line{background:linear-gradient(90deg,transparent 0%,rgba(239,68,68,0.3) 10%,rgba(239,68,68,0.8) 50%,rgba(239,68,68,0.3) 90%,transparent 100%);border-top:2px dashed #ef4444;pointer-events:auto;cursor:ns-resize}
+.price-line.tp-line{background:linear-gradient(90deg,transparent 0%,rgba(34,197,94,0.3) 10%,rgba(34,197,94,0.8) 50%,rgba(34,197,94,0.3) 90%,transparent 100%);border-top:2px dashed #22c55e;pointer-events:none}
+.price-line.sl-line{background:linear-gradient(90deg,transparent 0%,rgba(239,68,68,0.3) 10%,rgba(239,68,68,0.8) 50%,rgba(239,68,68,0.3) 90%,transparent 100%);border-top:2px dashed #ef4444;pointer-events:none}
+.price-line.tp-line .price-line-label,.price-line.sl-line .price-line-label{pointer-events:auto;cursor:ns-resize}
 .price-line.order-buy{background:linear-gradient(90deg,transparent 0%,rgba(59,130,246,0.3) 10%,rgba(59,130,246,0.7) 50%,rgba(59,130,246,0.3) 90%,transparent 100%);border-top:2px dotted #3b82f6}
 .price-line.order-sell{background:linear-gradient(90deg,transparent 0%,rgba(249,115,22,0.3) 10%,rgba(249,115,22,0.7) 50%,rgba(249,115,22,0.3) 90%,transparent 100%);border-top:2px dotted #f97316}
 .price-line-label{position:absolute;right:5px;padding:4px 10px;border-radius:6px;font-size:11px;font-weight:700;white-space:nowrap;transform:translateY(-50%);box-shadow:0 2px 8px rgba(0,0,0,0.3)}
@@ -1337,9 +1338,10 @@ const createPriceLine=(container,y,price,className,label,id,type)=>{
   labelEl.innerText=label;
   line.appendChild(labelEl);
   
-  // Make TP/SL lines draggable
+  // Make TP/SL labels draggable (not the full line to allow chart drag)
   if(type==='tp'||type==='sl'){
-    line.addEventListener('mousedown',startDrag);
+    labelEl.addEventListener('mousedown',startDrag);
+    labelEl.dataset.lineEl='parent';
   }
   
   container.appendChild(line);
@@ -1348,7 +1350,10 @@ const createPriceLine=(container,y,price,className,label,id,type)=>{
 
 const startDrag=(e)=>{
   e.preventDefault();
-  const line=e.currentTarget;
+  e.stopPropagation();
+  // Get the parent line element if clicked on label
+  const target=e.currentTarget;
+  const line=target.classList.contains('price-line-label')?target.parentElement:target;
   const id=line.dataset.id;
   const type=line.dataset.type;
   
