@@ -292,6 +292,11 @@ io.on('connection', (socket) => {
   socket.on('subscribe', (epics) => {
     console.log(`[WebSocket] ${socket.id} subscribed to:`, epics);
     socket.join('price-updates');
+
+    // Reduce load: poll only subscribed epics
+    if (Array.isArray(epics) && epics.length > 0) {
+      priceService.addSubscribedEpics(epics);
+    }
     
     // Send current prices for subscribed epics
     if (Array.isArray(epics)) {
@@ -312,6 +317,9 @@ io.on('connection', (socket) => {
   // Handle unsubscription
   socket.on('unsubscribe', (epics) => {
     console.log(`[WebSocket] ${socket.id} unsubscribed from:`, epics);
+    if (Array.isArray(epics) && epics.length > 0) {
+      priceService.removeSubscribedEpics(epics);
+    }
   });
   
   // Handle ping for connection health

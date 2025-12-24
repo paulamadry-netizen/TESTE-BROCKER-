@@ -16,10 +16,34 @@ class PriceService {
     this._consecutiveErrors = 0;
     this._lastErrorAt = null;
     this._recoveryInProgress = false;
+    this.subscribedEpics = new Set();
     
     // Configuration
-    this.pollIntervalMs = parseInt(process.env.PRICE_POLL_INTERVAL_MS) || 500; // 500ms for faster updates
+    this.pollIntervalMs = parseInt(process.env.PRICE_POLL_INTERVAL_MS) || 1500; // safer default for IG rate limits
     this.batchSize = 50; // IG API allows up to 50 epics per request
+  }
+
+  setSubscribedEpics(epics) {
+    this.subscribedEpics.clear();
+    if (Array.isArray(epics)) {
+      for (const e of epics) {
+        if (typeof e === 'string' && e.trim()) this.subscribedEpics.add(e.trim());
+      }
+    }
+  }
+
+  addSubscribedEpics(epics) {
+    if (!Array.isArray(epics)) return;
+    for (const e of epics) {
+      if (typeof e === 'string' && e.trim()) this.subscribedEpics.add(e.trim());
+    }
+  }
+
+  removeSubscribedEpics(epics) {
+    if (!Array.isArray(epics)) return;
+    for (const e of epics) {
+      this.subscribedEpics.delete(e);
+    }
   }
 
   /**
@@ -60,7 +84,14 @@ class PriceService {
    * Fetch prices for all configured EPICS
    */
   async fetchAllPrices() {
-    const allEpics = getAllEpics();
+    // Backoff: if we are erroring repeatedly, don't hammer IG
+    if (this._consecutiveErrors >= 10) {
+      return;
+    }
+
+    const allEpics = this.subscribedEpics.size > 0
+      ? Array.from(this.subscribedEpics)
+      : getAllEpics();
     
     try {
       // Split into batches
@@ -305,6 +336,7 @@ class PriceService {
       lastUpdate: this.lastUpdate,
       cachedPricesCount: this.priceCache.size,
       pollIntervalMs: this.pollIntervalMs,
+      subscribedEpicsCount: this.subscribedEpics.size,
       consecutiveErrors: this._consecutiveErrors,
       lastErrorAt: this._lastErrorAt
     };
