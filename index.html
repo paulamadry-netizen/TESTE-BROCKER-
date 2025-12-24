@@ -209,7 +209,9 @@
 
   window.loadUserOrders = async (userId) => {
     try {
-      const q = query(collection(db, 'orders'), where('userId','==',userId), where('status','==','pending'), orderBy('createdAt','desc'));
+      console.log('🔄 Loading orders for user:', userId);
+      // Simple query without orderBy to avoid index issues
+      const q = query(collection(db, 'orders'), where('userId','==',userId), where('status','==','pending'));
       const snap = await getDocs(q);
       const pending = [];
       snap.forEach(d => {
@@ -243,7 +245,9 @@
 
   window.loadUserTrades = async (userId) => {
     try {
-      const q = query(collection(db, 'trades'), where('userId','==',userId), orderBy('openedAt','desc'));
+      console.log('🔄 Loading trades for user:', userId);
+      // Simple query without orderBy to avoid index issues
+      const q = query(collection(db, 'trades'), where('userId','==',userId));
       const snap = await getDocs(q);
       const open = [];
       const closed = [];
