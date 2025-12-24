@@ -139,12 +139,12 @@ app.get('/status', (req, res) => {
 app.post('/api/restart-polling', async (req, res) => {
   console.log('[API] Manual restart-polling requested');
   try {
-    priceService.stopPolling();
+    priceService.stop();
     await igAuthService.login();
-    priceService.startPolling(io);
-    res.json({ success: true, message: 'Polling restarted', timestamp: new Date().toISOString() });
+    priceService.start(io);
+    res.json({ success: true, message: 'Service restarted', timestamp: new Date().toISOString() });
   } catch (error) {
-    console.error('[API] Restart polling failed:', error.message);
+    console.error('[API] Restart failed:', error.message);
     res.status(500).json({ success: false, error: error.message });
   }
 });
