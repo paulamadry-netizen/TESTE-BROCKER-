@@ -9,6 +9,7 @@ class IGAuthService {
   constructor() {
     this.cst = null;
     this.xSecurityToken = null;
+    this.accountId = null;
     this.isAuthenticated = false;
     this.lastLoginTime = null;
     this.loginInProgress = null;
@@ -79,6 +80,7 @@ class IGAuthService {
         throw new Error('Missing CST or X-SECURITY-TOKEN in response headers');
       }
 
+      this.accountId = response.data.currentAccountId;
       this.isAuthenticated = true;
       this.lastLoginTime = new Date();
       
@@ -86,7 +88,7 @@ class IGAuthService {
       console.log(`[IGAuth] CST: ${this.cst.substring(0, 10)}...`);
       console.log(`[IGAuth] X-SECURITY-TOKEN: ${this.xSecurityToken.substring(0, 10)}...`);
       console.log(`[IGAuth] Account Info:`, {
-        accountId: response.data.currentAccountId,
+        accountId: this.accountId,
         accountType: response.data.accountType,
         currency: response.data.currencyIsoCode
       });
