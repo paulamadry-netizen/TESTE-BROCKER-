@@ -1310,7 +1310,10 @@ const updateChartOverlay=()=>{
     
     // TP line - if set, show at position; if not, show handle attached to entry
     const handlesContainer=$('sltpHandlesContainer');
-    if(pos.tp!==null){
+    const hasTP=pos.tp!==null&&pos.tp!==undefined&&Number.isFinite(pos.tp);
+    const hasSL=pos.sl!==null&&pos.sl!==undefined&&Number.isFinite(pos.sl);
+    
+    if(hasTP){
       const tpY=priceToY(pos.tp);
       if(tpY!==null&&tpY>=0){
         createPriceLine(overlay,tpY,pos.tp,'tp-line',`TP @ ${formatChartPrice(pos.tp)}`,pos.id,'tp');
@@ -1322,7 +1325,7 @@ const updateChartOverlay=()=>{
     }
     
     // SL line - if set, show at position; if not, show handle attached to entry
-    if(pos.sl!==null){
+    if(hasSL){
       const slY=priceToY(pos.sl);
       if(slY!==null&&slY>=0){
         createPriceLine(overlay,slY,pos.sl,'sl-line',`SL @ ${formatChartPrice(pos.sl)}`,pos.id,'sl');
