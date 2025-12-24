@@ -1344,6 +1344,8 @@ const updateChartOverlay=()=>{
 };
 
 const createSlTpHandle=(container,y,entryPrice,posId,type,side)=>{
+  console.log(`Creating ${type} handle at y=${y} for position ${posId}, container:`, container);
+  if(!container){console.error('No container for handle!');return;}
   const handle=document.createElement('div');
   handle.className=`sltp-handle ${type}-handle`;
   handle.style.top=`${y}px`;
@@ -1356,6 +1358,7 @@ const createSlTpHandle=(container,y,entryPrice,posId,type,side)=>{
   
   handle.addEventListener('mousedown',startHandleDrag);
   container.appendChild(handle);
+  console.log(`Handle created:`, handle, `Container children:`, container.children.length);
 };
 
 const startHandleDrag=(e)=>{
