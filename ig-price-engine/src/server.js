@@ -167,20 +167,35 @@ const generateMockCandles = (epic, resolution, count, currentPrice) => {
   const now = Math.floor(Date.now() / 1000);
   const intervals = { 'MINUTE': 60, 'MINUTE_5': 300, 'MINUTE_15': 900, 'HOUR': 3600, 'HOUR_4': 14400, 'DAY': 86400 };
   const interval = intervals[resolution] || 3600;
-  const volatility = currentPrice * 0.001; // 0.1% volatility
   
-  let price = currentPrice * (1 - (Math.random() * 0.02)); // Start slightly lower
+  // Determine volatility based on price magnitude (indices vs forex)
+  const isIndex = currentPrice > 100;
+  const volatility = isIndex ? currentPrice * 0.002 : currentPrice * 0.0005; // 0.2% for indices, 0.05% for forex
   
-  for (let i = count - 1; i >= 0; i--) {
+  // Work backwards from current price to generate realistic history
+  let price = currentPrice;
+  const tempCandles = [];
+  
+  for (let i = 0; i < count; i++) {
     const time = now - (i * interval);
     const change = (Math.random() - 0.5) * volatility * 2;
-    const open = price;
-    price = price + change;
-    const high = Math.max(open, price) + Math.random() * volatility * 0.5;
-    const low = Math.min(open, price) - Math.random() * volatility * 0.5;
-    candles.push({ time, open, high, low, close: price, volume: Math.floor(Math.random() * 1000) });
+    const close = price;
+    const open = price - change; // Going backwards
+    const high = Math.max(open, close) + Math.random() * volatility * 0.3;
+    const low = Math.min(open, close) - Math.random() * volatility * 0.3;
+    tempCandles.unshift({ time, open, high, low, close, volume: Math.floor(Math.random() * 1000) });
+    price = open; // Move backwards
   }
-  return candles;
+  
+  // Ensure last candle closes at current price
+  if (tempCandles.length > 0) {
+    const lastCandle = tempCandles[tempCandles.length - 1];
+    lastCandle.close = currentPrice;
+    if (currentPrice > lastCandle.high) lastCandle.high = currentPrice;
+    if (currentPrice < lastCandle.low) lastCandle.low = currentPrice;
+  }
+  
+  return tempCandles;
 };
 
 // Get historical prices for an epic
