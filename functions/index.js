@@ -1,13 +1,17 @@
 /**
  * Cloud Function Firebase pour gérer les webhooks Stripe
- * CORRECTION : Cette version passe correctement l'email du client à Firebase Auth
+ * et la surveillance des SL/TP en temps réel
  */
 
 const functions = require('firebase-functions');
 const admin = require('firebase-admin');
+const https = require('https');
 
 // Initialiser Firebase Admin
 admin.initializeApp();
+
+// URL du backend de prix
+const PRICE_ENGINE_URL = 'https://ig-price-engine-44407447466.europe-west1.run.app';
 
 // Initialiser Stripe (sera chargé au runtime avec la config)
 let stripe;
@@ -264,3 +268,282 @@ async function sendWelcomeEmail(email, resetLink, session) {
     // Ne pas bloquer si l'email échoue
   }
 }
+
+/**
+ * Fonction utilitaire pour faire une requête HTTP GET
+ */
+function httpGet(url) {
+  return new Promise((resolve, reject) => {
+    https.get(url, (res) => {
+      let data = '';
+      res.on('data', chunk => data += chunk);
+      res.on('end', () => {
+        try {
+          resolve(JSON.parse(data));
+        } catch (e) {
+          reject(new Error('Invalid JSON response'));
+        }
+      });
+    }).on('error', reject);
+  });
+}
+
+/**
+ * Surveillance des SL/TP - Exécutée toutes les minutes
+ * Vérifie les positions ouvertes et ferme celles dont le SL ou TP est touché
+ */
+exports.checkSlTp = functions.pubsub.schedule('every 1 minutes').onRun(async (context) => {
+  console.log('🔍 Vérification des SL/TP...');
+  
+  try {
+    // Récupérer toutes les positions ouvertes avec SL ou TP défini
+    const tradesSnapshot = await admin.firestore()
+      .collection('trades')
+      .where('status', '==', 'open')
+      .get();
+    
+    if (tradesSnapshot.empty) {
+      console.log('ℹ️ Aucune position ouverte');
+      return null;
+    }
+    
+    console.log(`📊 ${tradesSnapshot.size} positions ouvertes à vérifier`);
+    
+    // Grouper les positions par symbole pour optimiser les appels API
+    const positionsBySymbol = {};
+    tradesSnapshot.forEach(doc => {
+      const trade = doc.data();
+      if (!trade.symbolApi) return;
+      if (!positionsBySymbol[trade.symbolApi]) {
+        positionsBySymbol[trade.symbolApi] = [];
+      }
+      positionsBySymbol[trade.symbolApi].push({ id: doc.id, ...trade });
+    });
+    
+    // Récupérer les prix actuels
+    const symbols = Object.keys(positionsBySymbol);
+    let prices = {};
+    
+    try {
+      const pricesData = await httpGet(`${PRICE_ENGINE_URL}/api/prices`);
+      if (pricesData && pricesData.prices) {
+        prices = pricesData.prices;
+      }
+    } catch (e) {
+      console.error('❌ Erreur récupération prix:', e.message);
+      return null;
+    }
+    
+    // Vérifier chaque position
+    const closedTrades = [];
+    
+    for (const symbol of symbols) {
+      const currentPrice = prices[symbol];
+      if (!currentPrice) {
+        console.log(`⚠️ Pas de prix pour ${symbol}`);
+        continue;
+      }
+      
+      const mid = (currentPrice.bid + currentPrice.offer) / 2;
+      
+      for (const trade of positionsBySymbol[symbol]) {
+        const { id, side, takeProfit, stopLoss, entryPrice, lots, userId } = trade;
+        
+        // Vérifier si SL ou TP est défini
+        if (!takeProfit && !stopLoss) continue;
+        
+        let shouldClose = false;
+        let closeReason = '';
+        let closePrice = mid;
+        
+        if (side === 'BUY') {
+          // BUY: TP atteint si prix >= TP, SL atteint si prix <= SL
+          if (takeProfit && mid >= takeProfit) {
+            shouldClose = true;
+            closeReason = 'TP';
+            closePrice = takeProfit;
+          } else if (stopLoss && mid <= stopLoss) {
+            shouldClose = true;
+            closeReason = 'SL';
+            closePrice = stopLoss;
+          }
+        } else if (side === 'SELL') {
+          // SELL: TP atteint si prix <= TP, SL atteint si prix >= SL
+          if (takeProfit && mid <= takeProfit) {
+            shouldClose = true;
+            closeReason = 'TP';
+            closePrice = takeProfit;
+          } else if (stopLoss && mid >= stopLoss) {
+            shouldClose = true;
+            closeReason = 'SL';
+            closePrice = stopLoss;
+          }
+        }
+        
+        if (shouldClose) {
+          console.log(`🎯 ${closeReason} touché pour ${symbol} (${side}) - Prix: ${mid}, ${closeReason}: ${closeReason === 'TP' ? takeProfit : stopLoss}`);
+          
+          // Calculer le PnL
+          const pipValue = symbol.includes('JPY') ? 0.01 : 0.0001;
+          const pips = side === 'BUY' 
+            ? (closePrice - entryPrice) / pipValue 
+            : (entryPrice - closePrice) / pipValue;
+          const pnl = pips * lots * 10; // Approximation
+          
+          // Mettre à jour le trade dans Firestore
+          await admin.firestore().collection('trades').doc(id).update({
+            status: 'closed',
+            closePrice: closePrice,
+            pnl: pnl,
+            closeReason: closeReason,
+            closedAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          });
+          
+          // Mettre à jour le solde utilisateur
+          if (userId) {
+            const userRef = admin.firestore().collection('users').doc(userId);
+            const userDoc = await userRef.get();
+            if (userDoc.exists) {
+              const userData = userDoc.data();
+              const newBalance = (userData.accountBalance || 0) + pnl;
+              await userRef.update({
+                accountBalance: newBalance,
+                updatedAt: new Date().toISOString()
+              });
+              console.log(`💰 Solde mis à jour pour ${userId}: ${newBalance}`);
+            }
+          }
+          
+          closedTrades.push({ id, symbol, side, closeReason, pnl });
+        }
+      }
+    }
+    
+    if (closedTrades.length > 0) {
+      console.log(`✅ ${closedTrades.length} position(s) fermée(s) automatiquement`);
+    } else {
+      console.log('ℹ️ Aucune position à fermer');
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('❌ Erreur checkSlTp:', error);
+    return null;
+  }
+});
+
+/**
+ * Surveillance des ordres limites - Exécutée toutes les minutes
+ * Vérifie les ordres en attente et les exécute si le prix est atteint
+ */
+exports.checkPendingOrders = functions.pubsub.schedule('every 1 minutes').onRun(async (context) => {
+  console.log('🔍 Vérification des ordres en attente...');
+  
+  try {
+    // Récupérer tous les ordres en attente
+    const ordersSnapshot = await admin.firestore()
+      .collection('orders')
+      .where('status', '==', 'pending')
+      .get();
+    
+    if (ordersSnapshot.empty) {
+      console.log('ℹ️ Aucun ordre en attente');
+      return null;
+    }
+    
+    console.log(`📊 ${ordersSnapshot.size} ordres en attente à vérifier`);
+    
+    // Grouper les ordres par symbole
+    const ordersBySymbol = {};
+    ordersSnapshot.forEach(doc => {
+      const order = doc.data();
+      if (!order.symbolApi) return;
+      if (!ordersBySymbol[order.symbolApi]) {
+        ordersBySymbol[order.symbolApi] = [];
+      }
+      ordersBySymbol[order.symbolApi].push({ id: doc.id, ...order });
+    });
+    
+    // Récupérer les prix actuels
+    const symbols = Object.keys(ordersBySymbol);
+    let prices = {};
+    
+    try {
+      const pricesData = await httpGet(`${PRICE_ENGINE_URL}/api/prices`);
+      if (pricesData && pricesData.prices) {
+        prices = pricesData.prices;
+      }
+    } catch (e) {
+      console.error('❌ Erreur récupération prix:', e.message);
+      return null;
+    }
+    
+    // Vérifier chaque ordre
+    const executedOrders = [];
+    
+    for (const symbol of symbols) {
+      const currentPrice = prices[symbol];
+      if (!currentPrice) continue;
+      
+      const mid = (currentPrice.bid + currentPrice.offer) / 2;
+      
+      for (const order of ordersBySymbol[symbol]) {
+        const { id, side, orderType, price, lots, takeProfit, stopLoss, userId } = order;
+        
+        let shouldExecute = false;
+        
+        if (orderType === 'limit') {
+          // Limit: BUY si prix <= target, SELL si prix >= target
+          if (side === 'BUY' && mid <= price) shouldExecute = true;
+          if (side === 'SELL' && mid >= price) shouldExecute = true;
+        } else if (orderType === 'stop') {
+          // Stop: BUY si prix >= target, SELL si prix <= target
+          if (side === 'BUY' && mid >= price) shouldExecute = true;
+          if (side === 'SELL' && mid <= price) shouldExecute = true;
+        }
+        
+        if (shouldExecute) {
+          console.log(`🎯 Ordre ${orderType} exécuté: ${side} ${symbol} @ ${price}`);
+          
+          // Créer un nouveau trade
+          const tradeRef = await admin.firestore().collection('trades').add({
+            userId: userId,
+            symbolApi: symbol,
+            symbol: symbol,
+            side: side,
+            entryPrice: price,
+            currentPrice: mid,
+            lots: lots,
+            takeProfit: takeProfit || null,
+            stopLoss: stopLoss || null,
+            status: 'open',
+            openedAt: new Date().toISOString(),
+            createdAt: new Date().toISOString()
+          });
+          
+          // Mettre à jour l'ordre comme exécuté
+          await admin.firestore().collection('orders').doc(id).update({
+            status: 'executed',
+            executedAt: new Date().toISOString(),
+            tradeId: tradeRef.id,
+            updatedAt: new Date().toISOString()
+          });
+          
+          executedOrders.push({ id, symbol, side, price });
+        }
+      }
+    }
+    
+    if (executedOrders.length > 0) {
+      console.log(`✅ ${executedOrders.length} ordre(s) exécuté(s)`);
+    } else {
+      console.log('ℹ️ Aucun ordre à exécuter');
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('❌ Erreur checkPendingOrders:', error);
+    return null;
+  }
+});

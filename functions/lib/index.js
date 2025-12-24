@@ -40,7 +40,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.approvePayout = exports.requestPayout = exports.upgradeChallenge = exports.closeTradesBeforeWeekend = exports.calculateDrawdowns = exports.updateTradingDays = exports.closeTrade = exports.executeTrade = exports.createKycVerification = exports.stripeWebhookV2 = void 0;
+exports.checkPendingOrders = exports.checkSlTp = exports.approvePayout = exports.requestPayout = exports.upgradeChallenge = exports.closeTradesBeforeWeekend = exports.calculateDrawdowns = exports.updateTradingDays = exports.closeTrade = exports.executeTrade = exports.createKycVerification = exports.stripeWebhookV2 = void 0;
 const https_1 = require("firebase-functions/v2/https");
 const params_1 = require("firebase-functions/params");
 const admin = __importStar(require("firebase-admin"));
@@ -463,4 +463,233 @@ Object.defineProperty(exports, "closeTradesBeforeWeekend", { enumerable: true, g
 Object.defineProperty(exports, "upgradeChallenge", { enumerable: true, get: function () { return tradeSecurity_1.upgradeChallenge; } });
 Object.defineProperty(exports, "requestPayout", { enumerable: true, get: function () { return tradeSecurity_1.requestPayout; } });
 Object.defineProperty(exports, "approvePayout", { enumerable: true, get: function () { return tradeSecurity_1.approvePayout; } });
+// ==========================================
+// SURVEILLANCE SL/TP ET ORDRES EN ATTENTE
+// ==========================================
+const scheduler_1 = require("firebase-functions/v2/scheduler");
+const https = __importStar(require("https"));
+const PRICE_ENGINE_URL = 'https://ig-price-engine-44407447466.europe-west1.run.app';
+function httpGet(url) {
+    return new Promise((resolve, reject) => {
+        https.get(url, (res) => {
+            let data = '';
+            res.on('data', (chunk) => data += chunk);
+            res.on('end', () => {
+                try {
+                    resolve(JSON.parse(data));
+                }
+                catch (e) {
+                    reject(new Error('Invalid JSON response'));
+                }
+            });
+        }).on('error', reject);
+    });
+}
+/**
+ * Surveillance des SL/TP - Exécutée toutes les minutes
+ * Vérifie les positions ouvertes et ferme celles dont le SL ou TP est touché
+ */
+exports.checkSlTp = (0, scheduler_1.onSchedule)('every 1 minutes', async () => {
+    console.log('🔍 Vérification des SL/TP...');
+    try {
+        const tradesSnapshot = await admin.firestore()
+            .collection('trades')
+            .where('status', '==', 'open')
+            .get();
+        if (tradesSnapshot.empty) {
+            console.log('ℹ️ Aucune position ouverte');
+            return;
+        }
+        console.log(`📊 ${tradesSnapshot.size} positions ouvertes à vérifier`);
+        const positionsBySymbol = {};
+        tradesSnapshot.forEach(doc => {
+            const trade = doc.data();
+            if (!trade.symbolApi)
+                return;
+            if (!positionsBySymbol[trade.symbolApi]) {
+                positionsBySymbol[trade.symbolApi] = [];
+            }
+            positionsBySymbol[trade.symbolApi].push(Object.assign({ id: doc.id }, trade));
+        });
+        let prices = {};
+        try {
+            const pricesData = await httpGet(`${PRICE_ENGINE_URL}/api/prices`);
+            if (pricesData && pricesData.prices) {
+                prices = pricesData.prices;
+            }
+        }
+        catch (e) {
+            console.error('❌ Erreur récupération prix:', e.message);
+            return;
+        }
+        const closedTrades = [];
+        for (const symbol of Object.keys(positionsBySymbol)) {
+            const currentPrice = prices[symbol];
+            if (!currentPrice) {
+                console.log(`⚠️ Pas de prix pour ${symbol}`);
+                continue;
+            }
+            const mid = (currentPrice.bid + currentPrice.offer) / 2;
+            for (const trade of positionsBySymbol[symbol]) {
+                const { id, side, takeProfit, stopLoss, entryPrice, lots, userId } = trade;
+                if (!takeProfit && !stopLoss)
+                    continue;
+                let shouldClose = false;
+                let closeReason = '';
+                let closePrice = mid;
+                if (side === 'BUY') {
+                    if (takeProfit && mid >= takeProfit) {
+                        shouldClose = true;
+                        closeReason = 'TP';
+                        closePrice = takeProfit;
+                    }
+                    else if (stopLoss && mid <= stopLoss) {
+                        shouldClose = true;
+                        closeReason = 'SL';
+                        closePrice = stopLoss;
+                    }
+                }
+                else if (side === 'SELL') {
+                    if (takeProfit && mid <= takeProfit) {
+                        shouldClose = true;
+                        closeReason = 'TP';
+                        closePrice = takeProfit;
+                    }
+                    else if (stopLoss && mid >= stopLoss) {
+                        shouldClose = true;
+                        closeReason = 'SL';
+                        closePrice = stopLoss;
+                    }
+                }
+                if (shouldClose) {
+                    console.log(`🎯 ${closeReason} touché pour ${symbol} (${side}) - Prix: ${mid}`);
+                    const pipValue = symbol.includes('JPY') ? 0.01 : 0.0001;
+                    const pips = side === 'BUY'
+                        ? (closePrice - entryPrice) / pipValue
+                        : (entryPrice - closePrice) / pipValue;
+                    const pnl = pips * lots * 10;
+                    await admin.firestore().collection('trades').doc(id).update({
+                        status: 'closed',
+                        closePrice: closePrice,
+                        pnl: pnl,
+                        closeReason: closeReason,
+                        closedAt: new Date().toISOString(),
+                        updatedAt: new Date().toISOString()
+                    });
+                    if (userId) {
+                        const userRef = admin.firestore().collection('users').doc(userId);
+                        const userDoc = await userRef.get();
+                        if (userDoc.exists) {
+                            const userData = userDoc.data();
+                            const newBalance = ((userData === null || userData === void 0 ? void 0 : userData.accountBalance) || 0) + pnl;
+                            await userRef.update({
+                                accountBalance: newBalance,
+                                updatedAt: new Date().toISOString()
+                            });
+                            console.log(`💰 Solde mis à jour pour ${userId}: ${newBalance}`);
+                        }
+                    }
+                    closedTrades.push({ id, symbol, side, closeReason, pnl });
+                }
+            }
+        }
+        if (closedTrades.length > 0) {
+            console.log(`✅ ${closedTrades.length} position(s) fermée(s) automatiquement`);
+        }
+    }
+    catch (error) {
+        console.error('❌ Erreur checkSlTp:', error);
+    }
+});
+/**
+ * Surveillance des ordres limites - Exécutée toutes les minutes
+ */
+exports.checkPendingOrders = (0, scheduler_1.onSchedule)('every 1 minutes', async () => {
+    console.log('🔍 Vérification des ordres en attente...');
+    try {
+        const ordersSnapshot = await admin.firestore()
+            .collection('orders')
+            .where('status', '==', 'pending')
+            .get();
+        if (ordersSnapshot.empty) {
+            console.log('ℹ️ Aucun ordre en attente');
+            return;
+        }
+        console.log(`📊 ${ordersSnapshot.size} ordres en attente à vérifier`);
+        const ordersBySymbol = {};
+        ordersSnapshot.forEach(doc => {
+            const order = doc.data();
+            if (!order.symbolApi)
+                return;
+            if (!ordersBySymbol[order.symbolApi]) {
+                ordersBySymbol[order.symbolApi] = [];
+            }
+            ordersBySymbol[order.symbolApi].push(Object.assign({ id: doc.id }, order));
+        });
+        let prices = {};
+        try {
+            const pricesData = await httpGet(`${PRICE_ENGINE_URL}/api/prices`);
+            if (pricesData && pricesData.prices) {
+                prices = pricesData.prices;
+            }
+        }
+        catch (e) {
+            console.error('❌ Erreur récupération prix:', e.message);
+            return;
+        }
+        const executedOrders = [];
+        for (const symbol of Object.keys(ordersBySymbol)) {
+            const currentPrice = prices[symbol];
+            if (!currentPrice)
+                continue;
+            const mid = (currentPrice.bid + currentPrice.offer) / 2;
+            for (const order of ordersBySymbol[symbol]) {
+                const { id, side, orderType, price, lots, takeProfit, stopLoss, userId } = order;
+                let shouldExecute = false;
+                if (orderType === 'limit') {
+                    if (side === 'BUY' && mid <= price)
+                        shouldExecute = true;
+                    if (side === 'SELL' && mid >= price)
+                        shouldExecute = true;
+                }
+                else if (orderType === 'stop') {
+                    if (side === 'BUY' && mid >= price)
+                        shouldExecute = true;
+                    if (side === 'SELL' && mid <= price)
+                        shouldExecute = true;
+                }
+                if (shouldExecute) {
+                    console.log(`🎯 Ordre ${orderType} exécuté: ${side} ${symbol} @ ${price}`);
+                    const tradeRef = await admin.firestore().collection('trades').add({
+                        userId: userId,
+                        symbolApi: symbol,
+                        symbol: symbol,
+                        side: side,
+                        entryPrice: price,
+                        currentPrice: mid,
+                        lots: lots,
+                        takeProfit: takeProfit || null,
+                        stopLoss: stopLoss || null,
+                        status: 'open',
+                        openedAt: new Date().toISOString(),
+                        createdAt: new Date().toISOString()
+                    });
+                    await admin.firestore().collection('orders').doc(id).update({
+                        status: 'executed',
+                        executedAt: new Date().toISOString(),
+                        tradeId: tradeRef.id,
+                        updatedAt: new Date().toISOString()
+                    });
+                    executedOrders.push({ id, symbol, side, price });
+                }
+            }
+        }
+        if (executedOrders.length > 0) {
+            console.log(`✅ ${executedOrders.length} ordre(s) exécuté(s)`);
+        }
+    }
+    catch (error) {
+        console.error('❌ Erreur checkPendingOrders:', error);
+    }
+});
 //# sourceMappingURL=index.js.map
