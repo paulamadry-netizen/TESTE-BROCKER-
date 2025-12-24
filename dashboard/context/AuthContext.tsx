@@ -40,7 +40,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signIn = async (email: string, password: string) => {
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+
+      await userCredential.user.reload();
+      if (!userCredential.user.emailVerified) {
+        await firebaseSignOut(auth);
+        throw new Error("Email non vérifié. Vérifie ta boîte mail puis reconnecte-toi.");
+      }
       router.push("/");
     } catch (error: any) {
       throw new Error(error.message || "Failed to sign in");

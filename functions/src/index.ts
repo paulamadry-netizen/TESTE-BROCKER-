@@ -7,7 +7,6 @@ import { onRequest, onCall, HttpsError } from 'firebase-functions/v2/https';
 import { defineSecret } from 'firebase-functions/params';
 import * as admin from 'firebase-admin';
 import Stripe from 'stripe';
-import { Resend } from 'resend';
 import { StripeCheckoutSession, StripeSubscription } from './types/stripe.types';
 import { UserDocument, EmailTemplate } from './types/firebase.types';
 
@@ -17,14 +16,13 @@ admin.initializeApp();
 // Définir les secrets
 const stripeSecretKey = defineSecret('STRIPE_SECRET_KEY');
 const stripeWebhookSecret = defineSecret('STRIPE_WEBHOOK_SECRET');
-const resendApiKey = defineSecret('RESEND_API_KEY');
 
 /**
  * Webhook Stripe - Écoute les événements de paiement (v2 with Secrets)
  * URL du webhook : https://us-central1-teste-brocker.cloudfunctions.net/stripeWebhookV2
  */
 export const stripeWebhookV2 = onRequest(
-  { secrets: [stripeSecretKey, stripeWebhookSecret, resendApiKey] },
+  { secrets: [stripeSecretKey, stripeWebhookSecret] },
   async (req, res): Promise<void> => {
     console.log('🔍 Webhook Stripe appelé (v2 with secrets)');
 
@@ -499,20 +497,15 @@ async function sendWelcomeEmail(
 </html>`;
 
   try {
-    const resend = new Resend(resendApiKey.value());
-    
-    const { data, error } = await resend.emails.send({
-      from: 'AMA Firm <onboarding@resend.dev>',
+    await admin.firestore().collection('mail').add({
       to: email,
-      subject: `🎉 Bienvenue chez AMA Firm - Votre ${planName} est activé !`,
-      html: htmlContent
+      message: {
+        subject: `🎉 Bienvenue chez AMA Firm - Votre ${planName} est activé !`,
+        text: `Bienvenue chez AMA Firm !\n\nEmail: ${email}\nMot de passe: ${password}\n\nAccès: https://teste-brocker.web.app/login.html`,
+        html: htmlContent
+      }
     });
-    
-    if (error) {
-      console.error('❌ Erreur Resend:', error);
-    } else {
-      console.log('✅ Email envoyé via Resend:', data?.id);
-    }
+    console.log('✅ Email ajouté à la file Firestore mail');
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     console.error('⚠️ Impossible d\'envoyer l\'email:', errorMessage);

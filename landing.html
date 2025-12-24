@@ -1508,6 +1508,25 @@
         console.log('Attempting login for:', email);
         const userCredential = await signInWithEmailAndPassword(auth, email, password);
         console.log('Login successful:', userCredential.user.uid);
+
+        // Bloquer si email non vérifié
+        await userCredential.user.reload();
+        if (!userCredential.user.emailVerified) {
+          try {
+            await sendEmailVerification(userCredential.user, {
+              url: 'https://teste-brocker.web.app/landing.html',
+              handleCodeInApp: false
+            });
+          } catch (emailError) {
+            console.warn('Resend verification error:', emailError);
+          }
+
+          await signOut(auth);
+          errorDiv.textContent = "Email non vérifié. Un email de vérification vient d'être renvoyé.";
+          errorDiv.classList.add('visible');
+          return;
+        }
+
         closeModal();
         showToast('Connexion réussie !', 'success');
       } catch (error) {

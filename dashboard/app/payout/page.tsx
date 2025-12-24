@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { doc, getDoc, collection, query, where, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase/config";
 import { useAuth } from "@/context/AuthContext";
+import { useAccount } from "@/context/AccountContext";
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { DollarSign, AlertCircle, Loader2, CheckCircle, Shield } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -27,6 +28,7 @@ interface UserData {
 
 export default function PayoutPage() {
   const { user, loading: authLoading } = useAuth();
+  const { activeAccount, loading: accountLoading } = useAccount();
   const [userData, setUserData] = useState<UserData | null>(null);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
@@ -35,7 +37,7 @@ export default function PayoutPage() {
 
   useEffect(() => {
     async function loadUserData() {
-      if (!user) {
+      if (!user || !activeAccount) {
         setLoading(false);
         return;
       }
@@ -44,14 +46,24 @@ export default function PayoutPage() {
         const userDocRef = doc(db, "users", user.uid);
         const userDocSnap = await getDoc(userDocRef);
 
-        if (userDocSnap.exists()) {
-          const data = userDocSnap.data() as UserData;
-          setUserData(data);
+        const baseData: UserData = {
+          email: user.email || '',
+          accountBalance: activeAccount.accountBalance,
+          initialBalance: activeAccount.initialBalance || activeAccount.accountBalance,
+          accountType: 'challenge',
+          accountStatus: activeAccount.accountStatus,
+          tradingDays: activeAccount.tradingDays || 0,
+        };
 
-          // Charger les infos d'éligibilité si c'est un compte financé
-          if (data.accountType === 'funded') {
-            await checkEligibility(data);
-          }
+        const mergedData: UserData = userDocSnap.exists()
+          ? ({ ...baseData, ...(userDocSnap.data() as any) } as UserData)
+          : baseData;
+
+        setUserData(mergedData);
+
+        // Charger les infos d'éligibilité si c'est un compte financé
+        if (mergedData.accountType === 'funded') {
+          await checkEligibility(mergedData);
         }
       } catch (error) {
         console.error("Error loading user data:", error);
@@ -60,15 +72,19 @@ export default function PayoutPage() {
       }
     }
 
-    if (!authLoading) {
+    if (!authLoading && !accountLoading) {
       loadUserData();
     }
-  }, [user, authLoading]);
+  }, [user, authLoading, activeAccount, accountLoading]);
 
   const checkEligibility = async (data: UserData) => {
     try {
       const payoutsReceived = data.payoutsReceived || 0;
-      const fundedAt = data.fundedAt?.toDate ? data.fundedAt.toDate() : new Date(data.fundedAt);
+      const fundedAt = data.fundedAt?.toDate ? data.fundedAt.toDate() : (data.fundedAt ? new Date(data.fundedAt) : null);
+      if (!fundedAt) {
+        setEligibilityInfo(null);
+        return;
+      }
       const daysSinceFunding = Math.floor((Date.now() - fundedAt.getTime()) / (1000 * 60 * 60 * 24));
 
       const initialBalance = data.initialFundedBalance || data.initialBalance;
@@ -173,7 +189,7 @@ export default function PayoutPage() {
     }
   };
 
-  if (loading || authLoading) {
+  if (loading || authLoading || accountLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <Loader2 className="h-8 w-8 animate-spin" />

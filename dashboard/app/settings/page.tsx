@@ -5,6 +5,7 @@ import { doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase/config";
 import { useAuth } from "@/context/AuthContext";
 import { useLanguage } from "@/context/LanguageContext";
+import { useAccount } from "@/context/AccountContext";
 import { User, Bell, Shield, Palette, Loader2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -22,6 +23,7 @@ interface UserData {
 export default function SettingsPage() {
   const { user, loading: authLoading } = useAuth();
   const { t } = useLanguage();
+  const { activeAccount, loading: accountLoading } = useAccount();
   const [userData, setUserData] = useState<UserData | null>(null);
   const [loading, setLoading] = useState(true);
   const [notifications, setNotifications] = useState({
@@ -33,7 +35,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     async function loadUserData() {
-      if (!user) {
+      if (!user || !activeAccount) {
         setLoading(false);
         return;
       }
@@ -43,7 +45,18 @@ export default function SettingsPage() {
         const userDocSnap = await getDoc(userDocRef);
 
         if (userDocSnap.exists()) {
-          setUserData(userDocSnap.data() as UserData);
+          setUserData({
+            email: user.email || '',
+            accountStatus: activeAccount.accountStatus,
+            createdAt: (userDocSnap.data() as any).createdAt,
+            ...(userDocSnap.data() as any),
+          } as UserData);
+        } else {
+          setUserData({
+            email: user.email || '',
+            accountStatus: activeAccount.accountStatus,
+            createdAt: null,
+          } as UserData);
         }
       } catch (error) {
         console.error("Error loading user data:", error);
@@ -52,12 +65,12 @@ export default function SettingsPage() {
       }
     }
 
-    if (!authLoading) {
+    if (!authLoading && !accountLoading) {
       loadUserData();
     }
-  }, [user, authLoading]);
+  }, [user, authLoading, activeAccount, accountLoading]);
 
-  if (loading || authLoading) {
+  if (loading || authLoading || accountLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <Loader2 className="h-8 w-8 animate-spin" />

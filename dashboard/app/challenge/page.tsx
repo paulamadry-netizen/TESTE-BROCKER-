@@ -1,60 +1,19 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { doc, getDoc } from "firebase/firestore";
-import { db } from "@/lib/firebase/config";
 import { useAuth } from "@/context/AuthContext";
 import { useLanguage } from "@/context/LanguageContext";
+import { useAccount } from "@/context/AccountContext";
 import { CheckCircle2, XCircle, Clock, Target, TrendingUp, AlertTriangle, Loader2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency } from "@/lib/utils";
 
-interface UserData {
-  email: string;
-  accountBalance: number;
-  accountStatus: string;
-  challengeType: string;
-  profitTarget: number;
-  maxDrawdown: number;
-  tradingDays: number;
-  stripeCustomerId: string;
-  stripeSessionId?: string;
-}
-
 export default function ChallengePage() {
   const { user, loading: authLoading } = useAuth();
   const { t } = useLanguage();
-  const [userData, setUserData] = useState<UserData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { activeAccount, loading: accountLoading } = useAccount();
 
-  useEffect(() => {
-    async function loadUserData() {
-      if (!user) {
-        setLoading(false);
-        return;
-      }
-
-      try {
-        const userDocRef = doc(db, "users", user.uid);
-        const userDocSnap = await getDoc(userDocRef);
-
-        if (userDocSnap.exists()) {
-          setUserData(userDocSnap.data() as UserData);
-        }
-      } catch (error) {
-        console.error("Error loading user data:", error);
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    if (!authLoading) {
-      loadUserData();
-    }
-  }, [user, authLoading]);
-
-  if (loading || authLoading) {
+  if (authLoading || accountLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <Loader2 className="h-8 w-8 animate-spin" />
@@ -62,7 +21,7 @@ export default function ChallengePage() {
     );
   }
 
-  if (!userData) {
+  if (!user || !activeAccount) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <p className="text-muted-foreground">{t("common.noData")}</p>
@@ -70,11 +29,11 @@ export default function ChallengePage() {
     );
   }
 
-  const initialBalance = userData.accountBalance;
-  const currentBalance = userData.accountBalance; // TODO: Update with real-time balance
+  const initialBalance = activeAccount.initialBalance || activeAccount.accountBalance;
+  const currentBalance = activeAccount.accountBalance;
   const profitLoss = currentBalance - initialBalance;
-  const profitTargetAmount = (initialBalance * userData.profitTarget) / 100;
-  const maxDrawdownAmount = (initialBalance * userData.maxDrawdown) / 100;
+  const profitTargetAmount = (initialBalance * (activeAccount.profitTarget || 10)) / 100;
+  const maxDrawdownAmount = (initialBalance * (activeAccount.maxDrawdown || 8)) / 100;
   const progressPercentage = profitTargetAmount > 0 ? (profitLoss / profitTargetAmount) * 100 : 0;
 
   // Calculate daily loss limit (3% of initial balance)
@@ -85,7 +44,7 @@ export default function ChallengePage() {
   const challengeRules = [
     {
       name: t("challenge.profitObjective"),
-      description: `${t("challenge.reachProfit")} ${userData.profitTarget}% ${t("challenge.ofProfit")} (${formatCurrency(profitTargetAmount)})`,
+      description: `${t("challenge.reachProfit")} ${activeAccount.profitTarget || 10}% ${t("challenge.ofProfit")} (${formatCurrency(profitTargetAmount)})`,
       status: profitLoss >= profitTargetAmount ? "PASSED" : profitLoss > 0 ? "IN_PROGRESS" : "PENDING",
       current: profitLoss,
       target: profitTargetAmount,
@@ -101,7 +60,7 @@ export default function ChallengePage() {
     },
     {
       name: t("challenge.maxTotalLoss"),
-      description: `${t("challenge.maxTotalDrawdown")} ${userData.maxDrawdown}% ${t("challenge.ofTotalLoss")} (${formatCurrency(totalLossLimit)})`,
+      description: `${t("challenge.maxTotalDrawdown")} ${activeAccount.maxDrawdown || 8}% ${t("challenge.ofTotalLoss")} (${formatCurrency(totalLossLimit)})`,
       status: "PASSED",
       current: Math.abs(Math.min(profitLoss, 0)),
       target: totalLossLimit,
@@ -110,8 +69,8 @@ export default function ChallengePage() {
     {
       name: t("challenge.minTradingDays"),
       description: t("challenge.tradeAtLeast"),
-      status: userData.tradingDays >= 3 ? "PASSED" : userData.tradingDays > 0 ? "IN_PROGRESS" : "PENDING",
-      current: userData.tradingDays,
+      status: (activeAccount.tradingDays || 0) >= 3 ? "PASSED" : (activeAccount.tradingDays || 0) > 0 ? "IN_PROGRESS" : "PENDING",
+      current: activeAccount.tradingDays || 0,
       target: 3,
       critical: false,
     },
@@ -152,10 +111,10 @@ export default function ChallengePage() {
               {t("challenge.overview")}
             </CardTitle>
             <Badge
-              variant={userData.accountStatus === "active" ? "success" : "destructive"}
+              variant={activeAccount.accountStatus === "active" ? "success" : "destructive"}
               className="text-sm"
             >
-              {t(`status.${userData.accountStatus}`)}
+              {t(`status.${activeAccount.accountStatus}`)}
             </Badge>
           </div>
         </CardHeader>
@@ -352,10 +311,10 @@ export default function ChallengePage() {
               </div>
               <div className="text-right">
                 <p className="text-2xl font-bold">
-                  {userData.tradingDays} / 30
+                  {activeAccount.tradingDays || 0} / 30
                 </p>
-                <Badge variant={userData.tradingDays >= 5 ? "success" : "secondary"}>
-                  {userData.tradingDays >= 5 ? t("challenge.requirementMet") : t("challenge.inProgress")}
+                <Badge variant={(activeAccount.tradingDays || 0) >= 5 ? "success" : "secondary"}>
+                  {(activeAccount.tradingDays || 0) >= 5 ? t("challenge.requirementMet") : t("challenge.inProgress")}
                 </Badge>
               </div>
             </div>
@@ -363,7 +322,7 @@ export default function ChallengePage() {
               <div
                 className="h-full bg-blue-500 transition-all"
                 style={{
-                  width: `${(userData.tradingDays / 30) * 100}%`,
+                  width: `${((activeAccount.tradingDays || 0) / 30) * 100}%`,
                 }}
               />
             </div>

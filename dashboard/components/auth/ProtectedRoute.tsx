@@ -21,6 +21,12 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
     }
   }, [mounted, user, loading, router, pathname]);
 
+  useEffect(() => {
+    if (mounted && !loading && user && !user.emailVerified && pathname !== "/login") {
+      router.push("/login?verify=1");
+    }
+  }, [mounted, user, loading, router, pathname]);
+
   // Prevent hydration mismatch by showing nothing until mounted
   if (!mounted || loading) {
     return (
@@ -34,6 +40,10 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
   }
 
   if (!user && pathname !== "/login") {
+    return null;
+  }
+
+  if (user && !user.emailVerified && pathname !== "/login") {
     return null;
   }
 

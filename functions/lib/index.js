@@ -45,18 +45,16 @@ const https_1 = require("firebase-functions/v2/https");
 const params_1 = require("firebase-functions/params");
 const admin = __importStar(require("firebase-admin"));
 const stripe_1 = __importDefault(require("stripe"));
-const resend_1 = require("resend");
 // Initialiser Firebase Admin
 admin.initializeApp();
 // Définir les secrets
 const stripeSecretKey = (0, params_1.defineSecret)('STRIPE_SECRET_KEY');
 const stripeWebhookSecret = (0, params_1.defineSecret)('STRIPE_WEBHOOK_SECRET');
-const resendApiKey = (0, params_1.defineSecret)('RESEND_API_KEY');
 /**
  * Webhook Stripe - Écoute les événements de paiement (v2 with Secrets)
  * URL du webhook : https://us-central1-teste-brocker.cloudfunctions.net/stripeWebhookV2
  */
-exports.stripeWebhookV2 = (0, https_1.onRequest)({ secrets: [stripeSecretKey, stripeWebhookSecret, resendApiKey] }, async (req, res) => {
+exports.stripeWebhookV2 = (0, https_1.onRequest)({ secrets: [stripeSecretKey, stripeWebhookSecret] }, async (req, res) => {
     console.log('🔍 Webhook Stripe appelé (v2 with secrets)');
     // Initialiser Stripe avec le secret
     const stripe = new stripe_1.default(stripeSecretKey.value(), {
@@ -458,19 +456,15 @@ async function sendWelcomeEmail(email, password, session, accountName) {
 </body>
 </html>`;
     try {
-        const resend = new resend_1.Resend(resendApiKey.value());
-        const { data, error } = await resend.emails.send({
-            from: 'AMA Firm <onboarding@resend.dev>',
+        await admin.firestore().collection('mail').add({
             to: email,
-            subject: `🎉 Bienvenue chez AMA Firm - Votre ${planName} est activé !`,
-            html: htmlContent
+            message: {
+                subject: `🎉 Bienvenue chez AMA Firm - Votre ${planName} est activé !`,
+                text: `Bienvenue chez AMA Firm !\n\nEmail: ${email}\nMot de passe: ${password}\n\nAccès: https://teste-brocker.web.app/login.html`,
+                html: htmlContent
+            }
         });
-        if (error) {
-            console.error('❌ Erreur Resend:', error);
-        }
-        else {
-            console.log('✅ Email envoyé via Resend:', data === null || data === void 0 ? void 0 : data.id);
-        }
+        console.log('✅ Email ajouté à la file Firestore mail');
     }
     catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
