@@ -325,6 +325,9 @@ html,body{height:100%;background:linear-gradient(135deg,var(--bg-primary) 0%,var
 .price-line.tp-line{background:linear-gradient(90deg,transparent 0%,rgba(34,197,94,0.3) 10%,rgba(34,197,94,0.8) 50%,rgba(34,197,94,0.3) 90%,transparent 100%);border-top:2px dashed #22c55e;pointer-events:none}
 .price-line.sl-line{background:linear-gradient(90deg,transparent 0%,rgba(239,68,68,0.3) 10%,rgba(239,68,68,0.8) 50%,rgba(239,68,68,0.3) 90%,transparent 100%);border-top:2px dashed #ef4444;pointer-events:none}
 .price-line.tp-line .price-line-label,.price-line.sl-line .price-line-label{pointer-events:auto;cursor:ns-resize}
+.price-line-delete,.price-line-close{position:absolute;right:90px;width:20px;height:20px;border-radius:50%;background:rgba(239,68,68,0.9);color:#fff;font-size:14px;font-weight:700;display:flex;align-items:center;justify-content:center;cursor:pointer;pointer-events:auto;transform:translateY(-50%);opacity:0.8;transition:all 0.2s}
+.price-line-delete:hover,.price-line-close:hover{opacity:1;transform:translateY(-50%) scale(1.2);background:#ef4444}
+.price-line-close{background:rgba(239,68,68,0.9)}
 .price-line.order-buy{background:linear-gradient(90deg,transparent 0%,rgba(59,130,246,0.3) 10%,rgba(59,130,246,0.7) 50%,rgba(59,130,246,0.3) 90%,transparent 100%);border-top:2px dotted #3b82f6}
 .price-line.order-sell{background:linear-gradient(90deg,transparent 0%,rgba(249,115,22,0.3) 10%,rgba(249,115,22,0.7) 50%,rgba(249,115,22,0.3) 90%,transparent 100%);border-top:2px dotted #f97316}
 .price-line-label{position:absolute;right:5px;padding:4px 10px;border-radius:6px;font-size:11px;font-weight:700;white-space:nowrap;transform:translateY(-50%);box-shadow:0 2px 8px rgba(0,0,0,0.3)}
@@ -1298,11 +1301,9 @@ const updateChartOverlay=()=>{
   // Get current symbol positions
   const symbolPositions=positions.filter(p=>p.symbol.api===currentSymbol.api);
   const symbolOrders=orders.filter(o=>o.symbol===currentSymbol.api);
-  console.log(`updateChartOverlay: ${symbolPositions.length} positions for ${currentSymbol?.api}, handlesContainer:`, $('sltpHandlesContainer'));
   
   // Draw position entry lines with attached SL/TP handles
   symbolPositions.forEach(pos=>{
-    console.log(`Position ${pos.id}: tp=${pos.tp}, sl=${pos.sl}, hasTP=${pos.tp!==null&&pos.tp!==undefined&&Number.isFinite(pos.tp)}, hasSL=${pos.sl!==null&&pos.sl!==undefined&&Number.isFinite(pos.sl)}`);
     const y=priceToY(pos.entry);
     if(y===null||y<0)return;
     
@@ -1349,8 +1350,7 @@ const updateChartOverlay=()=>{
 };
 
 const createSlTpHandle=(container,y,entryPrice,posId,type,side)=>{
-  console.log(`Creating ${type} handle at y=${y} for position ${posId}, container:`, container);
-  if(!container){console.error('No container for handle!');return;}
+  if(!container)return;
   const handle=document.createElement('div');
   handle.className=`sltp-handle ${type}-handle`;
   handle.style.top=`${y}px`;
@@ -1363,7 +1363,6 @@ const createSlTpHandle=(container,y,entryPrice,posId,type,side)=>{
   
   handle.addEventListener('mousedown',startHandleDrag);
   container.appendChild(handle);
-  console.log(`Handle created:`, handle, `Container children:`, container.children.length);
 };
 
 const startHandleDrag=(e)=>{
@@ -1429,14 +1428,51 @@ const createPriceLine=(container,y,price,className,label,id,type)=>{
   labelEl.innerText=label;
   line.appendChild(labelEl);
   
-  // Make TP/SL labels draggable (not the full line to allow chart drag)
+  // Make TP/SL labels draggable and add delete button
   if(type==='tp'||type==='sl'){
     labelEl.addEventListener('mousedown',startDrag);
     labelEl.dataset.lineEl='parent';
+    // Add delete button for TP/SL
+    const deleteBtn=document.createElement('span');
+    deleteBtn.className='price-line-delete';
+    deleteBtn.innerText='×';
+    deleteBtn.title=`Supprimer ${type.toUpperCase()}`;
+    deleteBtn.addEventListener('click',(e)=>{
+      e.stopPropagation();
+      removeSlTp(id,type);
+    });
+    line.appendChild(deleteBtn);
+  }
+  
+  // Add close button for entry line
+  if(type==='entry'){
+    const closeBtn=document.createElement('span');
+    closeBtn.className='price-line-close';
+    closeBtn.innerText='×';
+    closeBtn.title='Fermer la position';
+    closeBtn.addEventListener('click',(e)=>{
+      e.stopPropagation();
+      closePosition(id);
+    });
+    line.appendChild(closeBtn);
   }
   
   container.appendChild(line);
   chartPriceLines.push({element:line,id,type,price});
+};
+
+const removeSlTp=(posId,type)=>{
+  const pos=positions.find(p=>p.id===posId);
+  if(!pos)return;
+  if(type==='tp') pos.tp=null;
+  if(type==='sl') pos.sl=null;
+  renderPositions();
+  if(pos.firestoreId&&window.updateTrade){
+    const updateData={takeProfit:pos.tp,stopLoss:pos.sl,currentPrice:pos.current||priceCache[pos.symbol.api]||pos.entry};
+    window.updateTrade(pos.firestoreId,updateData);
+  }
+  showToast(`${type.toUpperCase()} supprime`,'info');
+  updateChartOverlay();
 };
 
 const startDrag=(e)=>{
