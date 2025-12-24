@@ -1298,9 +1298,11 @@ const updateChartOverlay=()=>{
   // Get current symbol positions
   const symbolPositions=positions.filter(p=>p.symbol.api===currentSymbol.api);
   const symbolOrders=orders.filter(o=>o.symbol===currentSymbol.api);
+  console.log(`updateChartOverlay: ${symbolPositions.length} positions for ${currentSymbol?.api}, handlesContainer:`, $('sltpHandlesContainer'));
   
   // Draw position entry lines with attached SL/TP handles
   symbolPositions.forEach(pos=>{
+    console.log(`Position ${pos.id}: tp=${pos.tp}, sl=${pos.sl}, hasTP=${pos.tp!==null&&pos.tp!==undefined&&Number.isFinite(pos.tp)}, hasSL=${pos.sl!==null&&pos.sl!==undefined&&Number.isFinite(pos.sl)}`);
     const y=priceToY(pos.entry);
     if(y===null||y<0)return;
     
