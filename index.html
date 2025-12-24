@@ -1504,13 +1504,16 @@ const startPriceWatchdog=()=>{
   },2000);
 };
 const updatePriceUI=(symbol,oldPrice,newPrice)=>{
-  const symObj=WATCHLIST.find(w=>w.api===symbol);
+  const symObj=WATCHLIST.find(w=>w.api===symbol)||WATCHLIST.find(w=>w.epic===symbol);
   const isSimple=!!(symObj&&(symObj.type==='etf'||symObj.type==='index'||symObj.type==='commodity'||symObj.type==='metal'));
   const formatted=isSimple?Number(newPrice).toFixed(2):Number(newPrice).toFixed(5).replace(/\.?0+$/,'');
+  const targetKey=symObj?symObj.api:symbol;
 
   let didUpdate=false;
-  document.querySelectorAll('.wl-item').forEach((row)=>{
-    if(row&&row.dataset&&row.dataset.symbol===symbol){
+  const rows=document.querySelectorAll('.wl-item');
+  rows.forEach((row)=>{
+    const ds=row.dataset.symbol;
+    if(ds===targetKey||ds===symbol){
       const el=row.querySelector('.wl-price');
       if(!el) return;
       el.innerText=formatted;
@@ -1521,8 +1524,8 @@ const updatePriceUI=(symbol,oldPrice,newPrice)=>{
       }
     }
   });
-  if(!didUpdate){
-    debugLog(`updatePriceUI: watchlist row not found for ${symbol}`);
+  if(!didUpdate&&rows.length>0){
+    debugLog(`updatePriceUI: no match for ${symbol} (rows=${rows.length}, first ds=${rows[0]?.dataset?.symbol})`);
   }
 
   if(symbol===currentSymbol.api){
