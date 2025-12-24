@@ -18,8 +18,9 @@ class PriceService {
     this._recoveryInProgress = false;
     this.subscribedEpics = new Set();
     
-    // Configuration - IG API has strict rate limits
-    this.pollIntervalMs = parseInt(process.env.PRICE_POLL_INTERVAL_MS) || 5000; // 5 seconds default
+    // Configuration - IG API allows ~60 requests/min for non-trading
+    // With batch requests (all epics in 1 call), we can poll every 2-3 seconds safely
+    this.pollIntervalMs = parseInt(process.env.PRICE_POLL_INTERVAL_MS) || 2500; // 2.5 seconds default
     this.batchSize = 50; // IG API allows up to 50 epics per request
     this._backoffMs = 0; // Exponential backoff on rate limit
     this._lastRateLimitAt = null;
