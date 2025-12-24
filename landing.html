@@ -1393,7 +1393,8 @@
       GoogleAuthProvider,
       onAuthStateChanged,
       signOut,
-      updateProfile
+      updateProfile,
+      sendEmailVerification
     } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
     import { 
       getFirestore, 
@@ -1552,6 +1553,17 @@
         await updateProfile(user, { displayName: name });
         console.log('Profile updated');
         
+        // Send verification email
+        try {
+          await sendEmailVerification(user, {
+            url: 'https://teste-brocker.web.app/landing.html',
+            handleCodeInApp: false
+          });
+          console.log('Verification email sent');
+        } catch (emailError) {
+          console.warn('Email verification error:', emailError);
+        }
+        
         // Create user document in Firestore (with error handling)
         try {
           await setDoc(doc(db, 'users', user.uid), {
@@ -1563,16 +1575,16 @@
             challengeType: 'none',
             profitTarget: 10,
             maxDrawdown: 8,
-            tradingDays: 0
+            tradingDays: 0,
+            emailVerified: false
           });
           console.log('Firestore document created');
         } catch (firestoreError) {
           console.warn('Firestore error (non-blocking):', firestoreError);
-          // Don't fail registration if Firestore fails - user is already created
         }
         
         closeModal();
-        showToast('Compte créé avec succès !', 'success');
+        showToast('Compte créé ! Vérifiez votre email pour confirmer votre adresse.', 'success');
       } catch (error) {
         console.error('Register error:', error.code, error.message);
         let message = 'Une erreur est survenue';

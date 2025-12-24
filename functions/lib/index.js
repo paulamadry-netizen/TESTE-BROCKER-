@@ -183,14 +183,20 @@ async function handleCheckoutCompleted(session, stripeInstance) {
             // Générer un mot de passe unique pour le broker
             const brokerPassword = generateSecurePassword();
             console.log('🔐 Mot de passe broker généré pour utilisateur existant');
-            await admin.firestore().collection('users').doc(existingUser.uid).update({
+            await admin.firestore().collection('users').doc(existingUser.uid).set({
+                email: customerEmail,
                 stripeCustomerId: customerId,
                 stripeSessionId: session.id,
                 accountStatus: 'active',
                 accountBalance: tradingCapital,
-                brokerPassword: brokerPassword, // Stocker le mot de passe broker
+                brokerPassword: brokerPassword,
+                challengeType: 'standard',
+                profitTarget: 10,
+                maxDrawdown: 5,
+                tradingDays: 0,
                 updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-            });
+                createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            }, { merge: true });
             console.log('✅ Données utilisateur mises à jour avec mot de passe broker');
             // Envoyer l'email avec les identifiants broker
             await sendWelcomeEmail(customerEmail, brokerPassword, session);
@@ -308,32 +314,128 @@ function generateSecurePassword() {
  * @param session - Session de checkout Stripe
  */
 async function sendWelcomeEmail(email, password, session) {
-    var _a, _b;
+    const amountTotal = session.amount_total || 0;
+    const amountInEuros = amountTotal / 100;
+    const tradingCapital = determineTradingCapital(amountInEuros);
+    const planName = tradingCapital === 100000 ? 'Plan Or' : tradingCapital === 50000 ? 'Plan Argent' : 'Plan Bronze';
     console.log('📧 Email de bienvenue à envoyer à:', email);
-    console.log('   - Mot de passe:', password);
-    console.log('   - Challenge type:', (_a = session.metadata) === null || _a === void 0 ? void 0 : _a.challengeType);
-    console.log('   - Dashboard: https://dash-board-claude-ia.onrender.com/login');
-    // Ajouter à la collection 'mail' pour déclencher une extension email
+    console.log('   - Plan:', planName, '- Capital:', tradingCapital + '$');
+    const htmlContent = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin:0;padding:0;background-color:#0a0e1a;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#0a0e1a;padding:40px 20px;">
+    <tr>
+      <td align="center">
+        <table width="600" cellpadding="0" cellspacing="0" style="background-color:#1a1f2e;border-radius:16px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.5);">
+          <!-- Header -->
+          <tr>
+            <td style="background:linear-gradient(135deg,#00d9b8,#00f0cc);padding:40px;text-align:center;">
+              <h1 style="margin:0;color:#0a0e1a;font-size:32px;font-weight:700;">AMA Firm</h1>
+              <p style="margin:10px 0 0;color:#0a0e1a;font-size:14px;opacity:0.8;">Pro Trading Platform</p>
+            </td>
+          </tr>
+          
+          <!-- Content -->
+          <tr>
+            <td style="padding:40px;">
+              <h2 style="color:#00d9b8;font-size:24px;margin:0 0 20px;">🎉 Félicitations !</h2>
+              <p style="color:#e8edf4;font-size:16px;line-height:1.6;margin:0 0 20px;">
+                Votre compte de trading <strong style="color:#00d9b8;">${planName}</strong> a été activé avec succès !
+              </p>
+              <p style="color:#9ba3b4;font-size:14px;line-height:1.6;margin:0 0 30px;">
+                Vous disposez maintenant d'un capital de <strong style="color:#00d9b8;">${tradingCapital.toLocaleString('fr-FR')} $</strong> pour relever le challenge et devenir un trader financé.
+              </p>
+              
+              <!-- Credentials Box -->
+              <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#0f1419;border-radius:12px;border:1px solid #252b3d;margin-bottom:30px;">
+                <tr>
+                  <td style="padding:24px;">
+                    <p style="color:#9ba3b4;font-size:12px;text-transform:uppercase;letter-spacing:1px;margin:0 0 16px;">Vos identifiants de connexion</p>
+                    <table width="100%" cellpadding="0" cellspacing="0">
+                      <tr>
+                        <td style="padding:8px 0;">
+                          <span style="color:#9ba3b4;font-size:14px;">Email :</span>
+                        </td>
+                        <td style="padding:8px 0;text-align:right;">
+                          <span style="color:#e8edf4;font-size:14px;font-weight:600;">${email}</span>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="padding:8px 0;">
+                          <span style="color:#9ba3b4;font-size:14px;">Mot de passe :</span>
+                        </td>
+                        <td style="padding:8px 0;text-align:right;">
+                          <code style="background-color:#252b3d;color:#00d9b8;padding:4px 12px;border-radius:6px;font-size:14px;font-family:monospace;">${password}</code>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+              
+              <!-- CTA Button -->
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td align="center">
+                    <a href="https://teste-brocker.web.app/login.html" style="display:inline-block;background:linear-gradient(135deg,#00d9b8,#00f0cc);color:#0a0e1a;text-decoration:none;padding:16px 40px;border-radius:8px;font-size:16px;font-weight:600;">
+                      Accéder à la plateforme
+                    </a>
+                  </td>
+                </tr>
+              </table>
+              
+              <!-- Rules Reminder -->
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:30px;background-color:#0f1419;border-radius:12px;border:1px solid #252b3d;">
+                <tr>
+                  <td style="padding:24px;">
+                    <p style="color:#00d9b8;font-size:14px;font-weight:600;margin:0 0 12px;">📋 Règles du Challenge</p>
+                    <ul style="color:#9ba3b4;font-size:13px;line-height:1.8;margin:0;padding-left:20px;">
+                      <li>Objectif de profit : <strong style="color:#e8edf4;">10%</strong></li>
+                      <li>Drawdown journalier max : <strong style="color:#e8edf4;">3%</strong></li>
+                      <li>Drawdown total max : <strong style="color:#e8edf4;">8%</strong></li>
+                      <li>Minimum 3 jours de trading</li>
+                    </ul>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          
+          <!-- Footer -->
+          <tr>
+            <td style="background-color:#0f1419;padding:30px;text-align:center;border-top:1px solid #252b3d;">
+              <p style="color:#9ba3b4;font-size:13px;margin:0 0 10px;">
+                Besoin d'aide ? Contactez-nous à <a href="mailto:support@amafirm.com" style="color:#00d9b8;text-decoration:none;">support@amafirm.com</a>
+              </p>
+              <p style="color:#6b7280;font-size:12px;margin:0;">
+                © 2024 AMA Firm. Tous droits réservés.
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
     try {
-        const emailData = {
+        await admin.firestore().collection('mail').add({
             to: email,
-            template: {
-                name: 'welcome',
-                data: {
-                    email,
-                    password,
-                    dashboardUrl: 'https://dash-board-claude-ia.onrender.com/login',
-                    challengeType: ((_b = session.metadata) === null || _b === void 0 ? void 0 : _b.challengeType) || 'standard',
-                }
+            message: {
+                subject: `🎉 Bienvenue chez AMA Firm - Votre ${planName} est activé !`,
+                html: htmlContent
             }
-        };
-        await admin.firestore().collection('mail').add(emailData);
-        console.log('✅ Email ajouté à la queue');
+        });
+        console.log('✅ Email de bienvenue ajouté à la queue');
     }
     catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         console.error('⚠️ Impossible d\'envoyer l\'email:', errorMessage);
-        // Ne pas bloquer si l'email échoue
     }
 }
 /**

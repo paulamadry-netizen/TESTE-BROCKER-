@@ -112,7 +112,7 @@ export function Sidebar() {
         {/* New Challenge Button */}
         <div className="pt-4 mt-4 border-t">
           <a
-            href="https://teste-brocker.web.app"
+            href="https://teste-brocker.web.app/landing.html#pricing"
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
