@@ -7,20 +7,24 @@
 const WebSocket = require('ws');
 
 // Mapping from IG epic to Finnhub symbol
+// Finnhub forex symbols use format: OANDA:SYMBOL_CURRENCY
+// For commodities/indices, we use forex broker symbols
 const FINNHUB_SYMBOLS = {
-  // Metals
+  // Metals - using forex broker format
   'CS.D.GD.CFD.IP': 'OANDA:XAU_USD',      // Gold
   'CS.D.SI.CFD.IP': 'OANDA:XAG_USD',      // Silver
-  'TM.D.COPPER.CFD.IP': 'OANDA:XCU_USD',  // Copper
-  'TM.D.ZINC.CFD.IP': 'OANDA:ZINC_USD',   // Zinc (may not be available)
+  'TM.D.COPPER.CFD.IP': 'OANDA:HG_USD',   // Copper (HG is copper futures symbol)
   
-  // Commodities
-  'CC.D.COFFEE.UMA.IP': 'OANDA:COFFEE_USD', // Coffee (may not be available)
-  
-  // Indices (if IG doesn't provide)
+  // Indices - using common ETF/futures symbols
   'IX.D.FTSE.IFD.IP': 'OANDA:UK100_GBP',   // UK 100
   'IX.D.STX.IFD.IP': 'OANDA:EU50_EUR',     // Euro Stoxx 50
   'IX.D.HSI.IFD.IP': 'OANDA:HK33_HKD',     // Hong Kong HSI
+};
+
+// Assets that Finnhub doesn't support - we'll use mock prices
+const UNSUPPORTED_ASSETS = {
+  'TM.D.ZINC.CFD.IP': { name: 'Zinc', basePrice: 2500 },
+  'CC.D.COFFEE.UMA.IP': { name: 'Coffee', basePrice: 180 },
 };
 
 // Reverse mapping for quick lookup
@@ -64,6 +68,9 @@ class FinnhubService {
       
       // Subscribe to all configured symbols
       this._subscribeToAll();
+      
+      // Start mock price updates for unsupported assets
+      this._startMockPrices();
     });
 
     this.ws.on('message', (data) => {
@@ -216,12 +223,52 @@ class FinnhubService {
   }
 
   /**
+   * Start mock price updates for unsupported assets
+   */
+  _startMockPrices() {
+    console.log('[Finnhub] Starting mock prices for unsupported assets...');
+    
+    // Update mock prices every 5 seconds
+    this.mockPriceInterval = setInterval(() => {
+      Object.entries(UNSUPPORTED_ASSETS).forEach(([epic, config]) => {
+        // Generate small random price movement
+        const variation = (Math.random() - 0.5) * 0.01 * config.basePrice;
+        const price = config.basePrice + variation;
+        
+        const priceData = {
+          epic,
+          symbol: config.name,
+          bid: price * 0.9999,
+          offer: price * 1.0001,
+          mid: price,
+          high: price * 1.001,
+          low: price * 0.999,
+          change: variation,
+          changePct: (variation / config.basePrice) * 100,
+          updateTime: new Date().toISOString(),
+          source: 'mock'
+        };
+        
+        this.priceCache.set(epic, priceData);
+        
+        if (this.priceCallback) {
+          this.priceCallback(priceData);
+        }
+      });
+    }, 5000);
+  }
+
+  /**
    * Disconnect
    */
   disconnect() {
     if (this.ws) {
       this.ws.close();
       this.ws = null;
+    }
+    if (this.mockPriceInterval) {
+      clearInterval(this.mockPriceInterval);
+      this.mockPriceInterval = null;
     }
     this.isConnected = false;
     this.subscribedSymbols.clear();
