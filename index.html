@@ -1307,19 +1307,21 @@ const updateChartOverlay=()=>{
     const y=priceToY(pos.entry);
     if(y===null||y<0)return;
     
-    // Entry line
-    createPriceLine(overlay,y,pos.entry,`position-${pos.side.toLowerCase()}`,
-      `${pos.side} @ ${formatChartPrice(pos.entry)} (${pos.size} lots)`,pos.id,'entry');
-    
     // TP line - if set, show at position; if not, show handle attached to entry
     const handlesContainer=$('sltpHandlesContainer');
+    
+    // Entry line (in handlesContainer for close button to work)
+    if(handlesContainer){
+      createPriceLine(handlesContainer,y,pos.entry,`position-${pos.side.toLowerCase()}`,
+        `${pos.side} @ ${formatChartPrice(pos.entry)} (${pos.size} lots)`,pos.id,'entry');
+    }
     const hasTP=pos.tp!==null&&pos.tp!==undefined&&Number.isFinite(pos.tp);
     const hasSL=pos.sl!==null&&pos.sl!==undefined&&Number.isFinite(pos.sl);
     
-    if(hasTP){
+    if(hasTP&&handlesContainer){
       const tpY=priceToY(pos.tp);
       if(tpY!==null&&tpY>=0){
-        createPriceLine(overlay,tpY,pos.tp,'tp-line',`TP @ ${formatChartPrice(pos.tp)}`,pos.id,'tp');
+        createPriceLine(handlesContainer,tpY,pos.tp,'tp-line',`TP @ ${formatChartPrice(pos.tp)}`,pos.id,'tp');
       }
     }else if(handlesContainer){
       // Show TP handle attached to entry line (above for BUY, below for SELL)
@@ -1328,10 +1330,10 @@ const updateChartOverlay=()=>{
     }
     
     // SL line - if set, show at position; if not, show handle attached to entry
-    if(hasSL){
+    if(hasSL&&handlesContainer){
       const slY=priceToY(pos.sl);
       if(slY!==null&&slY>=0){
-        createPriceLine(overlay,slY,pos.sl,'sl-line',`SL @ ${formatChartPrice(pos.sl)}`,pos.id,'sl');
+        createPriceLine(handlesContainer,slY,pos.sl,'sl-line',`SL @ ${formatChartPrice(pos.sl)}`,pos.id,'sl');
       }
     }else if(handlesContainer){
       // Show SL handle attached to entry line (below for BUY, above for SELL)
@@ -1381,16 +1383,21 @@ const startHandleDrag=(e)=>{
 
 const onHandleDrag=(e)=>{
   if(!dragState||!dragState.isHandle)return;
-  const overlay=$('chartOverlay');
-  const rect=overlay.getBoundingClientRect();
+  const container=$('sltpHandlesContainer')||$('chartOverlay');
+  const rect=container.getBoundingClientRect();
   const y=e.clientY-rect.top;
   dragState.handle.style.top=`${y}px`;
+  // Show current price while dragging
+  const currentPrice=yToPrice(y);
+  if(currentPrice!==null){
+    dragState.handle.innerText=`${dragState.type.toUpperCase()} ${formatChartPrice(currentPrice)}`;
+  }
 };
 
 const endHandleDrag=(e)=>{
   if(!dragState||!dragState.isHandle)return;
-  const overlay=$('chartOverlay');
-  const rect=overlay.getBoundingClientRect();
+  const container=$('sltpHandlesContainer')||$('chartOverlay');
+  const rect=container.getBoundingClientRect();
   const y=e.clientY-rect.top;
   const newPrice=yToPrice(y);
   
