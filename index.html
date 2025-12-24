@@ -312,22 +312,22 @@ html,body{height:100%;background:linear-gradient(135deg,var(--bg-primary) 0%,var
 #tv_chart_container{display:none}
 #lw_chart_container{width:100%;height:100%;position:relative}
 .chart-overlay{position:absolute;top:0;left:0;right:60px;bottom:30px;pointer-events:auto;z-index:10}
-.price-line{position:absolute;left:0;right:0;height:2px;display:flex;align-items:center;pointer-events:auto;cursor:ns-resize}
-.price-line.position-buy{background:linear-gradient(90deg,transparent,rgba(16,185,129,0.8),transparent)}
-.price-line.position-sell{background:linear-gradient(90deg,transparent,rgba(239,68,68,0.8),transparent)}
-.price-line.tp-line{background:linear-gradient(90deg,transparent,rgba(34,197,94,0.9),transparent);border-top:2px dashed #22c55e}
-.price-line.sl-line{background:linear-gradient(90deg,transparent,rgba(239,68,68,0.9),transparent);border-top:2px dashed #ef4444}
-.price-line.order-buy{background:linear-gradient(90deg,transparent,rgba(59,130,246,0.8),transparent);border-top:2px dotted #3b82f6}
-.price-line.order-sell{background:linear-gradient(90deg,transparent,rgba(249,115,22,0.8),transparent);border-top:2px dotted #f97316}
-.price-line-label{position:absolute;right:5px;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;white-space:nowrap;transform:translateY(-50%)}
-.price-line.position-buy .price-line-label{background:#10b981;color:#fff}
-.price-line.position-sell .price-line-label{background:#ef4444;color:#fff}
-.price-line.tp-line .price-line-label{background:#22c55e;color:#fff}
-.price-line.sl-line .price-line-label{background:#ef4444;color:#fff}
-.price-line.order-buy .price-line-label{background:#3b82f6;color:#fff}
-.price-line.order-sell .price-line-label{background:#f97316;color:#fff}
-.price-line:hover{height:4px;z-index:20}
-.price-line.dragging{height:4px;z-index:30;opacity:0.9}
+.price-line{position:absolute;left:0;right:0;height:2px;display:flex;align-items:center;pointer-events:auto;cursor:ns-resize;transition:height 0.15s ease}
+.price-line.position-buy{background:linear-gradient(90deg,transparent 0%,rgba(16,185,129,0.4) 10%,rgba(16,185,129,0.9) 50%,rgba(16,185,129,0.4) 90%,transparent 100%);cursor:default}
+.price-line.position-sell{background:linear-gradient(90deg,transparent 0%,rgba(239,68,68,0.4) 10%,rgba(239,68,68,0.9) 50%,rgba(239,68,68,0.4) 90%,transparent 100%);cursor:default}
+.price-line.tp-line{background:linear-gradient(90deg,transparent 0%,rgba(34,197,94,0.3) 10%,rgba(34,197,94,0.8) 50%,rgba(34,197,94,0.3) 90%,transparent 100%);border-top:2px dashed #22c55e}
+.price-line.sl-line{background:linear-gradient(90deg,transparent 0%,rgba(239,68,68,0.3) 10%,rgba(239,68,68,0.8) 50%,rgba(239,68,68,0.3) 90%,transparent 100%);border-top:2px dashed #ef4444}
+.price-line.order-buy{background:linear-gradient(90deg,transparent 0%,rgba(59,130,246,0.3) 10%,rgba(59,130,246,0.7) 50%,rgba(59,130,246,0.3) 90%,transparent 100%);border-top:2px dotted #3b82f6}
+.price-line.order-sell{background:linear-gradient(90deg,transparent 0%,rgba(249,115,22,0.3) 10%,rgba(249,115,22,0.7) 50%,rgba(249,115,22,0.3) 90%,transparent 100%);border-top:2px dotted #f97316}
+.price-line-label{position:absolute;right:5px;padding:4px 10px;border-radius:6px;font-size:11px;font-weight:700;white-space:nowrap;transform:translateY(-50%);box-shadow:0 2px 8px rgba(0,0,0,0.3)}
+.price-line.position-buy .price-line-label{background:linear-gradient(135deg,#10b981,#059669);color:#fff}
+.price-line.position-sell .price-line-label{background:linear-gradient(135deg,#ef4444,#dc2626);color:#fff}
+.price-line.tp-line .price-line-label{background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff}
+.price-line.sl-line .price-line-label{background:linear-gradient(135deg,#ef4444,#b91c1c);color:#fff}
+.price-line.order-buy .price-line-label{background:linear-gradient(135deg,#3b82f6,#2563eb);color:#fff}
+.price-line.order-sell .price-line-label{background:linear-gradient(135deg,#f97316,#ea580c);color:#fff}
+.price-line.tp-line:hover,.price-line.sl-line:hover{height:4px;z-index:20;cursor:ns-resize}
+.price-line.dragging{height:5px;z-index:30;opacity:1}
 .crosshair-info{position:absolute;top:10px;left:10px;background:rgba(15,20,25,0.9);padding:8px 12px;border-radius:6px;font-size:11px;color:#e8edf4;pointer-events:none;z-index:5;border:1px solid var(--border)}
 .crosshair-info div{margin:2px 0}
 .crosshair-info .label{color:var(--text-muted)}
@@ -1227,32 +1227,49 @@ const updateChartOverlay=()=>{
 
     const drawFibRetr=(d)=>{
       const top=Math.min(d.a.price,d.b.price),bot=Math.max(d.a.price,d.b.price);
-      const ratios=[0,0.236,0.382,0.5,0.618,0.786,1];
-      ratios.forEach(r=>{
+      const ratios=[
+        {r:0,color:'rgba(128,128,128,0.7)'},
+        {r:0.236,color:'rgba(255,235,59,0.8)'},
+        {r:0.382,color:'rgba(76,175,80,0.8)'},
+        {r:0.5,color:'rgba(33,150,243,0.8)'},
+        {r:0.618,color:'rgba(255,152,0,0.9)'},
+        {r:0.786,color:'rgba(156,39,176,0.8)'},
+        {r:1,color:'rgba(128,128,128,0.7)'}
+      ];
+      ratios.forEach(({r,color})=>{
         const price=bot-(bot-top)*r;
         const y=priceToY(price);
-        if(y===null) return;
-        const l=mkLine(0,y,w,y,'rgba(167,139,250,0.9)',1,'4 4');
+        if(y===null||y<0||y>overlay.clientHeight) return;
+        const l=mkLine(0,y,w,y,color,r===0.618?2:1,r===0.5?'':'4 4');
         l.dataset.id=d.id;
         svg.appendChild(l);
         const label=`${(r*100).toFixed(1)}%  ${formatChartPrice(price)}`;
-        svg.appendChild(mkText(w-6,y-6,label,'rgba(167,139,250,0.95)'));
+        svg.appendChild(mkText(w-6,y-6,label,color));
       });
     };
 
     const drawFibExt=(d)=>{
       if(!d.c) return;
       const move=d.b.price-d.a.price;
-      const ratios=[0,0.618,1,1.618,2.618];
-      ratios.forEach(r=>{
+      const ratios=[
+        {r:0,color:'rgba(128,128,128,0.7)'},
+        {r:0.382,color:'rgba(76,175,80,0.7)'},
+        {r:0.618,color:'rgba(255,235,59,0.8)'},
+        {r:1,color:'rgba(33,150,243,0.9)'},
+        {r:1.272,color:'rgba(255,152,0,0.8)'},
+        {r:1.618,color:'rgba(244,67,54,0.9)'},
+        {r:2,color:'rgba(156,39,176,0.8)'},
+        {r:2.618,color:'rgba(233,30,99,0.9)'}
+      ];
+      ratios.forEach(({r,color})=>{
         const price=d.c.price+move*r;
         const y=priceToY(price);
-        if(y===null) return;
-        const l=mkLine(0,y,w,y,'rgba(99,102,241,0.9)',1,'4 4');
+        if(y===null||y<0||y>overlay.clientHeight) return;
+        const l=mkLine(0,y,w,y,color,r===1||r===1.618?2:1,r===1?'':'4 4');
         l.dataset.id=d.id;
         svg.appendChild(l);
         const label=`${r.toFixed(3)}  ${formatChartPrice(price)}`;
-        svg.appendChild(mkText(w-6,y-6,label,'rgba(99,102,241,0.95)'));
+        svg.appendChild(mkText(w-6,y-6,label,color));
       });
     };
 
