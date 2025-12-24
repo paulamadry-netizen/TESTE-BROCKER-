@@ -1498,7 +1498,32 @@ const startPriceWatchdog=()=>{
     }
   },2000);
 };
-const updatePriceUI=(symbol,oldPrice,newPrice)=>{const el=$('price_'+escapeId(symbol));if(el){const symObj=WATCHLIST.find(w=>w.api===symbol);const isSimple=symObj&&(symObj.type==='etf'||symObj.type==='index'||symObj.type==='commodity'||symObj.type==='metal');el.innerText=isSimple?newPrice.toFixed(2):formatPrice(newPrice);const parentItem=el.closest('.wl-item');if(parentItem&&oldPrice!==undefined&&oldPrice!==newPrice){parentItem.classList.add('updating');setTimeout(()=>parentItem.classList.remove('updating'),500)}}if(symbol===currentSymbol.api){const isSimple=currentSymbol.type==='etf'||currentSymbol.type==='index'||currentSymbol.type==='commodity'||currentSymbol.type==='metal';const formatted=isSimple?newPrice.toFixed(2):formatPrice(newPrice);$('currentPriceValue').innerText=formatted;updateLightweightChart(newPrice);updateChartOverlay()}};
+const updatePriceUI=(symbol,oldPrice,newPrice)=>{
+  const symObj=WATCHLIST.find(w=>w.api===symbol);
+  const isSimple=!!(symObj&&(symObj.type==='etf'||symObj.type==='index'||symObj.type==='commodity'||symObj.type==='metal'));
+  const formatted=isSimple?Number(newPrice).toFixed(2):Number(newPrice).toFixed(5).replace(/\.?0+$/,'');
+
+  let el=$('price_'+escapeId(symbol));
+  if(!el){
+    const row=document.querySelector(`.wl-item[data-symbol="${CSS.escape(symbol)}"]`);
+    if(row) el=row.querySelector('.wl-price');
+  }
+
+  if(el){
+    el.innerText=formatted;
+    const parentItem=el.closest('.wl-item');
+    if(parentItem&&oldPrice!==undefined&&oldPrice!==newPrice){
+      parentItem.classList.add('updating');
+      setTimeout(()=>parentItem.classList.remove('updating'),500);
+    }
+  }
+
+  if(symbol===currentSymbol.api){
+    $('currentPriceValue').innerText=formatted;
+    updateLightweightChart(newPrice);
+    updateChartOverlay();
+  }
+};
 const refreshLotInfo=()=>{const price=priceCache[currentSymbol.api],lots=parseFloat($('lotInput').value)||1;if(price!==undefined){let exp;if(isETF(currentSymbol.api))exp=price*lots;else if(isBaseUsd(currentSymbol.api))exp=lotUnits(currentSymbol.api)*lots;else exp=price*lotUnits(currentSymbol.api)*lots;const margin=exp/CFG.leverage,pipInfo=describePip(currentSymbol.api,price);$('lotValueInfo').innerText=`${lots} lots = ${formatMoney(margin)} USD · ${pipInfo} · 1:${CFG.leverage}`;return}$('lotValueInfo').innerText=`1 lot = ${lotUnits(currentSymbol.api)}u · 1:${CFG.leverage}`};
 const onPriceUpdate=(symbol)=>{let updated=false;positions.forEach(pos=>{if(pos.symbol.api===symbol){pos.current=priceCache[symbol];updated=true}});checkPositionTargets(symbol);checkOrdersForSymbol(symbol);if(updated)renderPositions();renderTotals()};
 const checkPositionTargets=(symbol)=>{const price=priceCache[symbol];if(price===undefined)return;const toClose=[];positions.forEach(pos=>{if(pos.symbol.api!==symbol)return;if(pos.side==='BUY'){if(pos.tp!==null&&price>=pos.tp)toClose.push({id:pos.id,reason:'TP'});if(pos.sl!==null&&price<=pos.sl)toClose.push({id:pos.id,reason:'SL'})}else{if(pos.tp!==null&&price<=pos.tp)toClose.push({id:pos.id,reason:'TP'});if(pos.sl!==null&&price>=pos.sl)toClose.push({id:pos.id,reason:'SL'})}});toClose.forEach(({id,reason})=>{debugLog(`Close ${id}: ${reason}`);closePosition(id)})};
