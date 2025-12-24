@@ -79,46 +79,66 @@ class IGStreamingService {
    * Subscribe to price updates for epics
    */
   subscribeToEpics(epics, callback) {
-    if (!this.isConnected || !this.client) {
-      console.error('[IGStreaming] Not connected, cannot subscribe');
-      return false;
-    }
-
-    this.priceCallback = callback;
-    
-    if (this.subscription) {
-      try {
-        this.client.unsubscribe(this.subscription);
-      } catch (e) {}
-    }
-
-    const items = epics.map(epic => `MARKET:${epic}`);
-    const fields = ['BID', 'OFFER', 'HIGH', 'LOW', 'MID_OPEN', 'CHANGE', 'CHANGE_PCT', 'UPDATE_TIME', 'MARKET_STATE'];
-    
-    console.log(`[IGStreaming] Subscribing to ${epics.length} epics...`);
-    
-    this.subscription = new Subscription('MERGE', items, fields);
-    this.subscription.setDataAdapter('DEFAULT');
-    this.subscription.setRequestedSnapshot('yes');
-    
-    this.subscription.addListener({
-      onSubscription: () => {
-        console.log(`[IGStreaming] ✅ Subscribed to ${epics.length} epics`);
-        epics.forEach(e => this.subscribedEpics.add(e));
-      },
-      onUnsubscription: () => {
-        console.log('[IGStreaming] Unsubscribed');
-      },
-      onItemUpdate: (update) => {
-        this._handlePriceUpdate(update);
-      },
-      onSubscriptionError: (code, message) => {
-        console.error(`[IGStreaming] Subscription error ${code}: ${message}`);
+    return new Promise((resolve, reject) => {
+      if (!this.isConnected || !this.client) {
+        console.error('[IGStreaming] Not connected, cannot subscribe');
+        reject(new Error('Not connected'));
+        return;
       }
-    });
 
-    this.client.subscribe(this.subscription);
-    return true;
+      this.priceCallback = callback;
+      
+      if (this.subscription) {
+        try {
+          this.client.unsubscribe(this.subscription);
+        } catch (e) {}
+      }
+
+      const items = epics.map(epic => `MARKET:${epic}`);
+      const fields = ['BID', 'OFFER', 'HIGH', 'LOW', 'MID_OPEN', 'CHANGE', 'CHANGE_PCT', 'UPDATE_TIME', 'MARKET_STATE'];
+      
+      console.log(`[IGStreaming] Subscribing to ${epics.length} epics...`);
+      
+      this.subscription = new Subscription('MERGE', items, fields);
+      this.subscription.setDataAdapter('DEFAULT');
+      this.subscription.setRequestedSnapshot('yes');
+      
+      let resolved = false;
+      const timeout = setTimeout(() => {
+        if (!resolved) {
+          resolved = true;
+          reject(new Error('Subscription timeout'));
+        }
+      }, 10000);
+
+      this.subscription.addListener({
+        onSubscription: () => {
+          console.log(`[IGStreaming] ✅ Subscribed to ${epics.length} epics`);
+          epics.forEach(e => this.subscribedEpics.add(e));
+          if (!resolved) {
+            resolved = true;
+            clearTimeout(timeout);
+            resolve(true);
+          }
+        },
+        onUnsubscription: () => {
+          console.log('[IGStreaming] Unsubscribed');
+        },
+        onItemUpdate: (update) => {
+          this._handlePriceUpdate(update);
+        },
+        onSubscriptionError: (code, message) => {
+          console.error(`[IGStreaming] Subscription error ${code}: ${message}`);
+          if (!resolved) {
+            resolved = true;
+            clearTimeout(timeout);
+            reject(new Error(`Subscription error: ${message}`));
+          }
+        }
+      });
+
+      this.client.subscribe(this.subscription);
+    });
   }
 
   _handlePriceUpdate(update) {

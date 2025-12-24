@@ -100,7 +100,7 @@ class PriceService {
         ? Array.from(this.subscribedEpics) 
         : getAllEpics();
       
-      igStreamingService.subscribeToEpics(epics, (priceData) => {
+      await igStreamingService.subscribeToEpics(epics, (priceData) => {
         this.priceCache.set(priceData.epic, priceData);
         this.lastUpdate = new Date();
       });
