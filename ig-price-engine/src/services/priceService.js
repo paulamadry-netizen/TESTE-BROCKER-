@@ -91,8 +91,9 @@ class PriceService {
       const cst = igAuthService.cst;
       const xst = igAuthService.xSecurityToken;
       const accountId = igAuthService.accountId || 'DEFAULT';
+      const lsEndpoint = igAuthService.lightstreamerEndpoint;
 
-      await igStreamingService.connect(cst, xst, accountId);
+      await igStreamingService.connect(cst, xst, accountId, lsEndpoint);
       igStreamingService.setSocketIO(this.io);
       
       const epics = this.subscribedEpics.size > 0 

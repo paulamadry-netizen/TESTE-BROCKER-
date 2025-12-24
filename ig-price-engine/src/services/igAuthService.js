@@ -10,6 +10,7 @@ class IGAuthService {
     this.cst = null;
     this.xSecurityToken = null;
     this.accountId = null;
+    this.lightstreamerEndpoint = null;
     this.isAuthenticated = false;
     this.lastLoginTime = null;
     this.loginInProgress = null;
@@ -81,12 +82,14 @@ class IGAuthService {
       }
 
       this.accountId = response.data.currentAccountId;
+      this.lightstreamerEndpoint = response.data.lightstreamerEndpoint || 'https://apd.marketdatasystems.com';
       this.isAuthenticated = true;
       this.lastLoginTime = new Date();
       
       console.log('[IGAuth] ✅ Login successful!');
       console.log(`[IGAuth] CST: ${this.cst.substring(0, 10)}...`);
       console.log(`[IGAuth] X-SECURITY-TOKEN: ${this.xSecurityToken.substring(0, 10)}...`);
+      console.log(`[IGAuth] Lightstreamer: ${this.lightstreamerEndpoint}`);
       console.log(`[IGAuth] Account Info:`, {
         accountId: this.accountId,
         accountType: response.data.accountType,

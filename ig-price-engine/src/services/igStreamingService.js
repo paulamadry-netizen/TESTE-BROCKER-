@@ -13,24 +13,22 @@ class IGStreamingService {
     this.subscribedEpics = new Set();
     this.priceCallback = null;
     this.io = null;
-    
-    // IG Lightstreamer endpoint
-    this.lsEndpoint = 'https://apd.marketdatasystems.com';
   }
 
   /**
    * Initialize streaming connection
    */
-  async connect(cst, xSecurityToken, accountId) {
+  async connect(cst, xSecurityToken, accountId, lsEndpoint) {
+    const endpoint = lsEndpoint || 'https://apd.marketdatasystems.com';
     if (this.isConnected) {
       console.log('[IGStreaming] Already connected');
       return;
     }
 
-    console.log('[IGStreaming] Connecting to Lightstreamer...');
+    console.log(`[IGStreaming] Connecting to Lightstreamer at ${endpoint}...`);
     
     try {
-      this.client = new LightstreamerClient(this.lsEndpoint, 'DEFAULT');
+      this.client = new LightstreamerClient(endpoint, 'DEFAULT');
       
       // Set credentials - IG uses CST:XST format for password
       this.client.connectionDetails.setUser(accountId);
