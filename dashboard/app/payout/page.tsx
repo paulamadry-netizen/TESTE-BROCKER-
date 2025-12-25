@@ -36,6 +36,20 @@ export default function PayoutPage() {
   const [payoutAmount, setPayoutAmount] = useState('');
   const [eligibilityInfo, setEligibilityInfo] = useState<any>(null);
 
+  const toJsDate = (value: any): Date | null => {
+    try {
+      if (!value) return null;
+      if (typeof value?.toDate === 'function') return value.toDate();
+      if (typeof value === 'number') return new Date(value);
+      if (typeof value === 'string') return new Date(value);
+      if (typeof value === 'object' && typeof value.seconds === 'number') return new Date(value.seconds * 1000);
+      const d = new Date(value);
+      return isNaN(d.getTime()) ? null : d;
+    } catch {
+      return null;
+    }
+  };
+
   const computeTradingDaysForAccount = async (): Promise<number> => {
     if (!user || !activeAccount) return 0;
 
@@ -55,8 +69,8 @@ export default function PayoutPage() {
       const d = trade.openedAt || trade.closedAt;
       if (!d) return;
 
-      const date = new Date(d);
-      if (isNaN(date.getTime())) return;
+      const date = toJsDate(d);
+      if (!date) return;
 
       days.add(date.toISOString().slice(0, 10));
     });
@@ -151,8 +165,9 @@ export default function PayoutPage() {
         if (!activeAccount || !trade.accountId || trade.accountId !== activeAccount.id) return;
         if (trade.status !== 'closed') return;
         if (!trade.closedAt) return;
-        if (new Date(trade.closedAt).getTime() < fundedAt.getTime()) return;
-        const closedDate = new Date(trade.closedAt);
+        const closedDate = toJsDate(trade.closedAt);
+        if (!closedDate) return;
+        if (closedDate.getTime() < fundedAt.getTime()) return;
         const dateKey = closedDate.toISOString().split('T')[0];
         const currentProfit = profitByDay.get(dateKey) || 0;
         profitByDay.set(dateKey, currentProfit + (trade.pnl || 0));
