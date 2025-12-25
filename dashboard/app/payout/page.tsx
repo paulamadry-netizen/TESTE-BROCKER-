@@ -324,7 +324,7 @@ export default function PayoutPage() {
 
             <Button
               onClick={handleUpgradeChallenge}
-              disabled={processing || profitPercent < 10 || tradingDays < 3 || userData.accountStatus !== 'active'}
+              disabled={processing || !activeAccount || userData.accountStatus !== 'active'}
               className="w-full mt-4"
             >
               {processing ? (
