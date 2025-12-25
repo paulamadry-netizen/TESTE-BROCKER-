@@ -10,6 +10,7 @@ import { DollarSign, AlertCircle, Loader2, CheckCircle, Shield } from "lucide-re
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/lib/utils";
+import { AccountSelector } from "@/components/dashboard/AccountSelector";
 
 interface UserData {
   email: string;
@@ -35,6 +36,34 @@ export default function PayoutPage() {
   const [payoutAmount, setPayoutAmount] = useState('');
   const [eligibilityInfo, setEligibilityInfo] = useState<any>(null);
 
+  const computeTradingDaysForAccount = async (): Promise<number> => {
+    if (!user || !activeAccount) return 0;
+
+    const tradesSnapshot = await getDocs(
+      query(
+        collection(db, 'trades'),
+        where('userId', '==', user.uid),
+        where('accountId', '==', activeAccount.id)
+      )
+    );
+
+    const days = new Set<string>();
+    tradesSnapshot.forEach((snap) => {
+      const trade = snap.data() as any;
+      if (!trade) return;
+
+      const d = trade.openedAt || trade.closedAt;
+      if (!d) return;
+
+      const date = new Date(d);
+      if (isNaN(date.getTime())) return;
+
+      days.add(date.toISOString().slice(0, 10));
+    });
+
+    return days.size;
+  };
+
   useEffect(() => {
     async function loadUserData() {
       if (!user || !activeAccount) {
@@ -46,22 +75,38 @@ export default function PayoutPage() {
         const userDocRef = doc(db, "users", user.uid);
         const userDocSnap = await getDoc(userDocRef);
 
-        const baseData: UserData = {
-          email: user.email || '',
+        const userDocData = userDocSnap.exists() ? (userDocSnap.data() as any) : {};
+        const accountType = (String((activeAccount as any)?.accountType || '')).toLowerCase() === 'funded' || Boolean((activeAccount as any)?.isFunded)
+          ? 'funded'
+          : 'challenge';
+
+        const mergedData: UserData = {
+          email: user.email || userDocData.email || '',
           accountBalance: activeAccount.accountBalance,
           initialBalance: activeAccount.initialBalance || activeAccount.accountBalance,
-          accountType: 'challenge',
+          initialFundedBalance: (activeAccount as any).initialFundedBalance,
+          accountType,
           accountStatus: activeAccount.accountStatus,
           tradingDays: activeAccount.tradingDays || 0,
+          fundedAt: (activeAccount as any).fundedAt,
+          payoutsReceived: (activeAccount as any).payoutsReceived,
+          lastPayoutAt: (activeAccount as any).lastPayoutAt,
+          kycVerified: userDocData.kycVerified,
+          kycStatus: userDocData.kycStatus,
         };
-
-        const mergedData: UserData = userDocSnap.exists()
-          ? ({ ...baseData, ...(userDocSnap.data() as any) } as UserData)
-          : baseData;
 
         setUserData(mergedData);
 
-        // Charger les infos d'éligibilité si c'est un compte financé
+        // Calculer les jours de trading à partir des trades (plus fiable que le champ stocké)
+        if (mergedData.accountType === 'challenge') {
+          try {
+            const tradingDays = await computeTradingDaysForAccount();
+            setUserData((prev) => (prev ? { ...prev, tradingDays } : prev));
+          } catch (e) {
+            // ignore
+          }
+        }
+
         if (mergedData.accountType === 'funded') {
           await checkEligibility(mergedData);
         }
@@ -95,15 +140,18 @@ export default function PayoutPage() {
       const tradesSnapshot = await getDocs(
         query(
           collection(db, 'trades'),
-          where('userId', '==', user!.uid),
-          where('status', '==', 'closed'),
-          where('closedAt', '>=', fundedAt.toISOString())
+          where('userId', '==', user!.uid)
         )
       );
 
       const profitByDay = new Map<string, number>();
       tradesSnapshot.forEach((doc) => {
         const trade = doc.data();
+        if (!trade) return;
+        if (!activeAccount || !trade.accountId || trade.accountId !== activeAccount.id) return;
+        if (trade.status !== 'closed') return;
+        if (!trade.closedAt) return;
+        if (new Date(trade.closedAt).getTime() < fundedAt.getTime()) return;
         const closedDate = new Date(trade.closedAt);
         const dateKey = closedDate.toISOString().split('T')[0];
         const currentProfit = profitByDay.get(dateKey) || 0;
@@ -137,7 +185,7 @@ export default function PayoutPage() {
     try {
       const functions = getFunctions();
       const upgradeChallenge = httpsCallable(functions, 'upgradeChallenge');
-      const result = await upgradeChallenge();
+      const result = await upgradeChallenge({ accountId: activeAccount?.id });
 
       alert('✅ Challenge validé ! Votre compte est maintenant financé.');
       window.location.reload();
@@ -177,7 +225,7 @@ export default function PayoutPage() {
     try {
       const functions = getFunctions();
       const requestPayout = httpsCallable(functions, 'requestPayout');
-      const result: any = await requestPayout({ amount: parseFloat(payoutAmount) });
+      const result: any = await requestPayout({ amount: parseFloat(payoutAmount), accountId: activeAccount?.id });
 
       alert('✅ ' + result.data.message);
       setPayoutAmount('');
@@ -214,11 +262,14 @@ export default function PayoutPage() {
 
     return (
       <div className="flex flex-col gap-6 p-8">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Upgrade Challenge</h1>
-          <p className="text-muted-foreground">
-            Validez votre challenge pour accéder aux payouts
-          </p>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">Upgrade Challenge</h1>
+            <p className="text-muted-foreground">
+              Validez votre challenge pour accéder aux payouts
+            </p>
+          </div>
+          <AccountSelector />
         </div>
 
         <Card>
@@ -280,11 +331,14 @@ export default function PayoutPage() {
   if (!userData.kycVerified) {
     return (
       <div className="flex flex-col gap-6 p-8">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Vérification d'Identité Requise</h1>
-          <p className="text-muted-foreground">
-            Vérifiez votre identité pour débloquer les payouts
-          </p>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">Vérification d'Identité Requise</h1>
+            <p className="text-muted-foreground">
+              Vérifiez votre identité pour débloquer les payouts
+            </p>
+          </div>
+          <AccountSelector />
         </div>
 
         <Card className="border-blue-500 bg-blue-500/5">
@@ -368,14 +422,17 @@ export default function PayoutPage() {
 
   return (
     <div className="flex flex-col gap-6 p-8">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-          Demande de Payout
-          <CheckCircle className="h-6 w-6 text-green-600" />
-        </h1>
-        <p className="text-muted-foreground">
-          Retirez vos profits de trading
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
+            Demande de Payout
+            <CheckCircle className="h-6 w-6 text-green-600" />
+          </h1>
+          <p className="text-muted-foreground">
+            Retirez vos profits de trading
+          </p>
+        </div>
+        <AccountSelector />
       </div>
 
       {eligibilityInfo && eligibilityInfo.isFirstPayout && (
