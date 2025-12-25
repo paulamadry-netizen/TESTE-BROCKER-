@@ -1668,6 +1668,7 @@ export const contactPublicHttp = onRequest(
 export {
   executeTrade,
   closeTrade,
+  updateTradeTargets,
   updateTradingDays,
   calculateDrawdowns,
   closeTradesBeforeWeekend,

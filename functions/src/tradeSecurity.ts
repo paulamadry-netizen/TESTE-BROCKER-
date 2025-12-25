@@ -315,12 +315,14 @@ async function validateAccountDailyDrawdown(userId: string, accountId: string, i
 
 interface TradeData {
   userId: string;
+  accountId?: string;
   symbol: string;
   symbolApi: string;
   side: 'BUY' | 'SELL';
   lots: number;
   tp?: number | null;
   sl?: number | null;
+  price?: number;
 }
 
 interface ValidationResult {
@@ -546,7 +548,8 @@ function calculateMargin(symbol: string, lots: number, price: number): number {
 
 async function validateMargin(
   userId: string,
-  userData: any,
+  accountId: string,
+  accountData: any,
   symbol: string,
   lots: number,
   price: number
@@ -562,13 +565,20 @@ async function validateMargin(
   let usedMargin = 0;
   openTradesSnapshot.forEach((doc) => {
     const trade = doc.data();
+    const tradeAccountId = typeof trade.accountId === 'string'
+      ? trade.accountId
+      : (typeof trade.activeAccountId === 'string' ? trade.activeAccountId : '');
+    if (tradeAccountId !== accountId) return;
     const tradeMargin = calculateMargin(trade.symbolApi || trade.symbol, trade.lots, trade.entryPrice);
     usedMargin += tradeMargin;
   });
   
   // Balance disponible = balance totale - marge utilisée
-  const accountBalance = userData.accountBalance || userData.initialBalance || 25000;
-  const availableBalance = accountBalance - usedMargin;
+  const accountBalance = Number(accountData?.accountBalance ?? accountData?.initialBalance ?? 25000);
+  const storedAvailable = Number(accountData?.availableBalance);
+  const availableBalance = Number.isFinite(storedAvailable)
+    ? storedAvailable
+    : (accountBalance - usedMargin);
   
   console.log(`📊 Margin check: Account=${accountBalance}, Used=${usedMargin.toFixed(2)}, Available=${availableBalance.toFixed(2)}, Required=${requiredMargin.toFixed(2)}`);
 
@@ -587,7 +597,7 @@ async function validateMargin(
 // ==========================================
 
 export const executeTrade = onCall({ secrets: [finnhubApiKey] }, async (request) => {
-  const { userId, symbol, symbolApi, side, lots, tp, sl } = request.data as TradeData;
+  const { userId, accountId: requestedAccountId, symbol, symbolApi, side, lots, tp, sl } = request.data as TradeData;
 
   console.log(`🔍 Tentative de trade: ${side} ${symbol} ${lots} lots`);
 
@@ -608,11 +618,25 @@ export const executeTrade = onCall({ secrets: [finnhubApiKey] }, async (request)
 
   const userData = userDoc.data()!;
 
+  const resolvedAccountId = (typeof requestedAccountId === 'string' && requestedAccountId.trim())
+    ? requestedAccountId.trim()
+    : (typeof (userData as any)?.activeAccountId === 'string' ? (userData as any).activeAccountId : '');
+  if (!resolvedAccountId) {
+    throw new HttpsError('failed-precondition', 'Aucun compte actif');
+  }
+
+  const accountRef = db.collection('users').doc(userId).collection('accounts').doc(resolvedAccountId);
+  const accountSnap = await accountRef.get();
+  if (!accountSnap.exists) {
+    throw new HttpsError('not-found', 'Compte introuvable');
+  }
+  const accountData = accountSnap.data() as any;
+
   // 3. Vérifier que le compte est actif
-  if (userData.accountStatus !== 'active') {
+  if (accountData.accountStatus !== 'active') {
     throw new HttpsError(
       'failed-precondition',
-      `Compte ${userData.accountStatus}. Trading désactivé.`
+      `Compte ${accountData.accountStatus}. Trading désactivé.`
     );
   }
 
@@ -626,14 +650,17 @@ export const executeTrade = onCall({ secrets: [finnhubApiKey] }, async (request)
     throw new HttpsError('failed-precondition', hoursCheck.reason!);
   }
 
+  const initialBalance = Number(accountData?.initialBalance ?? accountData?.accountBalance ?? 25000);
+  const currentBalance = Number(accountData?.accountBalance ?? initialBalance);
+
   // 5. VALIDATION DRAWDOWN TOTAL
-  const totalDrawdownCheck = await validateTotalDrawdown(userId, userData);
+  const totalDrawdownCheck = await validateAccountTotalDrawdown(userId, resolvedAccountId, initialBalance, currentBalance);
   if (!totalDrawdownCheck.allowed) {
     throw new HttpsError('failed-precondition', totalDrawdownCheck.reason!);
   }
 
   // 6. VALIDATION DRAWDOWN JOURNALIER
-  const dailyDrawdownCheck = await validateDailyDrawdown(userId, userData);
+  const dailyDrawdownCheck = await validateAccountDailyDrawdown(userId, resolvedAccountId, initialBalance);
   if (!dailyDrawdownCheck.allowed) {
     throw new HttpsError('failed-precondition', dailyDrawdownCheck.reason!);
   }
@@ -646,7 +673,7 @@ export const executeTrade = onCall({ secrets: [finnhubApiKey] }, async (request)
   console.log(`✅ Prix validé serveur: ${symbolApi} = ${price}`);
 
   // 8. VALIDATION DE LA MARGE
-  const marginCheck = await validateMargin(userId, userData, symbolApi, lots, price);
+  const marginCheck = await validateMargin(userId, resolvedAccountId, accountData, symbolApi, lots, price);
   if (!marginCheck.allowed) {
     await auditLog('trade_rejected', userId, {
       reason: 'insufficient_margin',
@@ -664,14 +691,18 @@ export const executeTrade = onCall({ secrets: [finnhubApiKey] }, async (request)
       // Créer le trade
       transaction.set(tradeRef, {
         userId,
+        accountId: resolvedAccountId,
         symbol,
         symbolApi,
         side,
         lots,
         entryPrice: price,
         currentPrice: price,
+        takeProfit: tp || null,
+        stopLoss: sl || null,
         tp: tp || null,
         sl: sl || null,
+        marginUsed,
         status: 'open',
         pnl: 0,
         openedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -681,9 +712,10 @@ export const executeTrade = onCall({ secrets: [finnhubApiKey] }, async (request)
       });
 
       // Mettre à jour la balance disponible
-      transaction.update(userDoc.ref, {
+      transaction.update(accountRef, {
         availableBalance: admin.firestore.FieldValue.increment(-marginUsed),
-        lastTradeAt: admin.firestore.FieldValue.serverTimestamp()
+        lastTradeAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
     });
 
@@ -733,6 +765,10 @@ export const closeTrade = onCall({ secrets: [finnhubApiKey] }, async (request) =
 
   const trade = tradeDoc.data()!;
 
+  const tradeAccountId = typeof trade.accountId === 'string'
+    ? trade.accountId
+    : (typeof trade.activeAccountId === 'string' ? trade.activeAccountId : '');
+
   // Vérifier la propriété
   if (trade.userId !== userId) {
     throw new HttpsError('permission-denied', 'Ce trade ne vous appartient pas');
@@ -758,7 +794,7 @@ export const closeTrade = onCall({ secrets: [finnhubApiKey] }, async (request) =
     pnl = -pnl;
   }
 
-  const marginReleased = calculateMargin(symbol, lots, entryPrice);
+  const marginReleased = Number(trade.marginUsed) || calculateMargin(symbol, lots, entryPrice);
 
   console.log(`💰 P&L calculé: ${pnl.toFixed(2)} USD`);
 
@@ -775,9 +811,21 @@ export const closeTrade = onCall({ secrets: [finnhubApiKey] }, async (request) =
 
       // Mettre à jour la balance
       const userRef = db.collection('users').doc(userId);
-      transaction.update(userRef, {
+      const userSnap = await transaction.get(userRef);
+
+      const fallbackAccountId = userSnap.exists && typeof (userSnap.data() as any)?.activeAccountId === 'string'
+        ? (userSnap.data() as any).activeAccountId
+        : '';
+      const resolvedAccountId = tradeAccountId || fallbackAccountId;
+      if (!resolvedAccountId) {
+        throw new HttpsError('failed-precondition', 'Aucun compte actif');
+      }
+
+      const accountRef = db.collection('users').doc(userId).collection('accounts').doc(resolvedAccountId);
+      transaction.update(accountRef, {
         accountBalance: admin.firestore.FieldValue.increment(pnl),
-        availableBalance: admin.firestore.FieldValue.increment(pnl + marginReleased)
+        availableBalance: admin.firestore.FieldValue.increment(pnl + marginReleased),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
     });
 
@@ -789,25 +837,81 @@ export const closeTrade = onCall({ secrets: [finnhubApiKey] }, async (request) =
       marginReleased
     });
 
-    // Vérifier les règles après la fermeture
     const userDoc = await db.collection('users').doc(userId).get();
-    const userData = userDoc.data()!;
-
-    await validateTotalDrawdown(userId, userData);
-    await validateDailyDrawdown(userId, userData);
+    const userData = userDoc.data() as any;
+    const fallbackAccountId = userData && typeof userData.activeAccountId === 'string' ? userData.activeAccountId : '';
+    const resolvedAccountId = tradeAccountId || fallbackAccountId;
+    if (resolvedAccountId) {
+      const accountDoc = await db.collection('users').doc(userId).collection('accounts').doc(resolvedAccountId).get();
+      const accountData = accountDoc.exists ? (accountDoc.data() as any) : {};
+      const initialBalance = Number(accountData?.initialBalance ?? accountData?.accountBalance ?? 25000);
+      const currentBalance = Number(accountData?.accountBalance ?? 0);
+      await validateAccountTotalDrawdown(userId, resolvedAccountId, initialBalance, currentBalance);
+      await validateAccountDailyDrawdown(userId, resolvedAccountId, initialBalance);
+    }
 
     console.log(`✅ Trade fermé: ${tradeId}`);
+
+    const resolvedAccountIdForReturn = tradeAccountId || (userData && typeof userData.activeAccountId === 'string' ? userData.activeAccountId : '');
+    const accountSnap = resolvedAccountIdForReturn
+      ? await db.collection('users').doc(userId).collection('accounts').doc(resolvedAccountIdForReturn).get()
+      : null;
+    const newBalance = accountSnap && accountSnap.exists ? Number((accountSnap.data() as any)?.accountBalance ?? 0) : null;
 
     return {
       success: true,
       pnl,
-      newBalance: userData.accountBalance + pnl
+      newBalance,
     };
 
   } catch (error: any) {
     console.error('❌ Erreur fermeture trade:', error);
     throw new HttpsError('internal', `Erreur: ${error.message}`);
   }
+});
+
+export const updateTradeTargets = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Non authentifié');
+  }
+
+  const { tradeId, takeProfit, stopLoss } = request.data || {};
+  if (typeof tradeId !== 'string' || !tradeId.trim()) {
+    throw new HttpsError('invalid-argument', 'tradeId invalide');
+  }
+
+  const userId = request.auth.uid;
+  const tradeRef = db.collection('trades').doc(tradeId);
+  const tradeSnap = await tradeRef.get();
+  if (!tradeSnap.exists) {
+    throw new HttpsError('not-found', 'Trade introuvable');
+  }
+  const trade = tradeSnap.data() as any;
+  if (trade.userId !== userId) {
+    throw new HttpsError('permission-denied', 'Ce trade ne vous appartient pas');
+  }
+  if (trade.status !== 'open') {
+    throw new HttpsError('failed-precondition', 'Trade déjà fermé');
+  }
+
+  const tp = takeProfit === null || takeProfit === undefined ? null : Number(takeProfit);
+  const sl = stopLoss === null || stopLoss === undefined ? null : Number(stopLoss);
+  if (tp !== null && !Number.isFinite(tp)) {
+    throw new HttpsError('invalid-argument', 'takeProfit invalide');
+  }
+  if (sl !== null && !Number.isFinite(sl)) {
+    throw new HttpsError('invalid-argument', 'stopLoss invalide');
+  }
+
+  await tradeRef.update({
+    takeProfit: tp,
+    stopLoss: sl,
+    tp,
+    sl,
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+
+  return { success: true };
 });
 
 // ==========================================
