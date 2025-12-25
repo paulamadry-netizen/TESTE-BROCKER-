@@ -1696,6 +1696,22 @@ interface PricesResponse {
   prices: { [symbol: string]: PriceData };
 }
 
+function calculateMarginLocal(symbol: string, lots: number, price: number): number {
+  const leverage = 20;
+  const isStock = !symbol.includes('/') && !symbol.includes('XAU') && !symbol.includes('XAG');
+  const isMetal = symbol.includes('XAU') || symbol.includes('XAG');
+  let contractSize: number;
+  if (isStock) {
+    contractSize = 100;
+  } else if (isMetal) {
+    contractSize = 100;
+  } else {
+    contractSize = 100000;
+  }
+  const notionalValue = contractSize * lots * price;
+  return notionalValue / leverage;
+}
+
 function httpGet(url: string): Promise<PricesResponse> {
   return new Promise((resolve, reject) => {
     https.get(url, (res) => {
@@ -1813,18 +1829,28 @@ export const checkSlTp = onSchedule('every 1 minutes', async () => {
             closedAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
           });
-          
+
           if (userId) {
             const userRef = admin.firestore().collection('users').doc(userId);
             const userDoc = await userRef.get();
-            if (userDoc.exists) {
-              const userData = userDoc.data();
-              const newBalance = (userData?.accountBalance || 0) + pnl;
-              await userRef.update({
-                accountBalance: newBalance,
-                updatedAt: new Date().toISOString()
+
+            const tradeAccountId = typeof (trade as any)?.accountId === 'string'
+              ? String((trade as any).accountId)
+              : (typeof (trade as any)?.activeAccountId === 'string' ? String((trade as any).activeAccountId) : '');
+            const fallbackAccountId = userDoc.exists && typeof (userDoc.data() as any)?.activeAccountId === 'string'
+              ? (userDoc.data() as any).activeAccountId
+              : '';
+            const resolvedAccountId = tradeAccountId || fallbackAccountId;
+            if (!resolvedAccountId) {
+              console.log(`⚠️ Aucun compte actif pour ${userId}, balance non mise à jour`);
+            } else {
+              const marginReleased = Number((trade as any)?.marginUsed) || calculateMarginLocal(String((trade as any)?.symbolApi || symbol), Number(lots) || 0, Number(entryPrice) || 0);
+              const accountRef = admin.firestore().collection('users').doc(userId).collection('accounts').doc(resolvedAccountId);
+              await accountRef.update({
+                accountBalance: admin.firestore.FieldValue.increment(pnl),
+                availableBalance: admin.firestore.FieldValue.increment(pnl + marginReleased),
+                updatedAt: new Date().toISOString(),
               });
-              console.log(`💰 Solde mis à jour pour ${userId}: ${newBalance}`);
             }
           }
           
@@ -1905,27 +1931,56 @@ export const checkPendingOrders = onSchedule('every 1 minutes', async () => {
         
         if (shouldExecute) {
           console.log(`🎯 Ordre ${orderType} exécuté: ${side} ${symbol} @ ${price}`);
-          
-          const tradeRef = await admin.firestore().collection('trades').add({
-            userId: userId,
-            symbolApi: symbol,
-            symbol: symbol,
-            side: side,
-            entryPrice: price,
-            currentPrice: mid,
-            lots: lots,
-            takeProfit: takeProfit || null,
-            stopLoss: stopLoss || null,
-            status: 'open',
-            openedAt: new Date().toISOString(),
-            createdAt: new Date().toISOString()
-          });
-          
-          await admin.firestore().collection('orders').doc(id).update({
-            status: 'executed',
-            executedAt: new Date().toISOString(),
-            tradeId: tradeRef.id,
-            updatedAt: new Date().toISOString()
+
+          const orderAccountId = typeof (order as any)?.accountId === 'string' ? String((order as any).accountId) : '';
+          const userRef = admin.firestore().collection('users').doc(userId);
+          const userSnap = await userRef.get();
+          const fallbackAccountId = userSnap.exists && typeof (userSnap.data() as any)?.activeAccountId === 'string'
+            ? (userSnap.data() as any).activeAccountId
+            : '';
+          const resolvedAccountId = orderAccountId || fallbackAccountId;
+
+          const marginRaw = (order as any)?.margin;
+          const marginUsed = Number.isFinite(Number(marginRaw))
+            ? Number(marginRaw)
+            : calculateMarginLocal(String(symbol), Number(lots) || 0, Number(price) || 0);
+
+          const tradeDocRef = admin.firestore().collection('trades').doc();
+          await admin.firestore().runTransaction(async (tx) => {
+            tx.set(tradeDocRef, {
+              userId: userId,
+              accountId: resolvedAccountId || null,
+              symbolApi: symbol,
+              symbol: symbol,
+              side: side,
+              entryPrice: price,
+              currentPrice: mid,
+              lots: lots,
+              takeProfit: takeProfit || null,
+              stopLoss: stopLoss || null,
+              tp: takeProfit || null,
+              sl: stopLoss || null,
+              marginUsed: marginUsed || null,
+              status: 'open',
+              openedAt: new Date().toISOString(),
+              createdAt: new Date().toISOString(),
+            });
+
+            tx.update(admin.firestore().collection('orders').doc(id), {
+              status: 'executed',
+              executedAt: new Date().toISOString(),
+              tradeId: tradeDocRef.id,
+              updatedAt: new Date().toISOString(),
+            });
+
+            if (resolvedAccountId && marginUsed) {
+              const accountRef = admin.firestore().collection('users').doc(userId).collection('accounts').doc(resolvedAccountId);
+              tx.update(accountRef, {
+                availableBalance: admin.firestore.FieldValue.increment(-marginUsed),
+                lastTradeAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+              });
+            }
           });
           
           executedOrders.push({ id, symbol, side, price });

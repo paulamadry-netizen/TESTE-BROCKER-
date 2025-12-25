@@ -1003,7 +1003,7 @@ export const closeTradesBeforeWeekend = onSchedule({
           pnl = -pnl;
         }
 
-        const marginReleased = calculateMargin(trade.symbolApi, lots, entryPrice);
+        const marginReleased = Number(trade.marginUsed) || calculateMargin(trade.symbolApi, lots, entryPrice);
 
         console.log(`💰 P&L calculé pour ${trade.symbol}: ${pnl.toFixed(2)} USD`);
 
@@ -1018,11 +1018,25 @@ export const closeTradesBeforeWeekend = onSchedule({
             closedBy: 'weekend_auto_close'
           });
 
-          // Mettre à jour la balance utilisateur
           const userRef = db.collection('users').doc(trade.userId);
-          transaction.update(userRef, {
+          const userSnap = await transaction.get(userRef);
+
+          const tradeAccountId = typeof (trade as any)?.accountId === 'string'
+            ? String((trade as any).accountId)
+            : (typeof (trade as any)?.activeAccountId === 'string' ? String((trade as any).activeAccountId) : '');
+          const fallbackAccountId = userSnap.exists && typeof (userSnap.data() as any)?.activeAccountId === 'string'
+            ? (userSnap.data() as any).activeAccountId
+            : '';
+          const resolvedAccountId = tradeAccountId || fallbackAccountId;
+          if (!resolvedAccountId) {
+            throw new HttpsError('failed-precondition', 'Aucun compte actif');
+          }
+
+          const accountRef = db.collection('users').doc(trade.userId).collection('accounts').doc(resolvedAccountId);
+          transaction.update(accountRef, {
             accountBalance: admin.firestore.FieldValue.increment(pnl),
-            availableBalance: admin.firestore.FieldValue.increment(pnl + marginReleased)
+            availableBalance: admin.firestore.FieldValue.increment(pnl + marginReleased),
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
           });
         });
 
