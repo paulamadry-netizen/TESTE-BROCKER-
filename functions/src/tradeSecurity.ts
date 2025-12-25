@@ -1073,7 +1073,11 @@ export const upgradeChallenge = onCall(async (request) => {
 
   const profitPercent = ((currentBalance - initialBalance) / initialBalance) * 100;
   const stats = await getAccountTradeStats(userId, activeAccountId);
-  const tradingDays = Number(accountData?.tradingDays ?? stats.tradingDays ?? 0);
+  const tradingDaysFromAccount = Number(accountData?.tradingDays);
+  const tradingDaysFromStats = Number(stats?.tradingDays);
+  const tradingDays = Number.isFinite(tradingDaysFromStats)
+    ? tradingDaysFromStats
+    : (Number.isFinite(tradingDaysFromAccount) ? tradingDaysFromAccount : 0);
 
   if (tradingDays < 3) {
     throw new HttpsError('failed-precondition', `Vous devez trader pendant au moins 3 jours. Jours actuels: ${tradingDays}/3`);
