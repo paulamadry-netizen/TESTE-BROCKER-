@@ -20,6 +20,154 @@ function generateSecurePassword(): string {
   return password;
 }
 
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function buildFundedCreatedEmail(params: {
+  accountName: string;
+  brokerIdentifier: string;
+  brokerPassword: string;
+  brokerLoginUrl: string;
+  profitPercent?: number;
+  tradingDays?: number;
+  isForce?: boolean;
+}) {
+  const {
+    accountName,
+    brokerIdentifier,
+    brokerPassword,
+    brokerLoginUrl,
+    profitPercent,
+    tradingDays,
+    isForce,
+  } = params;
+
+  const safeAccountName = escapeHtml(accountName);
+  const safeIdentifier = escapeHtml(brokerIdentifier);
+  const safePassword = escapeHtml(brokerPassword);
+  const safeLoginUrl = escapeHtml(brokerLoginUrl);
+
+  const hasStats = Number.isFinite(profitPercent) && Number.isFinite(tradingDays);
+  const statsLine = hasStats
+    ? `Profit: ${Number(profitPercent).toFixed(2)}% — Jours de trading: ${Number(tradingDays)}`
+    : '';
+
+  const subject = `Félicitations — votre compte financé est prêt (${accountName})`;
+
+  const text =
+    `Félicitations !\n\n` +
+    `Votre challenge est validé et votre compte financé est maintenant actif.\n` +
+    (statsLine ? `${statsLine}\n\n` : `\n`) +
+    `Accès plateforme: ${brokerLoginUrl}\n\n` +
+    `Identifiant: ${brokerIdentifier}\n` +
+    `Mot de passe Broker: ${brokerPassword}\n\n` +
+    `Compte: ${accountName}\n\n` +
+    `Conseil sécurité: changez votre mot de passe après la première connexion.\n` +
+    (isForce ? `\nNote: compte créé via force upgrade (admin).\n` : '');
+
+  const preheader = 'Félicitations — vos accès au compte financé sont prêts.';
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin:0;padding:0;background-color:#f3f4f6;font-family:ui-sans-serif,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,'Helvetica Neue',sans-serif;">
+  <div style="display:none;font-size:1px;color:#f3f4f6;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;">
+    ${escapeHtml(preheader)}
+  </div>
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f3f4f6;padding:32px 16px;">
+    <tr>
+      <td align="center">
+        <table width="600" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 16px 50px rgba(17,24,39,0.10);">
+          <tr>
+            <td style="padding:28px 28px 18px;text-align:left;">
+              <div style="font-weight:800;font-size:20px;letter-spacing:0.2px;color:#0f172a;">AMA FIRM</div>
+              <div style="margin-top:6px;color:#64748b;font-size:13px;">Prop firm — compte financé</div>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding:0 28px 24px;">
+              <h1 style="margin:0;color:#0f172a;font-size:22px;line-height:1.3;">Félicitations, vous êtes financé</h1>
+              <p style="margin:10px 0 0;color:#334155;font-size:14px;line-height:1.7;">
+                Votre challenge est validé. Votre compte financé <strong>${safeAccountName}</strong> est maintenant actif.
+              </p>
+              ${hasStats ? `<p style="margin:10px 0 0;color:#334155;font-size:13px;line-height:1.7;">${escapeHtml(statsLine)}</p>` : ''}
+
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:18px;border-radius:12px;border:1px solid #e5e7eb;background:#f8fafc;">
+                <tr>
+                  <td style="padding:18px;">
+                    <div style="color:#0f172a;font-weight:700;font-size:14px;margin-bottom:10px;">Accès à la plateforme</div>
+                    <a href="${safeLoginUrl}" style="display:inline-block;background:#0f172a;color:#ffffff;text-decoration:none;padding:12px 18px;border-radius:10px;font-size:14px;font-weight:700;">
+                      Se connecter
+                    </a>
+                    <div style="margin-top:10px;color:#64748b;font-size:12px;">Si le bouton ne fonctionne pas : ${safeLoginUrl}</div>
+                  </td>
+                </tr>
+              </table>
+
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:14px;border-radius:12px;border:1px solid #e5e7eb;background:#ffffff;">
+                <tr>
+                  <td style="padding:18px;">
+                    <div style="color:#0f172a;font-weight:700;font-size:14px;margin-bottom:10px;">Vos identifiants Broker</div>
+                    <table width="100%" cellpadding="0" cellspacing="0" style="font-size:13px;color:#334155;">
+                      <tr>
+                        <td style="padding:6px 0;">Identifiant</td>
+                        <td style="padding:6px 0;text-align:right;font-weight:700;color:#0f172a;">${safeIdentifier}</td>
+                      </tr>
+                      <tr>
+                        <td style="padding:6px 0;">Mot de passe</td>
+                        <td style="padding:6px 0;text-align:right;">
+                          <code style="background:#0f172a;color:#ffffff;padding:4px 10px;border-radius:8px;font-size:12px;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,'Liberation Mono','Courier New',monospace;">${safePassword}</code>
+                        </td>
+                      </tr>
+                    </table>
+                    <div style="margin-top:10px;color:#64748b;font-size:12px;">Conseil : changez votre mot de passe après la première connexion.</div>
+                  </td>
+                </tr>
+              </table>
+
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:14px;border-radius:12px;border:1px solid #e5e7eb;background:#f8fafc;">
+                <tr>
+                  <td style="padding:18px;">
+                    <div style="color:#0f172a;font-weight:700;font-size:14px;margin-bottom:8px;">Prochaines étapes</div>
+                    <ul style="margin:0;padding-left:18px;color:#334155;font-size:13px;line-height:1.7;">
+                      <li>Connectez-vous à la plateforme et vérifiez vos informations.</li>
+                      <li>Respectez les règles de gestion du risque pour conserver votre statut.</li>
+                      <li>Une fois éligible, vous pourrez faire une demande de payout depuis le dashboard.</li>
+                    </ul>
+                  </td>
+                </tr>
+              </table>
+
+              ${isForce ? `<p style="margin:16px 0 0;color:#64748b;font-size:12px;line-height:1.6;">Note : compte créé via force upgrade (admin) pour test/assistance.</p>` : ''}
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding:18px 28px 26px;border-top:1px solid #e5e7eb;color:#64748b;font-size:12px;line-height:1.6;">
+              <div style="margin-top:12px;">© 2024 AMA FIRM. Tous droits réservés.</div>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
+  return { subject, text, html };
+}
+
 function generateBrokerIdentifier(): string {
   const charset = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let out = 'AMA-';
@@ -991,22 +1139,16 @@ export const upgradeChallenge = onCall(async (request) => {
     const toEmail = (typeof userData?.email === 'string' ? userData.email : (typeof request.auth.token.email === 'string' ? request.auth.token.email : '')).trim().toLowerCase();
     if (toEmail) {
       const from = 'AMA FIRM <ama.firm.fr@gmail.com>';
-      const subject = `Compte financé créé — ${accountName}`;
-      const text =
-        `Bonjour,\n\n` +
-        `Votre compte financé a été créé.\n\n` +
-        `Accès plateforme: https://teste-brocker.web.app/login.html\n` +
-        `Identifiant: ${brokerIdentifier}\n` +
-        `Mot de passe Broker: ${brokerPassword}\n\n` +
-        `Compte: ${accountName}\n`;
-
-      const html = `<!doctype html><html><body style="font-family:ui-sans-serif,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,'Helvetica Neue',sans-serif;">
-<h2>Compte financé créé</h2>
-<p>Votre compte financé <strong>${accountName}</strong> a été créé.</p>
-<p><strong>Accès plateforme:</strong> <a href="https://teste-brocker.web.app/login.html">Login</a></p>
-<p><strong>Identifiant:</strong> ${brokerIdentifier}<br/>
-<strong>Mot de passe Broker:</strong> ${brokerPassword}</p>
-</body></html>`;
+      const brokerLoginUrl = 'https://teste-brocker.web.app/login.html';
+      const emailContent = buildFundedCreatedEmail({
+        accountName,
+        brokerIdentifier,
+        brokerPassword,
+        brokerLoginUrl,
+        profitPercent,
+        tradingDays,
+        isForce: false,
+      });
 
       try {
         await db.collection('mail').add({
@@ -1014,9 +1156,9 @@ export const upgradeChallenge = onCall(async (request) => {
           message: {
             from,
             replyTo: 'paul.ama.firm.fr@gmail.com',
-            subject,
-            text,
-            html,
+            subject: emailContent.subject,
+            text: emailContent.text,
+            html: emailContent.html,
             headers: {
               'X-AMA-Email': 'funded_created',
               'X-AMA-UserId': userId,
@@ -1146,22 +1288,15 @@ export const forceUpgradeChallenge = onCall(async (request) => {
     const toEmail = (typeof userData?.email === 'string' ? userData.email : '').trim().toLowerCase();
     if (toEmail) {
       const from = 'AMA FIRM <ama.firm.fr@gmail.com>';
-      const subject = `Compte financé créé — ${accountName}`;
-      const text =
-        `Bonjour,\n\n` +
-        `Votre compte financé a été créé.\n\n` +
-        `Accès plateforme: https://teste-brocker.web.app/login.html\n` +
-        `Identifiant: ${brokerIdentifier}\n` +
-        `Mot de passe Broker: ${brokerPassword}\n\n` +
-        `Compte: ${accountName}\n`;
-
-      const html = `<!doctype html><html><body style="font-family:ui-sans-serif,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,'Helvetica Neue',sans-serif;">
-<h2>Compte financé créé</h2>
-<p>Votre compte financé <strong>${accountName}</strong> a été créé.</p>
-<p><strong>Accès plateforme:</strong> <a href="https://teste-brocker.web.app/login.html">Login</a></p>
-<p><strong>Identifiant:</strong> ${brokerIdentifier}<br/>
-<strong>Mot de passe Broker:</strong> ${brokerPassword}</p>
-</body></html>`;
+      const brokerLoginUrl = 'https://teste-brocker.web.app/login.html';
+      const emailContent = buildFundedCreatedEmail({
+        accountName,
+        brokerIdentifier,
+        brokerPassword,
+        brokerLoginUrl,
+        profitPercent,
+        isForce: true,
+      });
 
       try {
         await db.collection('mail').add({
@@ -1169,9 +1304,9 @@ export const forceUpgradeChallenge = onCall(async (request) => {
           message: {
             from,
             replyTo: 'paul.ama.firm.fr@gmail.com',
-            subject,
-            text,
-            html,
+            subject: emailContent.subject,
+            text: emailContent.text,
+            html: emailContent.html,
             headers: {
               'X-AMA-Email': 'funded_created_force',
               'X-AMA-UserId': targetUserId,
