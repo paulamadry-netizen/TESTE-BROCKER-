@@ -20,6 +20,7 @@ interface UserData {
   accountType: 'challenge' | 'funded';
   accountStatus: string;
   tradingDays: number;
+  role?: string;
   kycVerified?: boolean;
   kycStatus?: string;
   fundedAt?: any;
@@ -47,6 +48,21 @@ export default function PayoutPage() {
       return isNaN(d.getTime()) ? null : d;
     } catch {
       return null;
+    }
+  };
+
+  const handleForceUpgradeChallenge = async () => {
+    setProcessing(true);
+    try {
+      const functions = getFunctions();
+      const forceUpgradeChallenge = httpsCallable(functions, 'forceUpgradeChallenge');
+      const result: any = await forceUpgradeChallenge({ accountId: activeAccount?.id });
+      alert('✅ ' + (result?.data?.message || 'Compte financé créé.'));
+      window.location.reload();
+    } catch (error: any) {
+      alert('❌ ' + (error.message || 'Erreur force upgrade'));
+    } finally {
+      setProcessing(false);
     }
   };
 
@@ -102,6 +118,7 @@ export default function PayoutPage() {
           accountType,
           accountStatus: activeAccount.accountStatus,
           tradingDays: activeAccount.tradingDays || 0,
+          role: userDocData.role,
           fundedAt: (activeAccount as any).fundedAt,
           payoutsReceived: (activeAccount as any).payoutsReceived,
           lastPayoutAt: (activeAccount as any).lastPayoutAt,
@@ -336,6 +353,17 @@ export default function PayoutPage() {
                 'Valider le Challenge'
               )}
             </Button>
+
+            {userData.role === 'admin' && (
+              <Button
+                onClick={handleForceUpgradeChallenge}
+                disabled={processing || !activeAccount || userData.accountStatus !== 'active'}
+                variant="secondary"
+                className="w-full"
+              >
+                Forcer l'upgrade (admin)
+              </Button>
+            )}
           </CardContent>
         </Card>
       </div>

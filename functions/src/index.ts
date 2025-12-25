@@ -6,6 +6,7 @@
 import { onRequest, onCall, HttpsError } from 'firebase-functions/v2/https';
 import { defineSecret } from 'firebase-functions/params';
 import * as admin from 'firebase-admin';
+import * as functionsV1 from 'firebase-functions';
 import Stripe from 'stripe';
 import { StripeCheckoutSession, StripeSubscription } from './types/stripe.types';
 import { UserDocument, EmailTemplate } from './types/firebase.types';
@@ -13,9 +14,498 @@ import { UserDocument, EmailTemplate } from './types/firebase.types';
 // Initialiser Firebase Admin
 admin.initializeApp();
 
+export const brokerLogin = onCall(
+  {
+    cors: true,
+  },
+  async (request) => {
+    const data = request.data as { email?: string; identifier?: string; login?: string; password?: string };
+    const rawLogin = (data?.login || data?.identifier || data?.email || '').trim();
+    const email = rawLogin.includes('@') ? rawLogin.trim().toLowerCase() : '';
+    const identifier = !email ? rawLogin.trim().toUpperCase() : '';
+    const password = (data?.password || '').trim();
+
+    console.log('🔐 brokerLogin attempt:', {
+      hasEmail: Boolean(email),
+      hasIdentifier: Boolean(identifier),
+      identifier: identifier || null,
+    });
+
+    if ((!email && !identifier) || !password) {
+      throw new HttpsError('invalid-argument', 'Missing login or password');
+    }
+
+    let userRecord: admin.auth.UserRecord;
+    try {
+      if (email) {
+        userRecord = await admin.auth().getUserByEmail(email);
+      } else {
+        const mapSnap = await admin.firestore().collection('broker_identifiers').doc(identifier).get();
+        if (mapSnap.exists) {
+          const mapData = mapSnap.data() as any;
+          const mappedUid = typeof mapData?.uid === 'string' ? mapData.uid : '';
+          if (!mappedUid) {
+            throw new HttpsError('not-found', 'User not found');
+          }
+          userRecord = await admin.auth().getUser(mappedUid);
+        } else {
+          // Fallback: si la map n'existe pas (ancien user), tenter via users.brokerIdentifier
+          const qSnap = await admin.firestore()
+            .collection('users')
+            .where('brokerIdentifier', '==', identifier)
+            .limit(1)
+            .get();
+          if (qSnap.empty) {
+            throw new HttpsError('not-found', 'User not found');
+          }
+          const mappedUid = qSnap.docs[0].id;
+          userRecord = await admin.auth().getUser(mappedUid);
+        }
+      }
+    } catch (e) {
+      throw new HttpsError('not-found', 'User not found');
+    }
+
+    const userId = userRecord.uid;
+
+    console.log('🔐 brokerLogin user resolved:', {
+      uid: userId,
+      via: email ? 'email' : 'identifier',
+    });
+
+    const userSnap = await admin.firestore().collection('users').doc(userId).get();
+    if (!userSnap.exists) {
+      throw new HttpsError('not-found', 'User profile not found');
+    }
+
+    const userData = userSnap.data() as any;
+    const activeAccountId: string | undefined = userData?.activeAccountId;
+
+    if (!activeAccountId) {
+      throw new HttpsError('failed-precondition', 'No active account');
+    }
+
+    const accountSnap = await admin
+      .firestore()
+      .collection('users')
+      .doc(userId)
+      .collection('accounts')
+      .doc(activeAccountId)
+      .get();
+
+    if (!accountSnap.exists) {
+      throw new HttpsError('not-found', 'Active account not found');
+    }
+
+    const accountData = accountSnap.data() as any;
+
+    let resolvedActiveAccountId = activeAccountId;
+    let resolvedAccountData = accountData;
+    let matchedVia: 'activeAccountId' | 'otherAccount' = 'activeAccountId';
+
+    // Si le mot de passe ne matche pas l'account actif, on cherche parmi tous les accounts.
+    if (!resolvedAccountData?.brokerPassword || resolvedAccountData.brokerPassword !== password) {
+      const accountsSnap = await admin
+        .firestore()
+        .collection('users')
+        .doc(userId)
+        .collection('accounts')
+        .get();
+
+      let foundId: string | null = null;
+      let foundData: any = null;
+
+      accountsSnap.forEach((docSnap) => {
+        if (foundId) return;
+        const d = docSnap.data() as any;
+        if (d?.accountStatus && d.accountStatus !== 'active') return;
+        if (d?.brokerPassword && d.brokerPassword === password) {
+          foundId = docSnap.id;
+          foundData = d;
+        }
+      });
+
+      if (!foundId || !foundData) {
+        console.log('🔐 brokerLogin password did not match any account for uid:', userId);
+        throw new HttpsError('permission-denied', 'Invalid credentials');
+      }
+
+      resolvedActiveAccountId = foundId;
+      resolvedAccountData = foundData;
+      matchedVia = 'otherAccount';
+
+      // Basculer l'account actif sur celui correspondant au mot de passe
+      await admin.firestore().collection('users').doc(userId).set({
+        activeAccountId: resolvedActiveAccountId,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+    }
+
+    if (resolvedAccountData?.accountStatus && resolvedAccountData.accountStatus !== 'active') {
+      throw new HttpsError('failed-precondition', 'Account not active');
+    }
+
+    const token = await admin.auth().createCustomToken(userId, {
+      activeAccountId: resolvedActiveAccountId,
+      broker: true,
+    });
+
+    console.log('🔐 brokerLogin success:', {
+      uid: userId,
+      activeAccountId: resolvedActiveAccountId,
+      matchedVia,
+    });
+
+    return { token };
+  }
+);
+
+export const contactPublicHttpV1 = functionsV1.region('us-central1').https.onRequest(async (req, res) => {
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.set('Access-Control-Allow-Headers', 'Content-Type, Accept');
+
+  if (req.method === 'OPTIONS') {
+    res.status(204).send('');
+    return;
+  }
+
+  if (req.method !== 'POST') {
+    res.status(405).json({ success: false, error: 'Method not allowed' });
+    return;
+  }
+
+  const data = (req.body || {}) as { email?: string; subject?: string; message?: string };
+  const email = String(data?.email || '').trim().toLowerCase();
+  const subject = String(data?.subject || '').trim();
+  const message = String(data?.message || '').trim();
+
+  if (!email || !email.includes('@') || email.length > 254) {
+    res.status(400).json({ success: false, error: 'Email invalide' });
+    return;
+  }
+  if (!subject || subject.length < 3 || subject.length > 120) {
+    res.status(400).json({ success: false, error: 'Objet invalide' });
+    return;
+  }
+  if (!message || message.length < 10 || message.length > 5000) {
+    res.status(400).json({ success: false, error: 'Message invalide' });
+    return;
+  }
+
+  const escapeHtml = (value: string): string =>
+    value
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+
+  const safeEmail = escapeHtml(email);
+  const safeSubject = escapeHtml(subject);
+  const safeMessage = escapeHtml(message).replace(/\n/g, '<br/>');
+
+  const supportInbox = 'paul.ama.firm.fr@gmail.com';
+  const from = 'AMA FIRM <ama.firm.fr@gmail.com>';
+
+  const text =
+    `Nouvelle demande via la vitrine\n\n` +
+    `Email: ${email}\n` +
+    `Objet: ${subject}\n\n` +
+    `${message}`;
+
+  const html = `<!doctype html>
+<html>
+<body style="font-family:ui-sans-serif,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,'Helvetica Neue',sans-serif;background:#f3f4f6;padding:24px;">
+  <div style="max-width:640px;margin:0 auto;background:#ffffff;border:1px solid #e5e7eb;border-radius:14px;overflow:hidden;">
+    <div style="padding:18px 20px;border-bottom:1px solid #e5e7eb;">
+      <div style="font-weight:800;color:#0f172a;">AMA FIRM — Contact (vitrine)</div>
+      <div style="color:#64748b;font-size:12px;margin-top:4px;">Message envoyé depuis le site vitrine</div>
+    </div>
+    <div style="padding:18px 20px;color:#0f172a;">
+      <div style="font-size:13px;color:#334155;line-height:1.6;">
+        <div><strong>Email:</strong> ${safeEmail}</div>
+        <div><strong>Objet:</strong> ${safeSubject}</div>
+      </div>
+      <div style="margin-top:14px;padding:14px;border-radius:12px;background:#f8fafc;border:1px solid #e5e7eb;color:#0f172a;font-size:13px;line-height:1.7;">${safeMessage}</div>
+    </div>
+  </div>
+</body>
+</html>`;
+
+  try {
+    await admin.firestore().collection('mail').add({
+      to: [supportInbox],
+      message: {
+        from,
+        replyTo: email,
+        subject: `Contact vitrine — ${subject}`,
+        text,
+        html,
+        headers: {
+          'X-AMA-Email': 'contact_public_http_v1',
+        },
+      },
+    });
+    res.status(200).json({ success: true });
+  } catch (error) {
+    const debugId = admin.firestore().collection('contact_public_errors').doc().id;
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    const errorStack = error instanceof Error ? error.stack : undefined;
+
+    const safeRawError = (() => {
+      try {
+        return JSON.stringify(error);
+      } catch (e) {
+        return String(error);
+      }
+    })();
+
+    console.error('❌ contactPublicHttpV1 failed:', {
+      debugId,
+      errorMessage,
+      error,
+    });
+    if (errorStack) {
+      console.error('❌ contactPublicHttpV1 stack:', errorStack);
+    }
+
+    try {
+      await admin.firestore().collection('contact_public_errors').doc(debugId).set({
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        email,
+        subject,
+        messageLength: message.length,
+        errorMessage,
+        errorStack: errorStack || null,
+        rawError: safeRawError,
+        source: 'contactPublicHttpV1',
+      });
+    } catch (logError) {
+      const logErrorMessage = logError instanceof Error ? logError.message : 'Unknown log error';
+      console.error('❌ contactPublicHttpV1 failed to write debug log:', logErrorMessage);
+    }
+
+    res.status(500).json({ success: false, debugId });
+  }
+});
+
 // Définir les secrets
 const stripeSecretKey = defineSecret('STRIPE_SECRET_KEY');
 const stripeWebhookSecret = defineSecret('STRIPE_WEBHOOK_SECRET');
+
+function generateBrokerIdentifier(): string {
+  const charset = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let out = 'AMA-';
+  for (let i = 0; i < 8; i++) {
+    out += charset[Math.floor(Math.random() * charset.length)];
+  }
+  return out;
+}
+
+async function ensureBrokerIdentifier(uid: string): Promise<string> {
+  const userRef = admin.firestore().collection('users').doc(uid);
+  const userSnap = await userRef.get();
+  const existing = userSnap.exists ? (userSnap.data() as any)?.brokerIdentifier : null;
+  if (typeof existing === 'string' && existing.trim()) {
+    const identifier = existing.trim().toUpperCase();
+    try {
+      await admin.firestore().collection('broker_identifiers').doc(identifier).set({
+        uid,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+    } catch (e) {
+    }
+    return identifier;
+  }
+
+  for (let i = 0; i < 10; i++) {
+    const identifier = generateBrokerIdentifier();
+    const mapRef = admin.firestore().collection('broker_identifiers').doc(identifier);
+    try {
+      await mapRef.create({
+        uid,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      await userRef.set({
+        brokerIdentifier: identifier,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+      return identifier;
+    } catch (e) {
+    }
+  }
+
+  throw new Error('Unable to generate broker identifier');
+}
+
+export const createCheckoutFromPaymentLink = onCall(
+  {
+    cors: true,
+    secrets: [stripeSecretKey],
+  },
+  async (request) => {
+    if (!request.auth?.uid) {
+      throw new HttpsError('unauthenticated', 'Authentication required');
+    }
+
+    const authEmail = typeof request.auth.token.email === 'string' ? request.auth.token.email : undefined;
+    console.log('🧾 createCheckoutFromPaymentLink called:', {
+      uid: request.auth.uid,
+      email: authEmail || null,
+    });
+
+    const data = request.data as { paymentLinkUrl?: string };
+    const paymentLinkUrl = (data?.paymentLinkUrl || '').trim();
+
+    console.log('🧾 createCheckoutFromPaymentLink paymentLinkUrl:', paymentLinkUrl);
+
+    const allowedPaymentLinks = new Set<string>([
+      'https://buy.stripe.com/test_eVq00jfY0evn51obaT1ZS01',
+      'https://buy.stripe.com/test_3cIaEX9zCaf7gK6baT1ZS00',
+      'https://buy.stripe.com/test_3cI3cv27adrj51o2En1ZS02',
+    ]);
+
+    if (!allowedPaymentLinks.has(paymentLinkUrl)) {
+      throw new HttpsError('invalid-argument', 'Unknown payment link');
+    }
+
+    const stripe = new Stripe(stripeSecretKey.value(), {
+      apiVersion: '2023-10-16',
+    });
+
+    // Retrieve the payment link id from its url
+    const paymentLinks = await stripe.paymentLinks.list({
+      limit: 100,
+      active: true,
+    });
+
+    const paymentLink = paymentLinks.data.find((pl) => pl.url === paymentLinkUrl);
+    if (!paymentLink) {
+      throw new HttpsError('not-found', 'Payment link not found in Stripe');
+    }
+
+    const paymentLinkLineItems = await stripe.paymentLinks.listLineItems(paymentLink.id, {
+      limit: 10,
+      expand: ['data.price'],
+    } as any);
+
+    const line_items = paymentLinkLineItems.data
+      .map((li) => {
+        const price = li ? (li as any).price : null;
+        const priceId = typeof price === 'string' ? price : price?.id;
+        if (!priceId) return null;
+        return {
+          price: priceId,
+          quantity: li.quantity || 1,
+        };
+      })
+      .filter((x): x is { price: string; quantity: number } => Boolean(x));
+
+    if (!line_items.length) {
+      throw new HttpsError('failed-precondition', 'Payment link has no line items');
+    }
+
+    // ================================
+    // LIMITES D'ACHAT
+    // - Max 3 challenges actifs en cours
+    // - Max 1 000 000 de capital funded cumulé
+    // ================================
+
+    const accountsSnap = await admin
+      .firestore()
+      .collection('users')
+      .doc(request.auth.uid)
+      .collection('accounts')
+      .get();
+
+    let activeChallengesCount = 0;
+    let totalFundedCapital = 0;
+
+    accountsSnap.forEach((docSnap) => {
+      const a = docSnap.data() as any;
+      const status = typeof a?.accountStatus === 'string' ? a.accountStatus : '';
+      if (status !== 'active') return;
+
+      const accountTypeRaw = typeof a?.accountType === 'string' ? a.accountType : '';
+      const accountKindRaw = typeof a?.accountKind === 'string' ? a.accountKind : '';
+      const isFunded = Boolean(a?.isFunded);
+      const resolvedType = (accountTypeRaw || accountKindRaw || (isFunded ? 'funded' : 'challenge')).toLowerCase();
+
+      const balanceBase = Number(a?.initialBalance ?? a?.initialFundedBalance ?? a?.accountBalance ?? 0);
+      if (resolvedType === 'funded') {
+        if (Number.isFinite(balanceBase) && balanceBase > 0) {
+          totalFundedCapital += balanceBase;
+        }
+        return;
+      }
+
+      // Par défaut, tout compte actif non-funded compte comme challenge en cours
+      activeChallengesCount += 1;
+    });
+
+    if (activeChallengesCount >= 3) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Vous avez déjà 3 challenges en cours. Terminez-en un avant d\'en acheter un nouveau.'
+      );
+    }
+
+    // Calculer le capital du nouveau challenge à partir du montant (Stripe en centimes)
+    const estimatedAmountCents = paymentLinkLineItems.data
+      .map((li) => {
+        const price = li ? (li as any).price : null;
+        const unitAmount = typeof price?.unit_amount === 'number' ? price.unit_amount : null;
+        const quantity = typeof li?.quantity === 'number' ? li.quantity : 1;
+        if (!unitAmount) return 0;
+        return unitAmount * quantity;
+      })
+      .reduce((sum, v) => sum + v, 0);
+    const estimatedAmountEuros = estimatedAmountCents / 100;
+    const estimatedTradingCapital = determineTradingCapital(estimatedAmountEuros);
+
+    const FUNDED_CAP = 1_000_000;
+    if (totalFundedCapital >= FUNDED_CAP) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Plafond de 1 000 000€ de capital financé atteint. Achat de challenge bloqué.'
+      );
+    }
+    if (totalFundedCapital + estimatedTradingCapital > FUNDED_CAP) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Cet achat dépasserait le plafond de 1 000 000€ de capital financé. Achat de challenge bloqué.'
+      );
+    }
+
+    const baseUrl = 'https://amafirm.web.app';
+
+    const session = await stripe.checkout.sessions.create({
+      mode: 'payment',
+      line_items,
+      client_reference_id: request.auth.uid,
+      customer_email: authEmail,
+      success_url: `${baseUrl}/?success=1&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${baseUrl}/?canceled=1`,
+      metadata: {
+        uid: request.auth.uid,
+        authEmail: authEmail || '',
+      },
+    } as any);
+
+    console.log('🧾 createCheckoutFromPaymentLink session created:', {
+      sessionId: session.id,
+      hasUrl: Boolean(session.url),
+      clientReferenceId: request.auth.uid,
+    });
+
+    if (!session.url) {
+      throw new HttpsError('internal', 'No session url returned');
+    }
+
+    return { url: session.url };
+  }
+);
 
 /**
  * Webhook Stripe - Écoute les événements de paiement (v2 with Secrets)
@@ -109,30 +599,150 @@ async function handleCheckoutCompleted(
 ): Promise<void> {
   console.log('💳 Paiement complété pour la session:', session.id);
 
+  const uidFromClientReferenceId =
+    typeof (session as unknown as { client_reference_id?: unknown }).client_reference_id === 'string'
+      ? (session as unknown as { client_reference_id: string }).client_reference_id.trim()
+      : '';
+
+  const uidFromMetadataRaw = (session as any)?.metadata?.uid;
+  const uidFromMetadata = typeof uidFromMetadataRaw === 'string' ? uidFromMetadataRaw.trim() : '';
+
+  const targetUid = uidFromClientReferenceId || uidFromMetadata;
+  const uidSource = uidFromClientReferenceId ? 'client_reference_id' : uidFromMetadata ? 'metadata.uid' : 'none';
+  console.log('🧩 UID detection:', { uidSource, targetUid: targetUid || null });
+
   // Récupérer l'email du client (plusieurs sources possibles)
   const customerEmail: string | undefined =
     session.customer_details?.email ||
     session.customer_email ||
     session.metadata?.email;
 
-  if (!customerEmail) {
+  const authEmailFromMetadataRaw = (session as any)?.metadata?.authEmail;
+  const authEmailFromMetadata = typeof authEmailFromMetadataRaw === 'string' ? authEmailFromMetadataRaw.trim().toLowerCase() : '';
+
+  const resolvedEmailForProcessing = (authEmailFromMetadata || customerEmail || '').trim().toLowerCase();
+
+  if (!resolvedEmailForProcessing) {
     console.error('❌ ERREUR CRITIQUE: Aucun email trouvé dans la session Stripe');
     console.log('Session data:', JSON.stringify(session, null, 2));
     throw new Error('Email manquant dans la session Stripe');
   }
 
-  console.log('📧 Email du client:', customerEmail);
+  console.log('📧 Email (Stripe ou Auth):', resolvedEmailForProcessing);
+
+  try {
+    await admin.firestore().collection('stripe_webhook_debug').doc(session.id).set({
+      event: 'checkout.session.completed',
+      sessionId: session.id,
+      customerEmail: customerEmail || null,
+      authEmailFromMetadata: authEmailFromMetadata || null,
+      uidFromClientReferenceId: uidFromClientReferenceId || null,
+      uidFromMetadata: uidFromMetadata || null,
+      uidSource,
+      clientReferenceId: targetUid || null,
+      amountTotal: session.amount_total || 0,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+  } catch (e) {
+    console.warn('⚠️ Debug write failed (non-blocking)');
+  }
 
   // Générer un mot de passe aléatoire sécurisé
   const randomPassword: string = generateSecurePassword();
 
+  // Si l'achat vient d'un utilisateur déjà connecté, on rattache le challenge à son UID
+  if (targetUid) {
+    const customerId = typeof session.customer === 'string' ? session.customer : '';
+    const amountTotal = session.amount_total || 0;
+    const amountInEuros = amountTotal / 100;
+    const tradingCapital = determineTradingCapital(amountInEuros);
+    const planName = tradingCapital === 100000 ? 'Or' : tradingCapital === 50000 ? 'Argent' : 'Bronze';
+
+    const accountEmail = resolvedEmailForProcessing;
+
+    let userRecord: admin.auth.UserRecord;
+    try {
+      userRecord = await admin.auth().getUser(targetUid);
+    } catch (e) {
+      try {
+        userRecord = await admin.auth().createUser({
+          uid: targetUid,
+          email: accountEmail,
+          password: randomPassword,
+          emailVerified: false,
+        });
+      } catch (createErr) {
+        // Si l'email existe déjà sur un autre UID, on fallback sur l'utilisateur existant.
+        if (createErr && typeof createErr === 'object' && 'code' in createErr && createErr.code === 'auth/email-already-exists') {
+          userRecord = await admin.auth().getUserByEmail(accountEmail);
+        } else {
+          throw createErr;
+        }
+      }
+    }
+
+    const brokerIdentifier = await ensureBrokerIdentifier(userRecord.uid);
+
+    const brokerPassword: string = generateSecurePassword();
+
+    const accountsSnapshot = await admin.firestore()
+      .collection('users').doc(userRecord.uid)
+      .collection('accounts').get();
+    const accountNumber = accountsSnapshot.size + 1;
+    const accountName = `Challenge ${planName} #${accountNumber}`;
+
+    const newAccountRef = await admin.firestore()
+      .collection('users').doc(userRecord.uid)
+      .collection('accounts').add({
+        accountName: accountName,
+        stripeSessionId: session.id,
+        accountStatus: 'active',
+        accountBalance: tradingCapital,
+        initialBalance: tradingCapital,
+        brokerPassword: brokerPassword,
+        challengeType: 'standard',
+        planType: planName,
+        profitTarget: 10,
+        maxDrawdown: 5,
+        tradingDays: 0,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+    await admin.firestore().collection('users').doc(userRecord.uid).set({
+      stripeCustomerId: customerId,
+      activeAccountId: newAccountRef.id,
+      totalAccounts: accountNumber,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+
+    const destinationEmail = (userRecord.email || accountEmail).trim().toLowerCase();
+    await sendWelcomeEmail(destinationEmail, brokerIdentifier, brokerPassword, session, accountName);
+    console.log('✅ Challenge rattaché à l\'UID:', userRecord.uid, '- Compte:', newAccountRef.id);
+
+    try {
+      await admin.firestore().collection('stripe_webhook_debug').doc(session.id).set({
+        resolvedUid: userRecord.uid,
+        createdAccountId: newAccountRef.id,
+        branch: 'client_reference_id',
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+    } catch (e) {
+      console.warn('⚠️ Debug update failed (non-blocking)');
+    }
+
+    return;
+  }
+
   try {
     // Créer l'utilisateur dans Firebase Auth
     const userRecord = await admin.auth().createUser({
-      email: customerEmail,
+      email: resolvedEmailForProcessing,
       password: randomPassword,
       emailVerified: false,
     });
+
+    const brokerIdentifier = await ensureBrokerIdentifier(userRecord.uid);
 
     console.log('✅ Utilisateur créé avec succès!');
     console.log('   - UID:', userRecord.uid);
@@ -174,7 +784,7 @@ async function handleCheckoutCompleted(
 
     // Créer le document utilisateur principal
     await admin.firestore().collection('users').doc(userRecord.uid).set({
-      email: customerEmail,
+      email: resolvedEmailForProcessing,
       stripeCustomerId: customerId,
       activeAccountId: accountRef.id,
       totalAccounts: 1,
@@ -185,16 +795,17 @@ async function handleCheckoutCompleted(
     console.log('✅ Document utilisateur créé');
 
     // Envoyer un email de bienvenue au client avec le mot de passe
-    await sendWelcomeEmail(customerEmail, randomPassword, session, accountName);
+    await sendWelcomeEmail(resolvedEmailForProcessing, brokerIdentifier, randomPassword, session, accountName);
 
-    console.log('✅ Traitement terminé avec succès pour:', customerEmail);
+    console.log('✅ Traitement terminé avec succès pour:', resolvedEmailForProcessing);
 
   } catch (error) {
     // Si l'utilisateur existe déjà, créer un nouveau compte (challenge) pour lui
     if (error && typeof error === 'object' && 'code' in error && error.code === 'auth/email-already-exists') {
-      console.log('ℹ️ Utilisateur existe déjà, création d\'un nouveau compte:', customerEmail);
+      console.log('ℹ️ Utilisateur existe déjà, création d\'un nouveau compte:', resolvedEmailForProcessing);
 
-      const existingUser = await admin.auth().getUserByEmail(customerEmail);
+      const existingUser = await admin.auth().getUserByEmail(resolvedEmailForProcessing);
+      const brokerIdentifier = await ensureBrokerIdentifier(existingUser.uid);
       const customerId = typeof session.customer === 'string' ? session.customer : '';
       const amountTotal = session.amount_total || 0;
       const amountInEuros = amountTotal / 100;
@@ -235,7 +846,7 @@ async function handleCheckoutCompleted(
 
       // Mettre à jour le document utilisateur principal avec le dernier compte actif
       await admin.firestore().collection('users').doc(existingUser.uid).set({
-        email: customerEmail,
+        email: resolvedEmailForProcessing,
         stripeCustomerId: customerId,
         activeAccountId: newAccountRef.id,
         totalAccounts: accountNumber,
@@ -243,7 +854,8 @@ async function handleCheckoutCompleted(
       }, { merge: true });
 
       // Envoyer l'email avec les identifiants broker
-      await sendWelcomeEmail(customerEmail, brokerPassword, session, accountName);
+      const destinationEmail = (existingUser.email || resolvedEmailForProcessing).trim().toLowerCase();
+      await sendWelcomeEmail(destinationEmail, brokerIdentifier, brokerPassword, session, accountName);
       console.log('✅ Email envoyé avec identifiants broker');
     } else {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -361,7 +973,7 @@ function determineTradingCapital(amountInEuros: number): number {
  */
 function generateSecurePassword(): string {
   const length = 16;
-  const charset = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*';
+  const charset = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^*_-';
   let password = '';
 
   for (let i = 0; i < length; i++) {
@@ -380,17 +992,53 @@ function generateSecurePassword(): string {
  */
 async function sendWelcomeEmail(
   email: string,
+  brokerIdentifier: string,
   password: string,
   session: StripeCheckoutSession,
   accountName?: string
 ): Promise<void> {
+  const escapeHtml = (value: string): string =>
+    value
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+
   const amountTotal = session.amount_total || 0;
   const amountInEuros = amountTotal / 100;
   const tradingCapital = determineTradingCapital(amountInEuros);
   const planName = accountName || (tradingCapital === 100000 ? 'Plan Or' : tradingCapital === 50000 ? 'Plan Argent' : 'Plan Bronze');
+  const safePlanName = escapeHtml(planName);
+  const safeEmail = escapeHtml(email);
+  const safeBrokerIdentifier = escapeHtml(brokerIdentifier);
+  const safePassword = escapeHtml(password);
+  const brokerLoginUrl = 'https://teste-brocker.web.app/login.html';
+  const vitrineUrl = 'https://amafirm.web.app/';
+  const supportEmail = 'support@amafirm.com';
+  const from = 'AMA FIRM <ama.firm.fr@gmail.com>';
   
   console.log('📧 Email de bienvenue à envoyer à:', email);
   console.log('   - Plan:', planName, '- Capital:', tradingCapital + '$');
+
+  const subject = `Bienvenue chez AMA FIRM — Accès à votre ${planName}`;
+
+  const textContent =
+`Bonjour,\n\n` +
+`Votre compte AMA FIRM (${planName}) est prêt.\n` +
+`Capital: ${tradingCapital.toLocaleString('fr-FR')} $\n\n` +
+`Accès plateforme: ${brokerLoginUrl}\n\n` +
+`Identifiants de connexion\n` +
+`Identifiant: ${brokerIdentifier}\n` +
+`Mot de passe Broker: ${password}\n\n` +
+`Rappel règles du challenge\n` +
+`- Objectif profit: 10%\n` +
+`- Drawdown journalier max: 3%\n` +
+`- Drawdown total max: 8%\n` +
+`- Minimum 3 jours de trading\n\n` +
+`Besoin d'aide ? ${supportEmail}\n` +
+`Site: ${vitrineUrl}\n\n` +
+`Si vous n'êtes pas à l'origine de cet achat, contactez-nous immédiatement.`;
 
   const htmlContent = `
 <!DOCTYPE html>
@@ -399,94 +1047,87 @@ async function sendWelcomeEmail(
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
-<body style="margin:0;padding:0;background-color:#0a0e1a;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#0a0e1a;padding:40px 20px;">
+<body style="margin:0;padding:0;background-color:#f3f4f6;font-family:ui-sans-serif,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,'Helvetica Neue',sans-serif;">
+  <div style="display:none;font-size:1px;color:#f3f4f6;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;">
+    Votre compte AMA FIRM est prêt — accès et identifiants à l'intérieur.
+  </div>
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f3f4f6;padding:32px 16px;">
     <tr>
       <td align="center">
-        <table width="600" cellpadding="0" cellspacing="0" style="background-color:#1a1f2e;border-radius:16px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.5);">
-          <!-- Header -->
+        <table width="600" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 16px 50px rgba(17,24,39,0.10);">
           <tr>
-            <td style="background:linear-gradient(135deg,#00d9b8,#00f0cc);padding:40px;text-align:center;">
-              <h1 style="margin:0;color:#0a0e1a;font-size:32px;font-weight:700;">AMA Firm</h1>
-              <p style="margin:10px 0 0;color:#0a0e1a;font-size:14px;opacity:0.8;">Pro Trading Platform</p>
+            <td style="padding:28px 28px 18px;text-align:left;">
+              <div style="font-weight:800;font-size:20px;letter-spacing:0.2px;color:#0f172a;">AMA FIRM</div>
+              <div style="margin-top:6px;color:#64748b;font-size:13px;">Prop firm — accès à votre espace</div>
             </td>
           </tr>
-          
-          <!-- Content -->
+
           <tr>
-            <td style="padding:40px;">
-              <h2 style="color:#00d9b8;font-size:24px;margin:0 0 20px;">🎉 Félicitations !</h2>
-              <p style="color:#e8edf4;font-size:16px;line-height:1.6;margin:0 0 20px;">
-                Votre compte de trading <strong style="color:#00d9b8;">${planName}</strong> a été activé avec succès !
+            <td style="padding:0 28px 24px;">
+              <h1 style="margin:0;color:#0f172a;font-size:22px;line-height:1.3;">Bienvenue chez AMA FIRM</h1>
+              <p style="margin:10px 0 0;color:#334155;font-size:14px;line-height:1.7;">
+                Votre compte <strong>${safePlanName}</strong> est prêt. Capital: <strong>${tradingCapital.toLocaleString('fr-FR')} $</strong>.
               </p>
-              <p style="color:#9ba3b4;font-size:14px;line-height:1.6;margin:0 0 30px;">
-                Vous disposez maintenant d'un capital de <strong style="color:#00d9b8;">${tradingCapital.toLocaleString('fr-FR')} $</strong> pour relever le challenge et devenir un trader financé.
-              </p>
-              
-              <!-- Credentials Box -->
-              <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#0f1419;border-radius:12px;border:1px solid #252b3d;margin-bottom:30px;">
+
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:18px;border-radius:12px;border:1px solid #e5e7eb;background:#f8fafc;">
                 <tr>
-                  <td style="padding:24px;">
-                    <p style="color:#9ba3b4;font-size:12px;text-transform:uppercase;letter-spacing:1px;margin:0 0 16px;">Vos identifiants de connexion</p>
-                    <table width="100%" cellpadding="0" cellspacing="0">
+                  <td style="padding:18px;">
+                    <div style="color:#0f172a;font-weight:700;font-size:14px;margin-bottom:10px;">Accès à la plateforme</div>
+                    <a href="${brokerLoginUrl}" style="display:inline-block;background:#0f172a;color:#ffffff;text-decoration:none;padding:12px 18px;border-radius:10px;font-size:14px;font-weight:700;">
+                      Se connecter
+                    </a>
+                    <div style="margin-top:10px;color:#64748b;font-size:12px;">Si le bouton ne fonctionne pas : ${brokerLoginUrl}</div>
+                  </td>
+                </tr>
+              </table>
+
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:14px;border-radius:12px;border:1px solid #e5e7eb;background:#ffffff;">
+                <tr>
+                  <td style="padding:18px;">
+                    <div style="color:#0f172a;font-weight:700;font-size:14px;margin-bottom:10px;">Identifiants</div>
+                    <table width="100%" cellpadding="0" cellspacing="0" style="font-size:13px;color:#334155;">
                       <tr>
-                        <td style="padding:8px 0;">
-                          <span style="color:#9ba3b4;font-size:14px;">Email :</span>
-                        </td>
-                        <td style="padding:8px 0;text-align:right;">
-                          <span style="color:#e8edf4;font-size:14px;font-weight:600;">${email}</span>
-                        </td>
+                        <td style="padding:6px 0;">Identifiant</td>
+                        <td style="padding:6px 0;text-align:right;font-weight:700;color:#0f172a;">${safeBrokerIdentifier}</td>
                       </tr>
                       <tr>
-                        <td style="padding:8px 0;">
-                          <span style="color:#9ba3b4;font-size:14px;">Mot de passe :</span>
-                        </td>
-                        <td style="padding:8px 0;text-align:right;">
-                          <code style="background-color:#252b3d;color:#00d9b8;padding:4px 12px;border-radius:6px;font-size:14px;font-family:monospace;">${password}</code>
+                        <td style="padding:6px 0;">Mot de passe Broker</td>
+                        <td style="padding:6px 0;text-align:right;">
+                          <code style="background:#0f172a;color:#ffffff;padding:4px 10px;border-radius:8px;font-size:12px;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,'Liberation Mono','Courier New',monospace;">${safePassword}</code>
                         </td>
                       </tr>
                     </table>
+                    <div style="margin-top:10px;color:#64748b;font-size:12px;">Conseil : changez votre mot de passe après la première connexion.</div>
                   </td>
                 </tr>
               </table>
-              
-              <!-- CTA Button -->
-              <table width="100%" cellpadding="0" cellspacing="0">
+
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:14px;border-radius:12px;border:1px solid #e5e7eb;background:#f8fafc;">
                 <tr>
-                  <td align="center">
-                    <a href="https://teste-brocker.web.app/login.html" style="display:inline-block;background:linear-gradient(135deg,#00d9b8,#00f0cc);color:#0a0e1a;text-decoration:none;padding:16px 40px;border-radius:8px;font-size:16px;font-weight:600;">
-                      Accéder à la plateforme
-                    </a>
-                  </td>
-                </tr>
-              </table>
-              
-              <!-- Rules Reminder -->
-              <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:30px;background-color:#0f1419;border-radius:12px;border:1px solid #252b3d;">
-                <tr>
-                  <td style="padding:24px;">
-                    <p style="color:#00d9b8;font-size:14px;font-weight:600;margin:0 0 12px;">📋 Règles du Challenge</p>
-                    <ul style="color:#9ba3b4;font-size:13px;line-height:1.8;margin:0;padding-left:20px;">
-                      <li>Objectif de profit : <strong style="color:#e8edf4;">10%</strong></li>
-                      <li>Drawdown journalier max : <strong style="color:#e8edf4;">3%</strong></li>
-                      <li>Drawdown total max : <strong style="color:#e8edf4;">8%</strong></li>
-                      <li>Minimum 3 jours de trading</li>
+                  <td style="padding:18px;">
+                    <div style="color:#0f172a;font-weight:700;font-size:14px;margin-bottom:8px;">Rappel règles du challenge</div>
+                    <ul style="margin:0;padding-left:18px;color:#334155;font-size:13px;line-height:1.7;">
+                      <li>Objectif de profit : <strong>10%</strong></li>
+                      <li>Drawdown journalier max : <strong>3%</strong></li>
+                      <li>Drawdown total max : <strong>8%</strong></li>
+                      <li>Minimum : <strong>3</strong> jours de trading</li>
                     </ul>
                   </td>
                 </tr>
               </table>
+
+              <p style="margin:18px 0 0;color:#64748b;font-size:12px;line-height:1.6;">
+                Si vous n'êtes pas à l'origine de cet achat, contactez-nous immédiatement :
+                <a href="mailto:${supportEmail}" style="color:#0f172a;text-decoration:underline;">${supportEmail}</a>
+              </p>
             </td>
           </tr>
-          
-          <!-- Footer -->
+
           <tr>
-            <td style="background-color:#0f1419;padding:30px;text-align:center;border-top:1px solid #252b3d;">
-              <p style="color:#9ba3b4;font-size:13px;margin:0 0 10px;">
-                Besoin d'aide ? Contactez-nous à <a href="mailto:support@amafirm.com" style="color:#00d9b8;text-decoration:none;">support@amafirm.com</a>
-              </p>
-              <p style="color:#6b7280;font-size:12px;margin:0;">
-                © 2024 AMA Firm. Tous droits réservés.
-              </p>
+            <td style="padding:18px 28px 26px;border-top:1px solid #e5e7eb;color:#64748b;font-size:12px;line-height:1.6;">
+              <div style="margin-bottom:8px;">Support : <a href="mailto:${supportEmail}" style="color:#0f172a;text-decoration:underline;">${supportEmail}</a></div>
+              <div>Site : <a href="${vitrineUrl}" style="color:#0f172a;text-decoration:underline;">${vitrineUrl}</a></div>
+              <div style="margin-top:12px;">© 2024 AMA FIRM. Tous droits réservés.</div>
             </td>
           </tr>
         </table>
@@ -498,11 +1139,17 @@ async function sendWelcomeEmail(
 
   try {
     await admin.firestore().collection('mail').add({
-      to: email,
+      to: [email],
       message: {
-        subject: `🎉 Bienvenue chez AMA Firm - Votre ${planName} est activé !`,
-        text: `Bienvenue chez AMA Firm !\n\nEmail: ${email}\nMot de passe: ${password}\n\nAccès: https://teste-brocker.web.app/login.html`,
-        html: htmlContent
+        from,
+        replyTo: supportEmail,
+        subject,
+        text: textContent,
+        html: htmlContent,
+        headers: {
+          'X-AMA-Email': 'welcome',
+          'X-Stripe-Session': session.id
+        }
       }
     });
     console.log('✅ Email ajouté à la file Firestore mail');
@@ -668,6 +1315,352 @@ export const createKycVerification = onCall(
   }
 );
 
+export const contactSupport = onCall(
+  {
+    cors: true,
+  },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError('unauthenticated', 'Non authentifié');
+    }
+
+    const data = request.data as { email?: string; subject?: string; message?: string };
+    const email = String(data?.email || '').trim().toLowerCase();
+    const subject = String(data?.subject || '').trim();
+    const message = String(data?.message || '').trim();
+
+    if (!email || !email.includes('@')) {
+      throw new HttpsError('invalid-argument', 'Email invalide');
+    }
+    if (!subject || subject.length < 3 || subject.length > 120) {
+      throw new HttpsError('invalid-argument', 'Objet invalide');
+    }
+    if (!message || message.length < 10 || message.length > 5000) {
+      throw new HttpsError('invalid-argument', 'Message invalide');
+    }
+
+    const escapeHtml = (value: string): string =>
+      value
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+
+    const safeEmail = escapeHtml(email);
+    const safeSubject = escapeHtml(subject);
+    const safeMessage = escapeHtml(message).replace(/\n/g, '<br/>');
+
+    const supportInbox = 'paul.ama.firm.fr@gmail.com';
+    const from = 'AMA FIRM <ama.firm.fr@gmail.com>';
+
+    const text =
+      `Nouvelle demande via le dashboard\n\n` +
+      `Utilisateur: ${request.auth.uid}\n` +
+      `Email: ${email}\n` +
+      `Objet: ${subject}\n\n` +
+      `${message}`;
+
+    const html = `<!doctype html>
+<html>
+<body style="font-family:ui-sans-serif,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,'Helvetica Neue',sans-serif;background:#f3f4f6;padding:24px;">
+  <div style="max-width:640px;margin:0 auto;background:#ffffff;border:1px solid #e5e7eb;border-radius:14px;overflow:hidden;">
+    <div style="padding:18px 20px;border-bottom:1px solid #e5e7eb;">
+      <div style="font-weight:800;color:#0f172a;">AMA FIRM — Contact</div>
+      <div style="color:#64748b;font-size:12px;margin-top:4px;">Message envoyé depuis le dashboard</div>
+    </div>
+    <div style="padding:18px 20px;color:#0f172a;">
+      <div style="font-size:13px;color:#334155;line-height:1.6;">
+        <div><strong>Utilisateur:</strong> ${request.auth.uid}</div>
+        <div><strong>Email:</strong> ${safeEmail}</div>
+        <div><strong>Objet:</strong> ${safeSubject}</div>
+      </div>
+      <div style="margin-top:14px;padding:14px;border-radius:12px;background:#f8fafc;border:1px solid #e5e7eb;color:#0f172a;font-size:13px;line-height:1.7;">${safeMessage}</div>
+    </div>
+  </div>
+</body>
+</html>`;
+
+    try {
+      await admin.firestore().collection('mail').add({
+        to: [supportInbox],
+        message: {
+          from,
+          replyTo: email,
+          subject: `Contact — ${subject}`,
+          text,
+          html,
+          headers: {
+            'X-AMA-Email': 'contact',
+            'X-AMA-UserId': request.auth.uid,
+          },
+        },
+      });
+      return { success: true };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error('❌ contactSupport failed:', errorMessage);
+      throw new HttpsError('internal', 'Impossible d\'envoyer le message');
+    }
+  }
+);
+
+export const contactPublic = onCall(
+  {
+    cors: true,
+  },
+  async (request) => {
+    const data = request.data as { email?: string; subject?: string; message?: string };
+    const email = String(data?.email || '').trim().toLowerCase();
+    const subject = String(data?.subject || '').trim();
+    const message = String(data?.message || '').trim();
+
+    if (!email || !email.includes('@') || email.length > 254) {
+      throw new HttpsError('invalid-argument', 'Email invalide');
+    }
+    if (!subject || subject.length < 3 || subject.length > 120) {
+      throw new HttpsError('invalid-argument', 'Objet invalide');
+    }
+    if (!message || message.length < 10 || message.length > 5000) {
+      throw new HttpsError('invalid-argument', 'Message invalide');
+    }
+
+    const escapeHtml = (value: string): string =>
+      value
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+
+    const safeEmail = escapeHtml(email);
+    const safeSubject = escapeHtml(subject);
+    const safeMessage = escapeHtml(message).replace(/\n/g, '<br/>');
+
+    const supportInbox = 'paul.ama.firm.fr@gmail.com';
+    const from = 'AMA FIRM <ama.firm.fr@gmail.com>';
+
+    const text =
+      `Nouvelle demande via la vitrine\n\n` +
+      `Email: ${email}\n` +
+      `Objet: ${subject}\n\n` +
+      `${message}`;
+
+    const html = `<!doctype html>
+<html>
+<body style="font-family:ui-sans-serif,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,'Helvetica Neue',sans-serif;background:#f3f4f6;padding:24px;">
+  <div style="max-width:640px;margin:0 auto;background:#ffffff;border:1px solid #e5e7eb;border-radius:14px;overflow:hidden;">
+    <div style="padding:18px 20px;border-bottom:1px solid #e5e7eb;">
+      <div style="font-weight:800;color:#0f172a;">AMA FIRM — Contact (vitrine)</div>
+      <div style="color:#64748b;font-size:12px;margin-top:4px;">Message envoyé depuis le site vitrine</div>
+    </div>
+    <div style="padding:18px 20px;color:#0f172a;">
+      <div style="font-size:13px;color:#334155;line-height:1.6;">
+        <div><strong>Email:</strong> ${safeEmail}</div>
+        <div><strong>Objet:</strong> ${safeSubject}</div>
+      </div>
+      <div style="margin-top:14px;padding:14px;border-radius:12px;background:#f8fafc;border:1px solid #e5e7eb;color:#0f172a;font-size:13px;line-height:1.7;">${safeMessage}</div>
+    </div>
+  </div>
+</body>
+</html>`;
+
+    try {
+      await admin.firestore().collection('mail').add({
+        to: [supportInbox],
+        message: {
+          from,
+          replyTo: email,
+          subject: `Contact vitrine — ${subject}`,
+          text,
+          html,
+          headers: {
+            'X-AMA-Email': 'contact_public',
+          },
+        },
+      });
+      return { success: true };
+    } catch (error) {
+      const debugId = admin.firestore().collection('contact_public_errors').doc().id;
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const errorStack = error instanceof Error ? error.stack : undefined;
+
+      const safeRawError = (() => {
+        try {
+          return JSON.stringify(error);
+        } catch (e) {
+          return String(error);
+        }
+      })();
+
+      console.error('❌ contactPublic failed:', {
+        debugId,
+        errorMessage,
+        error,
+      });
+      if (errorStack) {
+        console.error('❌ contactPublic stack:', errorStack);
+      }
+
+      try {
+        await admin.firestore().collection('contact_public_errors').doc(debugId).set({
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          email,
+          subject,
+          messageLength: message.length,
+          errorMessage,
+          errorStack: errorStack || null,
+          rawError: safeRawError,
+        });
+      } catch (logError) {
+        const logErrorMessage = logError instanceof Error ? logError.message : 'Unknown log error';
+        console.error('❌ contactPublic failed to write debug log:', logErrorMessage);
+      }
+
+      return {
+        success: false,
+        debugId,
+      };
+    }
+  }
+);
+
+export const contactPublicHttp = onRequest(
+  {
+    cors: true,
+    invoker: 'public',
+  },
+  async (req, res) => {
+    res.set('Access-Control-Allow-Origin', '*');
+    res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.set('Access-Control-Allow-Headers', 'Content-Type, Accept');
+
+    if (req.method === 'OPTIONS') {
+      res.status(204).send('');
+      return;
+    }
+
+    if (req.method !== 'POST') {
+      res.status(405).json({ success: false, error: 'Method not allowed' });
+      return;
+    }
+
+    const data = (req.body || {}) as { email?: string; subject?: string; message?: string };
+    const email = String(data?.email || '').trim().toLowerCase();
+    const subject = String(data?.subject || '').trim();
+    const message = String(data?.message || '').trim();
+
+    if (!email || !email.includes('@') || email.length > 254) {
+      res.status(400).json({ success: false, error: 'Email invalide' });
+      return;
+    }
+    if (!subject || subject.length < 3 || subject.length > 120) {
+      res.status(400).json({ success: false, error: 'Objet invalide' });
+      return;
+    }
+    if (!message || message.length < 10 || message.length > 5000) {
+      res.status(400).json({ success: false, error: 'Message invalide' });
+      return;
+    }
+
+    const escapeHtml = (value: string): string =>
+      value
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+
+    const safeEmail = escapeHtml(email);
+    const safeSubject = escapeHtml(subject);
+    const safeMessage = escapeHtml(message).replace(/\n/g, '<br/>');
+
+    const supportInbox = 'paul.ama.firm.fr@gmail.com';
+    const from = 'AMA FIRM <ama.firm.fr@gmail.com>';
+
+    const text =
+      `Nouvelle demande via la vitrine\n\n` +
+      `Email: ${email}\n` +
+      `Objet: ${subject}\n\n` +
+      `${message}`;
+
+    const html = `<!doctype html>
+<html>
+<body style="font-family:ui-sans-serif,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,'Helvetica Neue',sans-serif;background:#f3f4f6;padding:24px;">
+  <div style="max-width:640px;margin:0 auto;background:#ffffff;border:1px solid #e5e7eb;border-radius:14px;overflow:hidden;">
+    <div style="padding:18px 20px;border-bottom:1px solid #e5e7eb;">
+      <div style="font-weight:800;color:#0f172a;">AMA FIRM — Contact (vitrine)</div>
+      <div style="color:#64748b;font-size:12px;margin-top:4px;">Message envoyé depuis le site vitrine</div>
+    </div>
+    <div style="padding:18px 20px;color:#0f172a;">
+      <div style="font-size:13px;color:#334155;line-height:1.6;">
+        <div><strong>Email:</strong> ${safeEmail}</div>
+        <div><strong>Objet:</strong> ${safeSubject}</div>
+      </div>
+      <div style="margin-top:14px;padding:14px;border-radius:12px;background:#f8fafc;border:1px solid #e5e7eb;color:#0f172a;font-size:13px;line-height:1.7;">${safeMessage}</div>
+    </div>
+  </div>
+</body>
+</html>`;
+
+    try {
+      await admin.firestore().collection('mail').add({
+        to: [supportInbox],
+        message: {
+          from,
+          replyTo: email,
+          subject: `Contact vitrine — ${subject}`,
+          text,
+          html,
+          headers: {
+            'X-AMA-Email': 'contact_public_http',
+          },
+        },
+      });
+      res.status(200).json({ success: true });
+    } catch (error) {
+      const debugId = admin.firestore().collection('contact_public_errors').doc().id;
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const errorStack = error instanceof Error ? error.stack : undefined;
+
+      const safeRawError = (() => {
+        try {
+          return JSON.stringify(error);
+        } catch (e) {
+          return String(error);
+        }
+      })();
+
+      console.error('❌ contactPublicHttp failed:', {
+        debugId,
+        errorMessage,
+        error,
+      });
+      if (errorStack) {
+        console.error('❌ contactPublicHttp stack:', errorStack);
+      }
+
+      try {
+        await admin.firestore().collection('contact_public_errors').doc(debugId).set({
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          email,
+          subject,
+          messageLength: message.length,
+          errorMessage,
+          errorStack: errorStack || null,
+          rawError: safeRawError,
+          source: 'contactPublicHttp',
+        });
+      } catch (logError) {
+        const logErrorMessage = logError instanceof Error ? logError.message : 'Unknown log error';
+        console.error('❌ contactPublicHttp failed to write debug log:', logErrorMessage);
+      }
+
+      res.status(500).json({ success: false, debugId });
+    }
+  }
+);
+
 // ==========================================
 // EXPORT DES FONCTIONS DE SÉCURITÉ TRADING
 // ==========================================
@@ -679,6 +1672,7 @@ export {
   calculateDrawdowns,
   closeTradesBeforeWeekend,
   upgradeChallenge,
+  forceUpgradeChallenge,
   requestPayout,
   approvePayout
 } from './tradeSecurity';

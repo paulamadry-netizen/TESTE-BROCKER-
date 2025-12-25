@@ -10,6 +10,157 @@ import { getValidatedPrice, finnhubApiKey } from './priceService';
 
 const db = admin.firestore();
 
+function generateSecurePassword(): string {
+  const length = 16;
+  const charset = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^*_-';
+  let password = '';
+  for (let i = 0; i < length; i++) {
+    password += charset[Math.floor(Math.random() * charset.length)];
+  }
+  return password;
+}
+
+function generateBrokerIdentifier(): string {
+  const charset = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let out = 'AMA-';
+  for (let i = 0; i < 8; i++) {
+    out += charset[Math.floor(Math.random() * charset.length)];
+  }
+  return out;
+}
+
+async function ensureBrokerIdentifier(userId: string): Promise<string> {
+  const userRef = db.collection('users').doc(userId);
+  const userSnap = await userRef.get();
+  const existing = userSnap.exists ? (userSnap.data() as any)?.brokerIdentifier : null;
+  if (typeof existing === 'string' && existing.trim()) {
+    const identifier = existing.trim().toUpperCase();
+    try {
+      await db.collection('broker_identifiers').doc(identifier).set({
+        uid: userId,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+    } catch (e) {
+    }
+    return identifier;
+  }
+
+  for (let i = 0; i < 10; i++) {
+    const identifier = generateBrokerIdentifier();
+    const mapRef = db.collection('broker_identifiers').doc(identifier);
+    try {
+      await mapRef.create({
+        uid: userId,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      await userRef.set({
+        brokerIdentifier: identifier,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+      return identifier;
+    } catch (e) {
+    }
+  }
+
+  throw new Error('Unable to generate broker identifier');
+}
+
+function toJsDate(value: any): Date | null {
+  try {
+    if (!value) return null;
+    if (typeof value?.toDate === 'function') return value.toDate();
+    if (typeof value === 'number') return new Date(value);
+    if (typeof value === 'string') return new Date(value);
+    if (typeof value === 'object' && typeof value.seconds === 'number') return new Date(value.seconds * 1000);
+    const d = new Date(value);
+    return isNaN(d.getTime()) ? null : d;
+  } catch {
+    return null;
+  }
+}
+
+async function getAccountTradeStats(userId: string, accountId: string) {
+  const tradesSnapshot = await db.collection('trades')
+    .where('userId', '==', userId)
+    .get();
+
+  const closedTrades: any[] = [];
+  const allTrades: any[] = [];
+  tradesSnapshot.forEach((docSnap) => {
+    const t = docSnap.data();
+    if (!t) return;
+    const tradeAccountId = typeof t.accountId === 'string' ? t.accountId : (typeof t.activeAccountId === 'string' ? t.activeAccountId : '');
+    if (tradeAccountId !== accountId) return;
+    allTrades.push(t);
+    if (t.status === 'closed') closedTrades.push(t);
+  });
+
+  const tradingDaysSet = new Set<string>();
+  allTrades.forEach((t) => {
+    const dateRaw = t.closedAt || t.openedAt || t.openDate || t.createdAt;
+    if (!dateRaw) return;
+    const date = toJsDate(dateRaw);
+    if (!date) return;
+    tradingDaysSet.add(date.toISOString().split('T')[0]);
+  });
+
+  return {
+    allTrades,
+    closedTrades,
+    tradingDays: tradingDaysSet.size,
+  };
+}
+
+async function validateAccountTotalDrawdown(userId: string, accountId: string, initialBalance: number, currentBalance: number) {
+  const stats = await getAccountTradeStats(userId, accountId);
+  if (!stats.closedTrades.length) return { allowed: true };
+
+  let calculatedBalance = initialBalance;
+  let peakBalance = initialBalance;
+  stats.closedTrades
+    .sort((a, b) => {
+      const da = toJsDate(a.closedAt)?.getTime() ?? 0;
+      const dbv = toJsDate(b.closedAt)?.getTime() ?? 0;
+      return da - dbv;
+    })
+    .forEach((trade) => {
+      const pnl = Number(trade.pnl) || 0;
+      calculatedBalance += pnl;
+      if (calculatedBalance > peakBalance) peakBalance = calculatedBalance;
+    });
+
+  const safeCurrent = Math.max(Number.isFinite(currentBalance) ? currentBalance : calculatedBalance, 0.01);
+  const drawdown = peakBalance - safeCurrent;
+  const drawdownPercent = peakBalance > 0 ? (drawdown / peakBalance) * 100 : 0;
+  if (drawdownPercent > 8) {
+    return { allowed: false, reason: `Drawdown total ${drawdownPercent.toFixed(2)}% (max 8%)` };
+  }
+  return { allowed: true };
+}
+
+async function validateAccountDailyDrawdown(userId: string, accountId: string, initialBalance: number) {
+  const stats = await getAccountTradeStats(userId, accountId);
+  const todayStart = new Date();
+  todayStart.setUTCHours(0, 0, 0, 0);
+
+  let todayPnl = 0;
+  stats.closedTrades.forEach((trade) => {
+    const closedAt = trade.closedAt;
+    if (!closedAt) return;
+    const d = toJsDate(closedAt);
+    if (!d) return;
+    if (d < todayStart) return;
+    todayPnl += Number(trade.pnl) || 0;
+  });
+
+  if (todayPnl >= 0) return { allowed: true };
+  const dailyLossPercent = initialBalance > 0 ? (Math.abs(todayPnl) / initialBalance) * 100 : 0;
+  if (dailyLossPercent > 3) {
+    return { allowed: false, reason: `Drawdown journalier ${dailyLossPercent.toFixed(2)}% (max 3%)` };
+  }
+  return { allowed: true };
+}
+
 // ==========================================
 // TYPES
 // ==========================================
@@ -742,91 +893,314 @@ export const upgradeChallenge = onCall(async (request) => {
 
   const userId = request.auth.uid;
 
+  const requestedAccountIdRaw = (request.data && (request.data as any).accountId) ? String((request.data as any).accountId) : '';
+  const requestedAccountId = requestedAccountIdRaw.trim();
+
   console.log(`🎯 Tentative d'upgrade challenge → compte financé: ${userId}`);
 
-  // Charger le compte utilisateur
   const userDoc = await db.collection('users').doc(userId).get();
-  if (!userDoc.exists) {
-    throw new HttpsError('not-found', 'Utilisateur introuvable');
+  if (!userDoc.exists) throw new HttpsError('not-found', 'Utilisateur introuvable');
+  const userData = userDoc.data() as any;
+
+  const activeAccountId = requestedAccountId || (typeof userData?.activeAccountId === 'string' ? userData.activeAccountId : '');
+  if (!activeAccountId) throw new HttpsError('failed-precondition', 'Aucun compte actif');
+
+  const accountRef = db.collection('users').doc(userId).collection('accounts').doc(activeAccountId);
+  const accountSnap = await accountRef.get();
+  if (!accountSnap.exists) throw new HttpsError('not-found', 'Compte introuvable');
+  const accountData = accountSnap.data() as any;
+
+  const accountStatus = typeof accountData?.accountStatus === 'string' ? accountData.accountStatus : '';
+  if (accountStatus !== 'active') throw new HttpsError('failed-precondition', `Compte ${accountStatus}. Upgrade impossible.`);
+
+  const accountTypeRaw = typeof accountData?.accountType === 'string' ? accountData.accountType : '';
+  const isFunded = Boolean(accountData?.isFunded) || accountTypeRaw.toLowerCase() === 'funded';
+  if (isFunded) throw new HttpsError('failed-precondition', 'Ce compte est déjà financé');
+
+  const initialBalance = Number(accountData?.initialBalance ?? accountData?.accountBalance ?? 0);
+  const currentBalance = Number(accountData?.accountBalance ?? 0);
+  if (!Number.isFinite(initialBalance) || initialBalance <= 0) {
+    throw new HttpsError('failed-precondition', 'Initial balance invalide');
   }
 
-  const userData = userDoc.data()!;
-
-  // 1. VÉRIFIER QUE C'EST UN COMPTE CHALLENGE
-  if (userData.accountType !== 'challenge') {
-    throw new HttpsError('failed-precondition', 'Ce compte n\'est pas un challenge');
-  }
-
-  if (userData.accountStatus !== 'active') {
-    throw new HttpsError('failed-precondition', `Compte ${userData.accountStatus}. Upgrade impossible.`);
-  }
-
-  // 2. VÉRIFIER: 3 JOURS MINIMUM DE TRADING
-  const tradingDays = userData.tradingDays || 0;
-  if (tradingDays < 3) {
-    throw new HttpsError(
-      'failed-precondition',
-      `Vous devez trader pendant au moins 3 jours. Jours actuels: ${tradingDays}/3`
-    );
-  }
-
-  // 3. VÉRIFIER: 10% DE PROFIT
-  const initialBalance = userData.initialBalance || userData.accountBalance;
-  const currentBalance = userData.accountBalance;
   const profitPercent = ((currentBalance - initialBalance) / initialBalance) * 100;
+  const stats = await getAccountTradeStats(userId, activeAccountId);
+  const tradingDays = Number(accountData?.tradingDays ?? stats.tradingDays ?? 0);
 
+  if (tradingDays < 3) {
+    throw new HttpsError('failed-precondition', `Vous devez trader pendant au moins 3 jours. Jours actuels: ${tradingDays}/3`);
+  }
   if (profitPercent < 10) {
-    throw new HttpsError(
-      'failed-precondition',
-      `Profit insuffisant. Requis: 10%, Actuel: ${profitPercent.toFixed(2)}%`
-    );
+    throw new HttpsError('failed-precondition', `Profit insuffisant. Requis: 10%, Actuel: ${profitPercent.toFixed(2)}%`);
   }
 
-  // 4. VÉRIFIER: AUCUNE VIOLATION DES RÈGLES
-  const totalDrawdownCheck = await validateTotalDrawdown(userId, userData);
+  const totalDrawdownCheck = await validateAccountTotalDrawdown(userId, activeAccountId, initialBalance, currentBalance);
   if (!totalDrawdownCheck.allowed) {
-    throw new HttpsError('failed-precondition', 'Violation de la règle de drawdown total');
+    throw new HttpsError('failed-precondition', totalDrawdownCheck.reason || 'Violation drawdown total');
   }
-
-  const dailyDrawdownCheck = await validateDailyDrawdown(userId, userData);
+  const dailyDrawdownCheck = await validateAccountDailyDrawdown(userId, activeAccountId, initialBalance);
   if (!dailyDrawdownCheck.allowed) {
-    throw new HttpsError('failed-precondition', 'Violation de la règle de drawdown journalier');
+    throw new HttpsError('failed-precondition', dailyDrawdownCheck.reason || 'Violation drawdown journalier');
   }
 
-  // 5. CRÉER LE COMPTE FINANCÉ
   try {
-    await db.collection('users').doc(userId).update({
+    const brokerIdentifier = await ensureBrokerIdentifier(userId);
+    const brokerPassword = generateSecurePassword();
+    const planType = typeof accountData?.planType === 'string' ? accountData.planType : '';
+    const fundedAccountsSnap = await db.collection('users').doc(userId).collection('accounts').get();
+    const fundedCount = fundedAccountsSnap.docs.filter((d) => {
+      const a = d.data() as any;
+      const t = typeof a?.accountType === 'string' ? a.accountType.toLowerCase() : '';
+      return (Boolean(a?.isFunded) || t === 'funded') && a?.accountStatus;
+    }).length;
+    const accountName = `Funded ${planType || 'Compte'} #${fundedCount + 1}`;
+
+    const fundedRef = await db.collection('users').doc(userId).collection('accounts').add({
+      accountName,
+      accountStatus: 'active',
       accountType: 'funded',
-      fundedAt: admin.firestore.FieldValue.serverTimestamp(),
+      isFunded: true,
+      planType: planType || accountData?.planType || 'funded',
+      challengeType: accountData?.challengeType || 'standard',
+      accountBalance: currentBalance,
+      initialBalance: currentBalance,
       initialFundedBalance: currentBalance,
-      tradingDaysAtUpgrade: tradingDays,
-      profitAtUpgrade: profitPercent,
-      // Réinitialiser les compteurs pour le compte financé
-      payoutsReceived: 0,
-      lastPayoutAt: null,
-      totalPayoutAmount: 0
+      fundedAt: admin.firestore.FieldValue.serverTimestamp(),
+      tradingDays: 0,
+      profitTarget: accountData?.profitTarget || 10,
+      maxDrawdown: accountData?.maxDrawdown || 5,
+      brokerPassword,
+      upgradedFromAccountId: activeAccountId,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
-    // Log d'audit
+    await accountRef.set({
+      accountStatus: 'completed',
+      completedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      passedAt: admin.firestore.FieldValue.serverTimestamp(),
+      profitAtPass: profitPercent,
+    }, { merge: true });
+
+    await db.collection('users').doc(userId).set({
+      activeAccountId: fundedRef.id,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+
+    const toEmail = (typeof userData?.email === 'string' ? userData.email : (typeof request.auth.token.email === 'string' ? request.auth.token.email : '')).trim().toLowerCase();
+    if (toEmail) {
+      const from = 'AMA FIRM <ama.firm.fr@gmail.com>';
+      const subject = `Compte financé créé — ${accountName}`;
+      const text =
+        `Bonjour,\n\n` +
+        `Votre compte financé a été créé.\n\n` +
+        `Accès plateforme: https://teste-brocker.web.app/login.html\n` +
+        `Identifiant: ${brokerIdentifier}\n` +
+        `Mot de passe Broker: ${brokerPassword}\n\n` +
+        `Compte: ${accountName}\n`;
+
+      const html = `<!doctype html><html><body style="font-family:ui-sans-serif,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,'Helvetica Neue',sans-serif;">
+<h2>Compte financé créé</h2>
+<p>Votre compte financé <strong>${accountName}</strong> a été créé.</p>
+<p><strong>Accès plateforme:</strong> <a href="https://teste-brocker.web.app/login.html">Login</a></p>
+<p><strong>Identifiant:</strong> ${brokerIdentifier}<br/>
+<strong>Mot de passe Broker:</strong> ${brokerPassword}</p>
+</body></html>`;
+
+      try {
+        await db.collection('mail').add({
+          to: [toEmail],
+          message: {
+            from,
+            replyTo: 'paul.ama.firm.fr@gmail.com',
+            subject,
+            text,
+            html,
+            headers: {
+              'X-AMA-Email': 'funded_created',
+              'X-AMA-UserId': userId,
+              'X-AMA-AccountId': fundedRef.id,
+            },
+          },
+        });
+      } catch (e) {
+      }
+    }
+
     await auditLog('challenge_upgraded', userId, {
+      fromAccountId: activeAccountId,
+      toAccountId: fundedRef.id,
       tradingDays,
       profitPercent: profitPercent.toFixed(2),
       initialBalance,
-      currentBalance
+      currentBalance,
     });
-
-    console.log(`✅ Challenge upgradé pour ${userId}`);
 
     return {
       success: true,
       message: `Félicitations! Votre challenge est validé avec ${profitPercent.toFixed(2)}% de profit en ${tradingDays} jours.`,
       newAccountType: 'funded',
-      fundedBalance: currentBalance
+      fundedBalance: currentBalance,
+      fundedAccountId: fundedRef.id,
     };
-
   } catch (error: any) {
     console.error('❌ Erreur upgrade challenge:', error);
-    throw new HttpsError('internal', `Erreur: ${error.message}`);
+    throw new HttpsError('internal', `Erreur: ${error?.message || 'unknown'}`);
+  }
+});
+
+export const forceUpgradeChallenge = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Non authentifié');
+  }
+
+  const callerId = request.auth.uid;
+  const { userId: targetUserIdRaw, accountId: requestedAccountIdRaw } = (request.data || {}) as any;
+  const targetUserId = (typeof targetUserIdRaw === 'string' && targetUserIdRaw.trim()) ? targetUserIdRaw.trim() : callerId;
+  const requestedAccountId = (typeof requestedAccountIdRaw === 'string' && requestedAccountIdRaw.trim()) ? requestedAccountIdRaw.trim() : '';
+
+  const callerDoc = await db.collection('users').doc(callerId).get();
+  if (!callerDoc.exists || callerDoc.data()?.role !== 'admin') {
+    throw new HttpsError('permission-denied', 'Accès réservé aux administrateurs');
+  }
+
+  console.log(`🧪 Force upgrade challenge → funded: caller=${callerId}, target=${targetUserId}`);
+
+  const userDoc = await db.collection('users').doc(targetUserId).get();
+  if (!userDoc.exists) throw new HttpsError('not-found', 'Utilisateur introuvable');
+  const userData = userDoc.data() as any;
+
+  const activeAccountId = requestedAccountId || (typeof userData?.activeAccountId === 'string' ? userData.activeAccountId : '');
+  if (!activeAccountId) throw new HttpsError('failed-precondition', 'Aucun compte actif');
+
+  const accountRef = db.collection('users').doc(targetUserId).collection('accounts').doc(activeAccountId);
+  const accountSnap = await accountRef.get();
+  if (!accountSnap.exists) throw new HttpsError('not-found', 'Compte introuvable');
+  const accountData = accountSnap.data() as any;
+
+  const accountStatus = typeof accountData?.accountStatus === 'string' ? accountData.accountStatus : '';
+  if (accountStatus !== 'active') throw new HttpsError('failed-precondition', `Compte ${accountStatus}. Upgrade impossible.`);
+
+  const accountTypeRaw = typeof accountData?.accountType === 'string' ? accountData.accountType : '';
+  const isFunded = Boolean(accountData?.isFunded) || accountTypeRaw.toLowerCase() === 'funded';
+  if (isFunded) throw new HttpsError('failed-precondition', 'Ce compte est déjà financé');
+
+  const initialBalance = Number(accountData?.initialBalance ?? accountData?.accountBalance ?? 0);
+  const currentBalance = Number(accountData?.accountBalance ?? 0);
+  if (!Number.isFinite(currentBalance) || currentBalance <= 0) {
+    throw new HttpsError('failed-precondition', 'Balance invalide');
+  }
+
+  const profitPercent = (Number.isFinite(initialBalance) && initialBalance > 0)
+    ? ((currentBalance - initialBalance) / initialBalance) * 100
+    : 0;
+
+  try {
+    const brokerIdentifier = await ensureBrokerIdentifier(targetUserId);
+    const brokerPassword = generateSecurePassword();
+    const planType = typeof accountData?.planType === 'string' ? accountData.planType : '';
+    const fundedAccountsSnap = await db.collection('users').doc(targetUserId).collection('accounts').get();
+    const fundedCount = fundedAccountsSnap.docs.filter((d) => {
+      const a = d.data() as any;
+      const t = typeof a?.accountType === 'string' ? a.accountType.toLowerCase() : '';
+      return (Boolean(a?.isFunded) || t === 'funded') && a?.accountStatus;
+    }).length;
+    const accountName = `Funded ${planType || 'Compte'} #${fundedCount + 1}`;
+
+    const fundedRef = await db.collection('users').doc(targetUserId).collection('accounts').add({
+      accountName,
+      accountStatus: 'active',
+      accountType: 'funded',
+      isFunded: true,
+      planType: planType || accountData?.planType || 'funded',
+      challengeType: accountData?.challengeType || 'standard',
+      accountBalance: currentBalance,
+      initialBalance: currentBalance,
+      initialFundedBalance: currentBalance,
+      fundedAt: admin.firestore.FieldValue.serverTimestamp(),
+      tradingDays: 0,
+      profitTarget: accountData?.profitTarget || 10,
+      maxDrawdown: accountData?.maxDrawdown || 5,
+      brokerPassword,
+      upgradedFromAccountId: activeAccountId,
+      forceUpgradedAt: admin.firestore.FieldValue.serverTimestamp(),
+      forceUpgradedBy: callerId,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    await accountRef.set({
+      accountStatus: 'completed',
+      completedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      forcePassedAt: admin.firestore.FieldValue.serverTimestamp(),
+      profitAtPass: profitPercent,
+    }, { merge: true });
+
+    await db.collection('users').doc(targetUserId).set({
+      activeAccountId: fundedRef.id,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+
+    const toEmail = (typeof userData?.email === 'string' ? userData.email : '').trim().toLowerCase();
+    if (toEmail) {
+      const from = 'AMA FIRM <ama.firm.fr@gmail.com>';
+      const subject = `Compte financé créé — ${accountName}`;
+      const text =
+        `Bonjour,\n\n` +
+        `Votre compte financé a été créé.\n\n` +
+        `Accès plateforme: https://teste-brocker.web.app/login.html\n` +
+        `Identifiant: ${brokerIdentifier}\n` +
+        `Mot de passe Broker: ${brokerPassword}\n\n` +
+        `Compte: ${accountName}\n`;
+
+      const html = `<!doctype html><html><body style="font-family:ui-sans-serif,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,'Helvetica Neue',sans-serif;">
+<h2>Compte financé créé</h2>
+<p>Votre compte financé <strong>${accountName}</strong> a été créé.</p>
+<p><strong>Accès plateforme:</strong> <a href="https://teste-brocker.web.app/login.html">Login</a></p>
+<p><strong>Identifiant:</strong> ${brokerIdentifier}<br/>
+<strong>Mot de passe Broker:</strong> ${brokerPassword}</p>
+</body></html>`;
+
+      try {
+        await db.collection('mail').add({
+          to: [toEmail],
+          message: {
+            from,
+            replyTo: 'paul.ama.firm.fr@gmail.com',
+            subject,
+            text,
+            html,
+            headers: {
+              'X-AMA-Email': 'funded_created_force',
+              'X-AMA-UserId': targetUserId,
+              'X-AMA-AccountId': fundedRef.id,
+            },
+          },
+        });
+      } catch (e) {
+      }
+    }
+
+    await auditLog('challenge_force_upgraded', targetUserId, {
+      fromAccountId: activeAccountId,
+      toAccountId: fundedRef.id,
+      profitPercent: profitPercent.toFixed(2),
+      initialBalance,
+      currentBalance,
+      forcedBy: callerId,
+    });
+
+    return {
+      success: true,
+      message: 'Compte financé créé (force upgrade).',
+      fundedAccountId: fundedRef.id,
+      fundedBalance: currentBalance,
+    };
+  } catch (error: any) {
+    console.error('❌ Erreur force upgrade challenge:', error);
+    throw new HttpsError('internal', `Erreur: ${error?.message || 'unknown'}`);
   }
 });
 
@@ -841,32 +1215,35 @@ export const requestPayout = onCall(async (request) => {
 
   const userId = request.auth.uid;
   const requestedAmount = request.data.amount;
+  const accountIdRaw = request.data && request.data.accountId ? String(request.data.accountId) : '';
+  const accountId = accountIdRaw.trim();
 
   console.log(`💰 Demande de payout: ${userId}, montant: ${requestedAmount}`);
 
-  // Charger le compte utilisateur
   const userDoc = await db.collection('users').doc(userId).get();
-  if (!userDoc.exists) {
-    throw new HttpsError('not-found', 'Utilisateur introuvable');
+  if (!userDoc.exists) throw new HttpsError('not-found', 'Utilisateur introuvable');
+  const userData = userDoc.data() as any;
+
+  const resolvedAccountId = accountId || (typeof userData?.activeAccountId === 'string' ? userData.activeAccountId : '');
+  if (!resolvedAccountId) throw new HttpsError('failed-precondition', 'Aucun compte sélectionné');
+
+  const accountRef = db.collection('users').doc(userId).collection('accounts').doc(resolvedAccountId);
+  const accountSnap = await accountRef.get();
+  if (!accountSnap.exists) throw new HttpsError('not-found', 'Compte introuvable');
+  const acc = accountSnap.data() as any;
+
+  const accStatus = typeof acc?.accountStatus === 'string' ? acc.accountStatus : '';
+  if (accStatus !== 'active') throw new HttpsError('failed-precondition', `Compte ${accStatus}. Payout impossible.`);
+
+  const accType = typeof acc?.accountType === 'string' ? acc.accountType.toLowerCase() : '';
+  const funded = Boolean(acc?.isFunded) || accType === 'funded';
+  if (!funded) {
+    throw new HttpsError('failed-precondition', 'Vous devez sélectionner un compte financé pour demander un payout');
   }
 
-  const userData = userDoc.data()!;
-
-  // 1. VÉRIFIER QUE C'EST UN COMPTE FINANCÉ
-  if (userData.accountType !== 'funded') {
-    throw new HttpsError(
-      'failed-precondition',
-      'Vous devez valider votre challenge avant de demander un payout'
-    );
-  }
-
-  if (userData.accountStatus !== 'active') {
-    throw new HttpsError('failed-precondition', `Compte ${userData.accountStatus}. Payout impossible.`);
-  }
-
-  const payoutsReceived = userData.payoutsReceived || 0;
-  const lastPayoutAt = userData.lastPayoutAt;
-  const fundedAt = userData.fundedAt;
+  const payoutsReceived = acc.payoutsReceived || 0;
+  const lastPayoutAt = acc.lastPayoutAt;
+  const fundedAt = acc.fundedAt;
 
   // 2. RÈGLES POUR LE PREMIER PAYOUT
   if (payoutsReceived === 0) {
@@ -884,8 +1261,8 @@ export const requestPayout = onCall(async (request) => {
     }
 
     // Règle B: 105% du solde initial
-    const initialBalance = userData.initialFundedBalance || userData.initialBalance;
-    const currentBalance = userData.accountBalance;
+    const initialBalance = acc.initialFundedBalance || acc.initialBalance;
+    const currentBalance = acc.accountBalance;
     const requiredBalance = initialBalance * 1.05;
 
     if (currentBalance < requiredBalance) {
@@ -899,16 +1276,18 @@ export const requestPayout = onCall(async (request) => {
     const tradesSnapshot = await db.collection('trades')
       .where('userId', '==', userId)
       .where('status', '==', 'closed')
-      .where('closedAt', '>=', fundedDate.toISOString())
       .get();
 
     // Grouper par jour
     const profitByDay = new Map<string, number>();
     tradesSnapshot.forEach((doc) => {
       const trade = doc.data();
+      if (!trade || trade.accountId !== resolvedAccountId) return;
+      if (!trade.closedAt) return;
       const closedDate = new Date(trade.closedAt);
-      const dateKey = closedDate.toISOString().split('T')[0]; // YYYY-MM-DD
-
+      if (isNaN(closedDate.getTime())) return;
+      if (closedDate.getTime() < fundedDate.getTime()) return;
+      const dateKey = closedDate.toISOString().split('T')[0];
       const currentProfit = profitByDay.get(dateKey) || 0;
       profitByDay.set(dateKey, currentProfit + (trade.pnl || 0));
     });
@@ -949,8 +1328,8 @@ export const requestPayout = onCall(async (request) => {
     throw new HttpsError('invalid-argument', 'Montant invalide');
   }
 
-  const currentBalance = userData.accountBalance;
-  const initialBalance = userData.initialFundedBalance || userData.initialBalance;
+  const currentBalance = acc.accountBalance;
+  const initialBalance = acc.initialFundedBalance || acc.initialBalance;
 
   // Maximum = solde actuel - solde initial (pour garder le capital)
   const maxPayout = currentBalance - initialBalance;
@@ -968,13 +1347,13 @@ export const requestPayout = onCall(async (request) => {
 
     await payoutRef.set({
       userId,
+      accountId: resolvedAccountId,
       amount: requestedAmount,
       status: 'pending',
       requestedAt: admin.firestore.FieldValue.serverTimestamp(),
       payoutNumber: payoutsReceived + 1,
       isFirstPayout: payoutsReceived === 0,
       accountBalance: currentBalance,
-      // Informations KYC (à compléter plus tard)
       kycVerified: userData.kycVerified || false
     });
 
@@ -1043,14 +1422,27 @@ export const approvePayout = onCall(async (request) => {
           approvedBy: request.auth!.uid
         });
 
-        // Mettre à jour le compte utilisateur
+        // Mettre à jour le compte (account) lié au payout
         const userRef = db.collection('users').doc(payout.userId);
-        transaction.update(userRef, {
+        const userSnap = await transaction.get(userRef);
+
+        const payoutAccountId = typeof payout.accountId === 'string' ? payout.accountId : '';
+        const fallbackAccountId = userSnap.exists && typeof (userSnap.data() as any)?.activeAccountId === 'string'
+          ? String((userSnap.data() as any).activeAccountId)
+          : '';
+        const accountId = (payoutAccountId || fallbackAccountId).trim();
+
+        if (!accountId) {
+          throw new HttpsError('failed-precondition', 'Aucun accountId associé au payout');
+        }
+
+        const accountRef = userRef.collection('accounts').doc(accountId);
+        transaction.update(accountRef, {
           accountBalance: admin.firestore.FieldValue.increment(-payout.amount),
-          availableBalance: admin.firestore.FieldValue.increment(-payout.amount),
           payoutsReceived: admin.firestore.FieldValue.increment(1),
           lastPayoutAt: admin.firestore.FieldValue.serverTimestamp(),
-          totalPayoutAmount: admin.firestore.FieldValue.increment(payout.amount)
+          totalPayoutAmount: admin.firestore.FieldValue.increment(payout.amount),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
       });
 
