@@ -8,6 +8,7 @@ export const fr = {
     analytics: "Analytique",
     payout: "Paiement",
     settings: "Paramètres",
+    admin: "Admin",
     logout: "Déconnexion",
     newChallenge: "Nouveau Challenge",
     trader: "Trader",

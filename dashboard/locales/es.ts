@@ -8,6 +8,7 @@ export const es = {
     analytics: "Analítica",
     payout: "Pago",
     settings: "Configuración",
+    admin: "Admin",
     logout: "Cerrar Sesión",
     newChallenge: "Nuevo Desafío",
     trader: "Trader",
