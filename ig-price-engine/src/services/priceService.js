@@ -33,6 +33,38 @@ class PriceService {
     this.finnhubService = new FinnhubService(FINNHUB_API_KEY);
   }
 
+  _getEffectivePollIntervalMs() {
+    if (process.env.PRICE_POLL_INTERVAL_MS) return this.pollIntervalMs;
+
+    const desired = this._getDesiredEpics();
+    const igEpicsCount = desired.filter((e) => !this._isFinnhubEpic(e)).length;
+
+    if (igEpicsCount <= 8) return 2500;
+    if (igEpicsCount <= 15) return 3000;
+    if (igEpicsCount <= 25) return 4000;
+    return 5000;
+  }
+
+  _restartPollingIntervalIfNeeded() {
+    if (this.useStreaming) return;
+    if (!this.isRunning) return;
+
+    const next = this._getEffectivePollIntervalMs();
+    if (this.pollIntervalMs === next && this.updateInterval) return;
+
+    this.pollIntervalMs = next;
+
+    if (this.updateInterval) {
+      clearInterval(this.updateInterval);
+      this.updateInterval = null;
+    }
+
+    this.fetchAllPrices();
+    this.updateInterval = setInterval(() => {
+      this.fetchAllPrices();
+    }, this.pollIntervalMs);
+  }
+
   _isFinnhubEpic(epic) {
     try {
       return FinnhubService.isHandledByFinnhub(epic);
@@ -62,6 +94,8 @@ class PriceService {
         } catch (err) {}
       }
     }
+
+    this._restartPollingIntervalIfNeeded();
   }
 
   addSubscribedEpics(epics) {
@@ -77,6 +111,8 @@ class PriceService {
         }
       }
     }
+
+    this._restartPollingIntervalIfNeeded();
   }
 
   removeSubscribedEpics(epics) {
@@ -89,6 +125,8 @@ class PriceService {
         } catch (err) {}
       }
     }
+
+    this._restartPollingIntervalIfNeeded();
   }
 
   /**
@@ -112,6 +150,7 @@ class PriceService {
     
     if (!streamingStarted) {
       // Fallback to polling
+      this.pollIntervalMs = this._getEffectivePollIntervalMs();
       console.log(`[PriceService] Starting polling fallback (every ${this.pollIntervalMs}ms)`);
       this.useStreaming = false;
       this.fetchAllPrices();
