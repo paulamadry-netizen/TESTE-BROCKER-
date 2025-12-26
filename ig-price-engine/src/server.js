@@ -41,6 +41,27 @@ const isFinnhubEpic = (epic) => {
   }
 };
 
+const alignLastCandleToLive = (epic, candles) => {
+  try {
+    if (!Array.isArray(candles) || candles.length === 0) return candles;
+    const p = priceService.getCachedPrice(epic);
+    const bid = p ? Number(p.bid) : NaN;
+    const offer = p ? Number(p.offer) : NaN;
+    const mid = Number.isFinite(bid) && Number.isFinite(offer) ? (bid + offer) / 2 : NaN;
+    if (!Number.isFinite(mid)) return candles;
+
+    const last = candles[candles.length - 1];
+    if (!last || typeof last !== 'object') return candles;
+
+    last.close = mid;
+    if (Number.isFinite(Number(last.high)) && mid > Number(last.high)) last.high = mid;
+    if (Number.isFinite(Number(last.low)) && mid < Number(last.low)) last.low = mid;
+    return candles;
+  } catch (e) {
+    return candles;
+  }
+};
+
 const getHistoryTtlMs = (resolution) => {
   switch (String(resolution)) {
     case 'MINUTE':
@@ -272,7 +293,7 @@ app.post('/api/backfill', async (req, res) => {
   const resolution = String(req.body?.resolution || 'HOUR');
   const maxNum = normalizeMax(req.body?.max, 500);
   const epicsRaw = Array.isArray(req.body?.epics) && req.body.epics.length > 0 ? req.body.epics : getAllEpics();
-  const epics = epicsRaw.filter((e) => !isFinnhubEpic(e));
+  const epics = epicsRaw;
 
   let client = igAuthService.getClient();
   if (!client) {
@@ -413,6 +434,7 @@ app.get('/api/history/:epic', async (req, res) => {
     const cached = historyCache.get(cacheKey);
     const ttlMs = getHistoryTtlMs(resolution);
     if (cached && cached.candles && cached.fetchedAt && (Date.now() - cached.fetchedAt) < ttlMs) {
+      alignLastCandleToLive(epic, cached.candles);
       return res.json({
         epic,
         resolution,
@@ -427,90 +449,39 @@ app.get('/api/history/:epic', async (req, res) => {
     if (!shouldRefresh) {
       const firestoreCached = await readBestHistoryFromFirestore(epic, resolution, maxNum);
       if (firestoreCached && firestoreCached.candles && firestoreCached.fetchedAt) {
-        const shouldUseFirestoreCache = !(isFinnhubEpic(epic) && firestoreCached.source !== 'finnhub');
-        if (shouldUseFirestoreCache) {
-          const isFresh = (Date.now() - firestoreCached.fetchedAt) < ttlMs;
-          const sliced = firestoreCached.candles.length > maxNum ? firestoreCached.candles.slice(-maxNum) : firestoreCached.candles;
-          historyCache.set(cacheKey, {
-            candles: sliced,
-            allowance: firestoreCached.allowance,
-            fetchedAt: firestoreCached.fetchedAt,
-          });
+        const isFresh = (Date.now() - firestoreCached.fetchedAt) < ttlMs;
+        const sliced = firestoreCached.candles.length > maxNum ? firestoreCached.candles.slice(-maxNum) : firestoreCached.candles;
+        alignLastCandleToLive(epic, sliced);
+        historyCache.set(cacheKey, {
+          candles: sliced,
+          allowance: firestoreCached.allowance,
+          fetchedAt: firestoreCached.fetchedAt,
+        });
 
-          if (isFresh) {
-            return res.json({
-              epic,
-              resolution,
-              count: sliced.length,
-              allowance: firestoreCached.allowance,
-              source: 'firestore_cache',
-              candles: sliced,
-              cachedAt: new Date(firestoreCached.fetchedAt).toISOString(),
-            });
-          }
-
-          if (['HOUR', 'HOUR_4', 'DAY'].includes(String(resolution))) {
-            return res.json({
-              epic,
-              resolution,
-              count: sliced.length,
-              allowance: firestoreCached.allowance,
-              source: 'firestore_cache_stale',
-              candles: sliced,
-              cachedAt: new Date(firestoreCached.fetchedAt).toISOString(),
-            });
-          }
-        }
-      }
-    }
-
-    if (isFinnhubEpic(epic)) {
-      try {
-        const candles = await priceService.finnhubService.fetchHistory(epic, resolution, maxNum);
-        if (candles && candles.length > 0) {
-          historyCache.set(cacheKey, {
-            candles,
-            allowance: null,
-            fetchedAt: Date.now(),
-          });
-
-          await writeHistoryToFirestore(cacheKey, {
-            epic,
-            resolution,
-            max: maxNum,
-            candles,
-            allowance: null,
-            source: 'finnhub',
-            fetchedAt: Date.now(),
-            updatedAt: Date.now(),
-          });
-
+        if (isFresh) {
           return res.json({
             epic,
             resolution,
-            count: candles.length,
-            allowance: null,
-            source: 'finnhub',
-            candles,
+            count: sliced.length,
+            allowance: firestoreCached.allowance,
+            source: 'firestore_cache',
+            candles: sliced,
+            cachedAt: new Date(firestoreCached.fetchedAt).toISOString(),
           });
         }
-      } catch (e) {
-      }
 
-      try {
-        const derived = await liveCandleService.getDerivedHistory(epic, resolution, maxNum);
-        if (derived && derived.length > 0) {
-          return res.json({ epic, resolution, count: derived.length, source: 'live_derived', candles: derived });
+        if (['HOUR', 'HOUR_4', 'DAY'].includes(String(resolution))) {
+          return res.json({
+            epic,
+            resolution,
+            count: sliced.length,
+            allowance: firestoreCached.allowance,
+            source: 'firestore_cache_stale',
+            candles: sliced,
+            cachedAt: new Date(firestoreCached.fetchedAt).toISOString(),
+          });
         }
-      } catch (e) {
       }
-
-      return res.status(502).json({
-        epic,
-        resolution,
-        source: 'finnhub_error',
-        error: 'Failed to fetch Finnhub history',
-      });
     }
 
     let client = igAuthService.getClient();
@@ -527,6 +498,7 @@ app.get('/api/history/:epic', async (req, res) => {
       try {
         const derived = await liveCandleService.getDerivedHistory(epic, resolution, maxNum);
         if (derived && derived.length > 0) {
+          alignLastCandleToLive(epic, derived);
           return res.json({ epic, resolution, count: derived.length, source: 'live_derived', candles: derived });
         }
       } catch (e) {}
@@ -566,6 +538,8 @@ app.get('/api/history/:epic', async (req, res) => {
         if (currentPrice < lastCandle.low) lastCandle.low = currentPrice;
       }
 
+      alignLastCandleToLive(epic, candles);
+
       historyCache.set(cacheKey, {
         candles,
         allowance: response.data.allowance,
@@ -601,6 +575,7 @@ app.get('/api/history/:epic', async (req, res) => {
       const cacheKey = getHistoryDocId(epic, resolution, maxNum);
       const cached = historyCache.get(cacheKey);
       if (cached && cached.candles && cached.candles.length > 0) {
+        alignLastCandleToLive(epic, cached.candles);
         return res.json({
           epic,
           resolution,
@@ -616,6 +591,7 @@ app.get('/api/history/:epic', async (req, res) => {
       const firestoreCached = await readBestHistoryFromFirestore(epic, resolution, maxNum);
       if (firestoreCached && firestoreCached.candles && firestoreCached.candles.length > 0) {
         const sliced = firestoreCached.candles.length > maxNum ? firestoreCached.candles.slice(-maxNum) : firestoreCached.candles;
+        alignLastCandleToLive(epic, sliced);
         historyCache.set(cacheKey, {
           candles: sliced,
           allowance: firestoreCached.allowance,
@@ -636,6 +612,7 @@ app.get('/api/history/:epic', async (req, res) => {
       try {
         const derived = await liveCandleService.getDerivedHistory(epic, resolution, maxNum);
         if (derived && derived.length > 0) {
+          alignLastCandleToLive(epic, derived);
           return res.json({ epic, resolution, count: derived.length, source: 'live_derived', candles: derived, error: errorCode });
         }
       } catch (e) {}
