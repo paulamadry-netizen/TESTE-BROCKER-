@@ -595,29 +595,30 @@ html,body{height:100%;background:linear-gradient(135deg,var(--bg-primary) 0%,var
 ::-webkit-scrollbar-thumb{background:var(--border-light);border-radius:4px}
 ::-webkit-scrollbar-thumb:hover{background:var(--text-muted)}
 @media (max-width:1400px){.watchlist-panel{width:280px}.orders-panel{width:340px}.header-account{display:none}}
-@media (max-width:1100px){.workspace{flex-direction:column}.watchlist-panel,.orders-panel{width:100%;border:none;border-bottom:1px solid var(--border)}.bottom-panel{flex-direction:column;height:auto}.header-account{display:none}}
 
-@media (max-width:900px){
+@media (max-width:1100px){
   html,body{overflow:auto}
-  .workspace{overflow:auto}
-  .resizable-panel{width:100% !important;min-width:0}
-  .chart-panel{min-width:0}
-  .watchlist-panel{width:100%}
-  .orders-panel{width:100%}
-  .bottom-panel{height:auto}
-}
-
-@media (max-width:768px){
+  .header-account{display:none}
   .header{flex-wrap:wrap;gap:8px;padding:10px 12px}
   .header-left{flex-wrap:wrap;gap:10px}
   .header-symbol{width:100%}
   .view-controls{padding-left:0;border-left:none}
-  .workspace{flex-direction:column}
+
+  .workspace{display:block;overflow:hidden;position:relative}
+  .workspace > .resizable-panel{display:none;width:100% !important;min-width:0;border-left:none;border-right:none;border-top:none}
+  .workspace > .resizable-panel .resize-handle{display:none}
+
+  body:not([data-mobile-view]) #chartPanel{display:flex}
+  body[data-mobile-view="chart"] #chartPanel{display:flex}
+  body[data-mobile-view="watchlist"] #watchlistPanel{display:flex}
+  body[data-mobile-view="orders"] #ordersPanel{display:flex}
+  body[data-mobile-view="positions"] #bottomPanel{display:flex}
+
+  .workspace > .resizable-panel{height:calc(100vh - 140px)}
   .panel-header{padding:12px}
   .panel-content{padding:10px}
-  .chart-panel{flex:unset;min-width:0}
-  .watchlist-panel,.orders-panel{border-left:none;border-right:none}
-  .order-form{padding:12px}
+  .chart-panel{min-width:0}
+  .bottom-panel{height:calc(100vh - 140px)}
   .toast{right:12px;left:12px;min-width:unset}
 }
 
@@ -1882,13 +1883,85 @@ const deleteActiveDrawing=()=>{
   updateChartOverlay();
 };
 
-const togglePanel=(panelId,btnId)=>{const panel=$(panelId),btn=$(btnId);const isHidden=panel.classList.contains('hidden');panel.classList.toggle('hidden',!isHidden);btn.classList.toggle('active',!isHidden);if(tvWidget)setTimeout(()=>tvWidget.activeChart&&tvWidget.activeChart().resetData(),100);if(lwChart)setTimeout(()=>{const container=$('lw_chart_container');if(lwChart&&container)lwChart.applyOptions({width:container.clientWidth,height:container.clientHeight})},100)};
+const isMobileLayout=()=>{try{return window.matchMedia('(max-width:1100px)').matches}catch{return false}};
+let __mobilePrevState=null;
+
+const captureDesktopPanelState=()=>({
+  watchlistHidden: $('watchlistPanel').classList.contains('hidden'),
+  ordersHidden: $('ordersPanel').classList.contains('hidden'),
+  positionsHidden: $('bottomPanel').classList.contains('hidden'),
+});
+
+const restoreDesktopPanelState=(state)=>{
+  if(!state) return;
+  $('watchlistPanel').classList.toggle('hidden',!!state.watchlistHidden);
+  $('ordersPanel').classList.toggle('hidden',!!state.ordersHidden);
+  $('bottomPanel').classList.toggle('hidden',!!state.positionsHidden);
+  $('toggleWatchlist').classList.toggle('active',!state.watchlistHidden);
+  $('toggleOrders').classList.toggle('active',!state.ordersHidden);
+  $('togglePositions').classList.toggle('active',!state.positionsHidden);
+};
+
+const applyMobileButtons=(view)=>{
+  $('toggleWatchlist').classList.toggle('active',view==='watchlist');
+  $('toggleOrders').classList.toggle('active',view==='orders');
+  $('togglePositions').classList.toggle('active',view==='positions');
+};
+
+const setMobileView=(view)=>{
+  document.body.dataset.mobileView=view;
+  // make sure panels aren't hard-hidden by desktop toggles
+  $('watchlistPanel').classList.remove('hidden');
+  $('ordersPanel').classList.remove('hidden');
+  $('bottomPanel').classList.remove('hidden');
+  applyMobileButtons(view);
+  if(tvWidget) setTimeout(()=>tvWidget.activeChart&&tvWidget.activeChart().resetData(),100);
+  if(lwChart) setTimeout(()=>{const container=$('lw_chart_container');if(lwChart&&container)lwChart.applyOptions({width:container.clientWidth,height:container.clientHeight})},120);
+};
+
+const togglePanel=(panelId,btnId)=>{
+  if(isMobileLayout()){
+    const map={watchlistPanel:'watchlist',ordersPanel:'orders',bottomPanel:'positions'};
+    const view=map[panelId]||'chart';
+    const current=document.body.dataset.mobileView||'chart';
+    setMobileView(current===view?'chart':view);
+    return;
+  }
+
+  const panel=$(panelId),btn=$(btnId);
+  const isHidden=panel.classList.contains('hidden');
+  panel.classList.toggle('hidden',!isHidden);
+  btn.classList.toggle('active',!isHidden);
+  if(tvWidget)setTimeout(()=>tvWidget.activeChart&&tvWidget.activeChart().resetData(),100);
+  if(lwChart)setTimeout(()=>{const container=$('lw_chart_container');if(lwChart&&container)lwChart.applyOptions({width:container.clientWidth,height:container.clientHeight})},100);
+};
+
 $('toggleWatchlist').onclick=()=>togglePanel('watchlistPanel','toggleWatchlist');
 $('toggleOrders').onclick=()=>togglePanel('ordersPanel','toggleOrders');
 $('togglePositions').onclick=()=>togglePanel('bottomPanel','togglePositions');
-$('closeWatchlist').onclick=()=>togglePanel('watchlistPanel','toggleWatchlist');
-$('closeOrders').onclick=()=>togglePanel('ordersPanel','toggleOrders');
-$('closePositions').onclick=()=>togglePanel('bottomPanel','togglePositions');
+
+$('closeWatchlist').onclick=()=>{if(isMobileLayout())setMobileView('chart');else togglePanel('watchlistPanel','toggleWatchlist')};
+$('closeOrders').onclick=()=>{if(isMobileLayout())setMobileView('chart');else togglePanel('ordersPanel','toggleOrders')};
+$('closePositions').onclick=()=>{if(isMobileLayout())setMobileView('chart');else togglePanel('bottomPanel','togglePositions')};
+
+// Sync when resizing between desktop and mobile
+const syncLayoutMode=()=>{
+  if(isMobileLayout()){
+    if(!__mobilePrevState) __mobilePrevState=captureDesktopPanelState();
+    if(!document.body.dataset.mobileView) setMobileView('chart');
+    return;
+  }
+  if(document.body.dataset.mobileView){
+    delete document.body.dataset.mobileView;
+  }
+  if(__mobilePrevState){
+    restoreDesktopPanelState(__mobilePrevState);
+    __mobilePrevState=null;
+  }
+};
+
+window.addEventListener('resize',()=>{syncLayoutMode()});
+setTimeout(()=>syncLayoutMode(),0);
 
 const setWsStatus=(status)=>{const el=$('wsStatus');wsConnected=status==='connected';if(status==='connected'){el.className='status-badge connected';el.innerHTML='<div class="status-dot"></div><span>Connecte</span>'}else if(status==='connecting'){el.className='status-badge connecting';el.innerHTML='<div class="status-dot"></div><span>Connexion...</span>'}else{el.className='status-badge disconnected';el.innerHTML='<div class="status-dot"></div><span>Deconnecte</span>'}};
 const startKeepalive=()=>{stopKeepalive();keepaliveTimer=setInterval(()=>{if(ws&&ws.connected){ws.emit('ping');debugLog('Ping')}},CFG.keepalive)},stopKeepalive=()=>{if(keepaliveTimer){clearInterval(keepaliveTimer);keepaliveTimer=null}};
