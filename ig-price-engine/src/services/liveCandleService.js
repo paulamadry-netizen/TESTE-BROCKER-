@@ -10,6 +10,11 @@ class LiveCandleService {
     this._db = null;
     this._flushTimer = null;
 
+    this._lastIngestAt = null;
+    this._lastFlushAt = null;
+    this._lastCommitAt = null;
+    this._lastCommitError = null;
+
     this._current = new Map();
 
     this._pending = [];
@@ -92,6 +97,7 @@ class LiveCandleService {
     if (!Number.isFinite(mid) || mid <= 0) return;
 
     const minuteStartMs = this._minuteStartMs(tsMs);
+    this._lastIngestAt = Date.now();
 
     const existing = this._current.get(epic);
     if (!existing) {
@@ -141,6 +147,7 @@ class LiveCandleService {
     if (!this.enabled) return;
 
     const nowMs = Date.now();
+    this._lastFlushAt = nowMs;
 
     for (const epic of this._current.keys()) {
       this._finalizeIfNeeded(epic, nowMs);
@@ -170,7 +177,29 @@ class LiveCandleService {
       );
     }
 
-    await batch.commit();
+    try {
+      await batch.commit();
+      this._lastCommitAt = Date.now();
+      this._lastCommitError = null;
+    } catch (e) {
+      this._lastCommitError = e && e.message ? e.message : String(e);
+      throw e;
+    }
+  }
+
+  getStatus() {
+    return {
+      enabled: this.enabled,
+      collection: this.collection,
+      flushIntervalMs: this.flushIntervalMs,
+      maxHours: this.maxHours,
+      currentEpicsCount: this._current.size,
+      pendingWritesCount: this._pending.length,
+      lastIngestAt: this._lastIngestAt,
+      lastFlushAt: this._lastFlushAt,
+      lastCommitAt: this._lastCommitAt,
+      lastCommitError: this._lastCommitError,
+    };
   }
 
   async getDerivedHistory(epic, resolution, max) {
@@ -189,29 +218,53 @@ class LiveCandleService {
     const minutesNeeded = maxN * minutesPerCandle;
     const hoursNeeded = Math.min(this.maxHours, Math.ceil(minutesNeeded / 60) + 2);
 
-    const db = this._getDb();
-    const hoursCol = db.collection(this.collection).doc(epic).collection('hours');
-
-    const snaps = await hoursCol.orderBy('hourStartMs', 'desc').limit(hoursNeeded).get();
-    if (snaps.empty) return null;
-
     const oneMinute = [];
-    snaps.forEach((doc) => {
-      const d = doc.data();
-      const candlesMap = d && d.candles ? d.candles : null;
-      if (!candlesMap || typeof candlesMap !== 'object') return;
-      for (const k of Object.keys(candlesMap)) {
-        const c = candlesMap[k];
-        if (!c) continue;
+
+    try {
+      const db = this._getDb();
+      const hoursCol = db.collection(this.collection).doc(epic).collection('hours');
+      const snaps = await hoursCol.orderBy('hourStartMs', 'desc').limit(hoursNeeded).get();
+
+      snaps.forEach((doc) => {
+        const d = doc.data();
+        const candlesMap = d && d.candles ? d.candles : null;
+        if (!candlesMap || typeof candlesMap !== 'object') return;
+        for (const k of Object.keys(candlesMap)) {
+          const c = candlesMap[k];
+          if (!c) continue;
+          const t = Number(c.time);
+          const o = Number(c.open);
+          const h = Number(c.high);
+          const l = Number(c.low);
+          const cl = Number(c.close);
+          if (!Number.isFinite(t) || !Number.isFinite(o) || !Number.isFinite(h) || !Number.isFinite(l) || !Number.isFinite(cl)) continue;
+          oneMinute.push({ time: t, open: o, high: h, low: l, close: cl, volume: 0 });
+        }
+      });
+    } catch (e) {
+    }
+
+    for (const p of this._pending) {
+      if (p && p.epic === epic && p.candle) {
+        const c = p.candle;
         const t = Number(c.time);
         const o = Number(c.open);
         const h = Number(c.high);
         const l = Number(c.low);
         const cl = Number(c.close);
-        if (!Number.isFinite(t) || !Number.isFinite(o) || !Number.isFinite(h) || !Number.isFinite(l) || !Number.isFinite(cl)) continue;
-        oneMinute.push({ time: t, open: o, high: h, low: l, close: cl, volume: 0 });
+        if (Number.isFinite(t) && Number.isFinite(o) && Number.isFinite(h) && Number.isFinite(l) && Number.isFinite(cl)) {
+          oneMinute.push({ time: t, open: o, high: h, low: l, close: cl, volume: 0 });
+        }
       }
-    });
+    }
+
+    const cur = this._current.get(epic);
+    if (cur && cur.minuteStartMs) {
+      const t = Math.floor(cur.minuteStartMs / 1000);
+      if (Number.isFinite(t) && Number.isFinite(cur.open) && Number.isFinite(cur.high) && Number.isFinite(cur.low) && Number.isFinite(cur.close)) {
+        oneMinute.push({ time: t, open: cur.open, high: cur.high, low: cur.low, close: cur.close, volume: 0 });
+      }
+    }
 
     if (oneMinute.length === 0) return null;
 
