@@ -961,6 +961,87 @@ const computeSMA=(data,period)=>{
   }
   return out;
 };
+
+const toEpochSeconds=(v)=>{
+  if(v===undefined||v===null) return null;
+  if(typeof v==='number'){
+    if(!Number.isFinite(v)) return null;
+    // seconds vs ms
+    return v>1e12?Math.floor(v/1000):Math.floor(v);
+  }
+  if(typeof v==='string'){
+    const d=new Date(v);
+    const ms=d.getTime();
+    return Number.isFinite(ms)?Math.floor(ms/1000):null;
+  }
+  if(typeof v==='object'){
+    try{
+      if(typeof v.toDate==='function'){
+        const ms=v.toDate().getTime();
+        return Number.isFinite(ms)?Math.floor(ms/1000):null;
+      }
+      if(typeof v.seconds==='number') return Math.floor(v.seconds);
+      if(typeof v._seconds==='number') return Math.floor(v._seconds);
+    }catch(e){}
+  }
+  return null;
+};
+
+const pickMid=(p)=>{
+  if(p===undefined||p===null) return null;
+  if(typeof p==='number') return Number.isFinite(p)?p:null;
+  if(typeof p==='object'){
+    const bid=Number(p.bid);
+    const ask=Number(p.ask);
+    const last=Number(p.lastTraded);
+    if(Number.isFinite(bid)&&Number.isFinite(ask)) return (bid+ask)/2;
+    if(Number.isFinite(last)) return last;
+    const mid=Number(p.mid);
+    if(Number.isFinite(mid)) return mid;
+  }
+  return null;
+};
+
+const normalizeCandle=(c)=>{
+  if(!c) return null;
+  // Already in LightweightCharts format
+  const t0=toEpochSeconds(c.time ?? c.t ?? c.timestamp ?? c.ts ?? c.snapshotTimeUTC ?? c.snapshotTime ?? c.datetime ?? c.dateTime ?? c.date);
+  const o0=Number(c.open),h0=Number(c.high),l0=Number(c.low),cl0=Number(c.close);
+  if(t0!==null && Number.isFinite(o0) && Number.isFinite(h0) && Number.isFinite(l0) && Number.isFinite(cl0)){
+    const open=o0,high=h0,low=l0,close=cl0;
+    if(open<=0||high<=0||low<=0||close<=0) return null;
+    return {time:t0,open,high:Math.max(high,open,close),low:Math.min(low,open,close),close};
+  }
+
+  // IG-style format
+  const t=toEpochSeconds(c.snapshotTimeUTC ?? c.snapshotTime ?? c.time ?? c.timestamp ?? c.utcTime ?? c.dateTime ?? c.date);
+  if(t===null) return null;
+  const open=pickMid(c.openPrice ?? c.open);
+  const high=pickMid(c.highPrice ?? c.high);
+  const low=pickMid(c.lowPrice ?? c.low);
+  const close=pickMid(c.closePrice ?? c.close);
+  if(!Number.isFinite(open)||!Number.isFinite(high)||!Number.isFinite(low)||!Number.isFinite(close)) return null;
+  if(open<=0||high<=0||low<=0||close<=0) return null;
+  return {time:t,open,high:Math.max(high,open,close),low:Math.min(low,open,close),close};
+};
+
+const normalizeCandles=(candles)=>{
+  const arr=Array.isArray(candles)?candles:[];
+  const out=[];
+  for(let i=0;i<arr.length;i++){
+    const c=normalizeCandle(arr[i]);
+    if(c) out.push(c);
+  }
+  out.sort((a,b)=>a.time-b.time);
+  // Deduplicate by time (keep last)
+  const dedup=[];
+  for(let i=0;i<out.length;i++){
+    const prev=dedup[dedup.length-1];
+    if(prev && prev.time===out[i].time) dedup[dedup.length-1]=out[i];
+    else dedup.push(out[i]);
+  }
+  return dedup;
+};
 const computeEMA=(data,period)=>{
   const out=[];const k=2/(period+1);
   let ema=null;
@@ -1262,9 +1343,11 @@ const loadHistoricalData=async(epic,timeframe)=>{
     const resp=await fetch(url);
     if(!resp.ok){debugLog(`HTTP ${resp.status}`);return null}
     const data=await resp.json();
-    if(!data.candles||data.candles.length===0){debugLog('No candles');return null}
-    debugLog(`Got ${data.candles.length} candles`);
-    return data.candles;
+    const raw=(data&&data.candles)?data.candles:(Array.isArray(data)?data:[]);
+    const normalized=normalizeCandles(raw);
+    if(!normalized||normalized.length===0){debugLog('No candles');return null}
+    debugLog(`Got ${normalized.length} candles`);
+    return normalized;
   }catch(e){debugLog(`History error: ${e.message}`);return null}
 };
 
