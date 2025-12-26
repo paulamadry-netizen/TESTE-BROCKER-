@@ -5,6 +5,8 @@
  */
 
 const WebSocket = require('ws');
+const axios = require('axios');
+const { EPICS } = require('../config/epics');
 
 // Mapping from IG epic to Finnhub symbol
 // Finnhub forex symbols use format: OANDA:SYMBOL_CURRENCY
@@ -13,29 +15,126 @@ const FINNHUB_SYMBOLS = {
   // Metals - using forex broker format
   'CS.D.GD.CFD.IP': 'OANDA:XAU_USD',      // Gold
   'CS.D.SI.CFD.IP': 'OANDA:XAG_USD',      // Silver
-  'TM.D.COPPER.CFD.IP': 'OANDA:HG_USD',   // Copper (HG is copper futures symbol)
+  'TM.D.COPPER.CFD.IP': 'OANDA:XCU_USD',
   
   // Indices - using common ETF/futures symbols
-  'IX.D.FTSE.IFD.IP': 'OANDA:UK100_GBP',   // UK 100
-  'IX.D.STX.IFD.IP': 'OANDA:EU50_EUR',     // Euro Stoxx 50
-  'IX.D.HSI.IFD.IP': 'OANDA:HK33_HKD',     // Hong Kong HSI
+  
 };
 
 // Assets that need mock prices (Finnhub rate limits or unsupported)
-const UNSUPPORTED_ASSETS = {
-  'TM.D.ZINC.CFD.IP': { name: 'Zinc', basePrice: 2500 },
-  'TM.D.COPPER.CFD.IP': { name: 'Copper', basePrice: 4.20 },
-  'CC.D.COFFEE.UMA.IP': { name: 'Coffee', basePrice: 180 },
-  'IX.D.FTSE.IFD.IP': { name: 'UK 100', basePrice: 8150 },
-  'IX.D.STX.IFD.IP': { name: 'Euro Stoxx 50', basePrice: 4950 },
-  'IX.D.HSI.IFD.IP': { name: 'Hong Kong HSI', basePrice: 19800 },
-};
+const UNSUPPORTED_ASSETS = {};
 
 // Reverse mapping for quick lookup
 const SYMBOL_TO_EPIC = {};
 Object.entries(FINNHUB_SYMBOLS).forEach(([epic, symbol]) => {
   SYMBOL_TO_EPIC[symbol] = epic;
 });
+
+const parseForexEpic = (epic) => {
+  const m = String(epic || '').match(/^CS\.D\.([A-Z]{6})\.CFD\.IP$/);
+  if (!m) return null;
+  const pair = m[1];
+  return { base: pair.slice(0, 3), quote: pair.slice(3, 6) };
+};
+
+const getDefaultSymbols = () => {
+  const symbols = new Set();
+
+  Object.keys((EPICS && EPICS.forex) || {}).forEach((epic) => {
+    const parsed = parseForexEpic(epic);
+    if (!parsed) return;
+    symbols.add(`OANDA:${parsed.base}_${parsed.quote}`);
+  });
+
+  ['CS.D.GD.CFD.IP', 'CS.D.SI.CFD.IP', 'TM.D.COPPER.CFD.IP'].forEach((epic) => {
+    const symbol = FINNHUB_SYMBOLS[epic];
+    if (symbol) symbols.add(symbol);
+  });
+
+  return Array.from(symbols);
+};
+
+const getFinnhubSymbolForEpic = (epic) => {
+  const fixed = FINNHUB_SYMBOLS[epic];
+  if (fixed) return fixed;
+  const parsed = parseForexEpic(epic);
+  if (parsed) return `OANDA:${parsed.base}_${parsed.quote}`;
+  return null;
+};
+
+const getEpicForFinnhubSymbol = (symbol) => {
+  const fixed = SYMBOL_TO_EPIC[symbol];
+  if (fixed) return fixed;
+
+  const m = String(symbol || '').match(/^OANDA:([A-Z]{3})_([A-Z]{3})$/);
+  if (m) {
+    return `CS.D.${m[1]}${m[2]}.CFD.IP`;
+  }
+  return null;
+};
+
+const finnhubResolutionFor = (resolution) => {
+  switch (String(resolution)) {
+    case 'MINUTE':
+      return '1';
+    case 'MINUTE_5':
+      return '5';
+    case 'MINUTE_15':
+      return '15';
+    case 'HOUR':
+      return '60';
+    case 'DAY':
+      return 'D';
+    case 'HOUR_4':
+      return '60';
+    default:
+      return null;
+  }
+};
+
+const resolutionSecondsFor = (resolution) => {
+  switch (String(resolution)) {
+    case 'MINUTE':
+      return 60;
+    case 'MINUTE_5':
+      return 5 * 60;
+    case 'MINUTE_15':
+      return 15 * 60;
+    case 'HOUR':
+      return 60 * 60;
+    case 'HOUR_4':
+      return 4 * 60 * 60;
+    case 'DAY':
+      return 24 * 60 * 60;
+    default:
+      return 60;
+  }
+};
+
+const aggregateCandles = (candles, bucketSeconds) => {
+  if (!Array.isArray(candles) || candles.length === 0) return [];
+  const out = [];
+
+  const sorted = candles.slice().sort((a, b) => a.time - b.time);
+  let cur = null;
+
+  for (const c of sorted) {
+    const t = Number(c.time);
+    if (!Number.isFinite(t)) continue;
+    const bucket = Math.floor(t / bucketSeconds) * bucketSeconds;
+    if (!cur || cur.time !== bucket) {
+      if (cur) out.push(cur);
+      cur = { time: bucket, open: c.open, high: c.high, low: c.low, close: c.close, volume: c.volume || 0 };
+      continue;
+    }
+    cur.high = Math.max(cur.high, c.high);
+    cur.low = Math.min(cur.low, c.low);
+    cur.close = c.close;
+    cur.volume = (cur.volume || 0) + (c.volume || 0);
+  }
+  if (cur) out.push(cur);
+  return out;
+};
 
 class FinnhubService {
   constructor(apiKey) {
@@ -72,9 +171,6 @@ class FinnhubService {
       
       // Subscribe to all configured symbols
       this._subscribeToAll();
-      
-      // Start mock price updates for unsupported assets
-      this._startMockPrices();
     });
 
     this.ws.on('message', (data) => {
@@ -108,7 +204,7 @@ class FinnhubService {
    * Subscribe to all configured symbols
    */
   _subscribeToAll() {
-    Object.values(FINNHUB_SYMBOLS).forEach(symbol => {
+    getDefaultSymbols().forEach(symbol => {
       this.subscribe(symbol);
     });
   }
@@ -142,6 +238,12 @@ class FinnhubService {
     this.subscribedSymbols.delete(symbol);
   }
 
+  unsubscribeEpic(epic) {
+    const symbol = this.getFinnhubSymbol(epic);
+    if (!symbol) return;
+    this.unsubscribe(symbol);
+  }
+
   /**
    * Handle incoming trade data
    */
@@ -153,7 +255,7 @@ class FinnhubService {
       const price = trade.p;
       const timestamp = trade.t;
 
-      const epic = SYMBOL_TO_EPIC[symbol];
+      const epic = getEpicForFinnhubSymbol(symbol);
       if (!epic) return;
 
       // Update cache
@@ -216,14 +318,79 @@ class FinnhubService {
    * Check if epic is handled by Finnhub
    */
   static isHandledByFinnhub(epic) {
-    return epic in FINNHUB_SYMBOLS;
+    const symbol = getFinnhubSymbolForEpic(epic);
+    return Boolean(symbol);
   }
 
   /**
    * Get list of epics handled by Finnhub
    */
   static getHandledEpics() {
-    return Object.keys(FINNHUB_SYMBOLS);
+    return Array.from(new Set([
+      ...Object.keys((EPICS && EPICS.forex) || {}),
+      'CS.D.GD.CFD.IP',
+      'CS.D.SI.CFD.IP',
+      'TM.D.COPPER.CFD.IP',
+    ]));
+  }
+
+  getFinnhubSymbol(epic) {
+    return getFinnhubSymbolForEpic(epic);
+  }
+
+  ensureSubscribedForEpic(epic) {
+    const symbol = this.getFinnhubSymbol(epic);
+    if (!symbol) return;
+    this.subscribe(symbol);
+  }
+
+  async fetchHistory(epic, resolution, max) {
+    const symbol = this.getFinnhubSymbol(epic);
+    if (!symbol) return null;
+
+    const res = finnhubResolutionFor(resolution);
+    if (!res) return null;
+
+    const maxNum = Number.parseInt(String(max), 10) || 100;
+    const now = Math.floor(Date.now() / 1000);
+
+    const wantSeconds = resolutionSecondsFor(resolution);
+    const baseSeconds = resolutionSecondsFor(resolution === 'HOUR_4' ? 'HOUR' : resolution);
+    const baseCount = resolution === 'HOUR_4' ? maxNum * 4 : maxNum;
+    const from = now - Math.max(baseCount * baseSeconds * 2, baseSeconds * 10);
+
+    const url = `https://finnhub.io/api/v1/forex/candle`;
+    const response = await axios.get(url, {
+      params: {
+        symbol,
+        resolution: res,
+        from,
+        to: now,
+        token: this.apiKey,
+      },
+      timeout: 20000,
+    });
+
+    const data = response.data;
+    if (!data || data.s !== 'ok' || !Array.isArray(data.t)) {
+      return null;
+    }
+
+    const candles = data.t.map((t, i) => ({
+      time: data.t[i],
+      open: data.o[i],
+      high: data.h[i],
+      low: data.l[i],
+      close: data.c[i],
+      volume: (data.v && data.v[i]) || 0,
+    }));
+
+    const normalized = candles.slice(-baseCount);
+    if (resolution === 'HOUR_4') {
+      const aggregated = aggregateCandles(normalized, wantSeconds);
+      return aggregated.slice(-maxNum);
+    }
+    return normalized.slice(-maxNum);
   }
 
   /**

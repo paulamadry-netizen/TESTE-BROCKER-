@@ -33,6 +33,20 @@ class PriceService {
     this.finnhubService = new FinnhubService(FINNHUB_API_KEY);
   }
 
+  _isFinnhubEpic(epic) {
+    try {
+      return FinnhubService.isHandledByFinnhub(epic);
+    } catch (e) {
+      return false;
+    }
+  }
+
+  _getDesiredEpics() {
+    return this.subscribedEpics.size > 0
+      ? Array.from(this.subscribedEpics)
+      : getAllEpics();
+  }
+
   setSubscribedEpics(epics) {
     this.subscribedEpics.clear();
     if (Array.isArray(epics)) {
@@ -40,12 +54,28 @@ class PriceService {
         if (typeof e === 'string' && e.trim()) this.subscribedEpics.add(e.trim());
       }
     }
+
+    for (const e of this.subscribedEpics) {
+      if (this._isFinnhubEpic(e)) {
+        try {
+          this.finnhubService.ensureSubscribedForEpic(e);
+        } catch (err) {}
+      }
+    }
   }
 
   addSubscribedEpics(epics) {
     if (!Array.isArray(epics)) return;
     for (const e of epics) {
-      if (typeof e === 'string' && e.trim()) this.subscribedEpics.add(e.trim());
+      if (typeof e === 'string' && e.trim()) {
+        const epic = e.trim();
+        this.subscribedEpics.add(epic);
+        if (this._isFinnhubEpic(epic)) {
+          try {
+            this.finnhubService.ensureSubscribedForEpic(epic);
+          } catch (err) {}
+        }
+      }
     }
   }
 
@@ -53,6 +83,11 @@ class PriceService {
     if (!Array.isArray(epics)) return;
     for (const e of epics) {
       this.subscribedEpics.delete(e);
+      if (this._isFinnhubEpic(e)) {
+        try {
+          this.finnhubService.unsubscribeEpic(e);
+        } catch (err) {}
+      }
     }
   }
 
@@ -132,10 +167,17 @@ class PriceService {
       await igStreamingService.connect(cst, xst, accountId, lsEndpoint);
       igStreamingService.setSocketIO(this.io);
       
-      const epics = this.subscribedEpics.size > 0 
-        ? Array.from(this.subscribedEpics) 
-        : getAllEpics();
-      
+      const desired = this._getDesiredEpics();
+      const epics = desired.filter((e) => !this._isFinnhubEpic(e));
+
+      for (const e of desired) {
+        if (this._isFinnhubEpic(e)) {
+          try {
+            this.finnhubService.ensureSubscribedForEpic(e);
+          } catch (err) {}
+        }
+      }
+
       await igStreamingService.subscribeToEpics(epics, (priceData) => {
         this.priceCache.set(priceData.epic, priceData);
         this.lastUpdate = new Date();
@@ -225,9 +267,8 @@ class PriceService {
       return;
     }
 
-    const allEpics = this.subscribedEpics.size > 0
-      ? Array.from(this.subscribedEpics)
-      : getAllEpics();
+    const desired = this._getDesiredEpics();
+    const allEpics = desired.filter((e) => !this._isFinnhubEpic(e));
     
     try {
       // Split into batches
@@ -302,6 +343,48 @@ class PriceService {
    * Fetch individual market price
    */
   async fetchPrice(epic) {
+    if (this._isFinnhubEpic(epic)) {
+      try {
+        this.finnhubService.ensureSubscribedForEpic(epic);
+      } catch (e) {}
+      const cached = this.finnhubService.getCachedPrice(epic);
+      if (cached) {
+        this.priceCache.set(epic, cached);
+        try {
+          liveCandleService.ingestPrice(cached);
+        } catch (e) {}
+        return cached;
+      }
+      try {
+        const candles = await this.finnhubService.fetchHistory(epic, 'MINUTE', 1);
+        if (candles && candles.length > 0) {
+          const close = candles[candles.length - 1].close;
+          const priceData = {
+            epic,
+            symbol: epic,
+            name: epic,
+            bid: close * 0.9999,
+            offer: close * 1.0001,
+            high: close,
+            low: close,
+            open: close,
+            close: close,
+            change: 0,
+            changePercent: 0,
+            updateTime: new Date().toISOString(),
+            marketStatus: 'UNKNOWN',
+            timestamp: Date.now(),
+            source: 'finnhub'
+          };
+          this.priceCache.set(epic, priceData);
+          try {
+            liveCandleService.ingestPrice(priceData);
+          } catch (e) {}
+          return priceData;
+        }
+      } catch (e) {}
+      return null;
+    }
     try {
       const response = await igApiClient.get(`/markets/${epic}`);
       
@@ -459,14 +542,32 @@ class PriceService {
    * Get cached price for an epic
    */
   getCachedPrice(epic) {
-    return this.priceCache.get(epic) || null;
+    const cached = this.priceCache.get(epic) || null;
+    if (cached) return cached;
+    if (this._isFinnhubEpic(epic)) {
+      try {
+        return this.finnhubService.getCachedPrice(epic) || null;
+      } catch (e) {
+        return null;
+      }
+    }
+    return null;
   }
 
   /**
    * Get all cached prices
    */
   getAllCachedPrices() {
-    return Array.from(this.priceCache.values());
+    const merged = new Map();
+    for (const p of this.priceCache.values()) {
+      if (p && p.epic) merged.set(p.epic, p);
+    }
+    try {
+      for (const p of this.finnhubService.getAllCachedPrices()) {
+        if (p && p.epic) merged.set(p.epic, p);
+      }
+    } catch (e) {}
+    return Array.from(merged.values());
   }
 
   /**
