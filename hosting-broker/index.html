@@ -597,29 +597,51 @@ html,body{height:100%;background:linear-gradient(135deg,var(--bg-primary) 0%,var
 @media (max-width:1400px){.watchlist-panel{width:280px}.orders-panel{width:340px}.header-account{display:none}}
 
 @media (max-width:1100px){
-  html,body{overflow:auto}
+  html,body{overflow:hidden}
+  .app{padding-bottom:56px}
   .header-account{display:none}
   .header{flex-wrap:wrap;gap:8px;padding:10px 12px}
   .header-left{flex-wrap:wrap;gap:10px}
   .header-symbol{width:100%}
   .view-controls{padding-left:0;border-left:none}
 
-  .workspace{display:block;overflow:hidden;position:relative}
-  .workspace > .resizable-panel{display:none;width:100% !important;min-width:0;border-left:none;border-right:none;border-top:none}
-  .workspace > .resizable-panel .resize-handle{display:none}
-
-  body:not([data-mobile-view]) #chartPanel{display:flex}
-  body[data-mobile-view="chart"] #chartPanel{display:flex}
-  body[data-mobile-view="watchlist"] #watchlistPanel{display:flex}
-  body[data-mobile-view="orders"] #ordersPanel{display:flex}
-  body[data-mobile-view="positions"] #bottomPanel{display:flex}
-
-  .workspace > .resizable-panel{height:calc(100vh - 140px)}
+  .workspace{flex:1;display:block;overflow:hidden;position:relative}
+  .chart-panel{width:100%;min-width:0;border-left:none;border-right:none}
+  #chartPanel{height:calc(100vh - 140px);}
   .panel-header{padding:12px}
   .panel-content{padding:10px}
-  .chart-panel{min-width:0}
-  .bottom-panel{height:calc(100vh - 140px)}
   .toast{right:12px;left:12px;min-width:unset}
+
+  .mobile-sheet-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:999}
+  body[data-mobile-sheet] .mobile-sheet-backdrop{display:block}
+
+  .watchlist-panel,.orders-panel,.bottom-panel{
+    position:fixed;
+    left:0;right:0;
+    bottom:56px;
+    height:62vh;
+    max-height:70vh;
+    width:auto;
+    border-left:none;
+    border-right:none;
+    border-bottom:none;
+    border-top:1px solid var(--border);
+    border-radius:16px 16px 0 0;
+    box-shadow:var(--shadow-xl);
+    z-index:1000;
+    transform:translateY(105%);
+    transition:transform 0.22s cubic-bezier(0.4,0,0.2,1);
+  }
+  .watchlist-panel .resize-handle,.orders-panel .resize-handle,.bottom-panel .resize-handle{display:none}
+
+  body[data-mobile-sheet="watchlist"] #watchlistPanel{transform:translateY(0)}
+  body[data-mobile-sheet="orders"] #ordersPanel{transform:translateY(0)}
+  body[data-mobile-sheet="positions"] #bottomPanel{transform:translateY(0)}
+
+  .mobile-bottom-nav{display:flex;position:fixed;left:0;right:0;bottom:0;height:56px;background:var(--surface);border-top:1px solid var(--border);z-index:1100}
+  .mobile-bottom-nav button{flex:1;border:none;background:transparent;color:var(--text-secondary);font-size:11px;font-weight:700;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px}
+  .mobile-bottom-nav button i{font-size:14px}
+  .mobile-bottom-nav button.active{color:var(--accent)}
 }
 
 @media (max-width:520px){
@@ -660,6 +682,7 @@ html,body{height:100%;background:linear-gradient(135deg,var(--bg-primary) 0%,var
 <button class="icon-btn" onclick="window.logoutBroker()" title="Deconnexion"><i class="fas fa-sign-out-alt"></i></button>
 </div>
 </header>
+<div id="mobileSheetBackdrop" class="mobile-sheet-backdrop"></div>
 <div class="workspace">
 <div class="resizable-panel watchlist-panel" id="watchlistPanel">
 <div class="panel-header"><div class="panel-title"><i class="fas fa-list-ul"></i>Watchlist</div><div class="panel-controls"><button class="panel-btn" id="closeWatchlist" title="Fermer"><i class="fas fa-times"></i></button></div></div>
@@ -738,6 +761,12 @@ html,body{height:100%;background:linear-gradient(135deg,var(--bg-primary) 0%,var
 <div class="resize-handle resize-handle-left"></div>
 </div>
 </div>
+<nav class="mobile-bottom-nav" aria-label="Mobile navigation">
+  <button type="button" id="mobileNavChart" class="active"><i class="fas fa-chart-area"></i><span>Chart</span></button>
+  <button type="button" id="mobileNavWatchlist"><i class="fas fa-list-ul"></i><span>Watchlist</span></button>
+  <button type="button" id="mobileNavOrders"><i class="fas fa-clock"></i><span>Ordres</span></button>
+  <button type="button" id="mobileNavPositions"><i class="fas fa-briefcase"></i><span>Positions</span></button>
+</nav>
 <div class="resizable-panel bottom-panel" id="bottomPanel">
 <div class="resizable-panel positions-panel">
 <div class="section-header">
@@ -1890,6 +1919,9 @@ const captureDesktopPanelState=()=>({
   watchlistHidden: $('watchlistPanel').classList.contains('hidden'),
   ordersHidden: $('ordersPanel').classList.contains('hidden'),
   positionsHidden: $('bottomPanel').classList.contains('hidden'),
+  watchlistActive: $('toggleWatchlist').classList.contains('active'),
+  ordersActive: $('toggleOrders').classList.contains('active'),
+  positionsActive: $('togglePositions').classList.contains('active'),
 });
 
 const restoreDesktopPanelState=(state)=>{
@@ -1897,24 +1929,40 @@ const restoreDesktopPanelState=(state)=>{
   $('watchlistPanel').classList.toggle('hidden',!!state.watchlistHidden);
   $('ordersPanel').classList.toggle('hidden',!!state.ordersHidden);
   $('bottomPanel').classList.toggle('hidden',!!state.positionsHidden);
-  $('toggleWatchlist').classList.toggle('active',!state.watchlistHidden);
-  $('toggleOrders').classList.toggle('active',!state.ordersHidden);
-  $('togglePositions').classList.toggle('active',!state.positionsHidden);
+  $('toggleWatchlist').classList.toggle('active',!!state.watchlistActive);
+  $('toggleOrders').classList.toggle('active',!!state.ordersActive);
+  $('togglePositions').classList.toggle('active',!!state.positionsActive);
 };
 
-const applyMobileButtons=(view)=>{
-  $('toggleWatchlist').classList.toggle('active',view==='watchlist');
-  $('toggleOrders').classList.toggle('active',view==='orders');
-  $('togglePositions').classList.toggle('active',view==='positions');
+const setBottomNavActive=(key)=>{
+  const ids=['mobileNavChart','mobileNavWatchlist','mobileNavOrders','mobileNavPositions'];
+  ids.forEach((id)=>{const el=$(id);if(!el) return;el.classList.remove('active')});
+  const map={chart:'mobileNavChart',watchlist:'mobileNavWatchlist',orders:'mobileNavOrders',positions:'mobileNavPositions'};
+  const activeId=map[key]||'mobileNavChart';
+  const activeEl=$(activeId);
+  if(activeEl) activeEl.classList.add('active');
 };
 
-const setMobileView=(view)=>{
-  document.body.dataset.mobileView=view;
-  // make sure panels aren't hard-hidden by desktop toggles
+const setHeaderButtonsActive=(sheet)=>{
+  $('toggleWatchlist').classList.toggle('active',sheet==='watchlist');
+  $('toggleOrders').classList.toggle('active',sheet==='orders');
+  $('togglePositions').classList.toggle('active',sheet==='positions');
+};
+
+const setMobileSheet=(sheet)=>{
+  if(!sheet){
+    delete document.body.dataset.mobileSheet;
+    setHeaderButtonsActive('');
+    setBottomNavActive('chart');
+  }else{
+    document.body.dataset.mobileSheet=sheet;
+    setHeaderButtonsActive(sheet);
+    setBottomNavActive(sheet);
+  }
+  // ensure panels are not hard-hidden
   $('watchlistPanel').classList.remove('hidden');
   $('ordersPanel').classList.remove('hidden');
   $('bottomPanel').classList.remove('hidden');
-  applyMobileButtons(view);
   if(tvWidget) setTimeout(()=>tvWidget.activeChart&&tvWidget.activeChart().resetData(),100);
   if(lwChart) setTimeout(()=>{const container=$('lw_chart_container');if(lwChart&&container)lwChart.applyOptions({width:container.clientWidth,height:container.clientHeight})},120);
 };
@@ -1922,9 +1970,9 @@ const setMobileView=(view)=>{
 const togglePanel=(panelId,btnId)=>{
   if(isMobileLayout()){
     const map={watchlistPanel:'watchlist',ordersPanel:'orders',bottomPanel:'positions'};
-    const view=map[panelId]||'chart';
-    const current=document.body.dataset.mobileView||'chart';
-    setMobileView(current===view?'chart':view);
+    const sheet=map[panelId]||'';
+    const current=document.body.dataset.mobileSheet||'';
+    setMobileSheet(current===sheet?'':sheet);
     return;
   }
 
@@ -1940,19 +1988,25 @@ $('toggleWatchlist').onclick=()=>togglePanel('watchlistPanel','toggleWatchlist')
 $('toggleOrders').onclick=()=>togglePanel('ordersPanel','toggleOrders');
 $('togglePositions').onclick=()=>togglePanel('bottomPanel','togglePositions');
 
-$('closeWatchlist').onclick=()=>{if(isMobileLayout())setMobileView('chart');else togglePanel('watchlistPanel','toggleWatchlist')};
-$('closeOrders').onclick=()=>{if(isMobileLayout())setMobileView('chart');else togglePanel('ordersPanel','toggleOrders')};
-$('closePositions').onclick=()=>{if(isMobileLayout())setMobileView('chart');else togglePanel('bottomPanel','togglePositions')};
+$('closeWatchlist').onclick=()=>{if(isMobileLayout())setMobileSheet('');else togglePanel('watchlistPanel','toggleWatchlist')};
+$('closeOrders').onclick=()=>{if(isMobileLayout())setMobileSheet('');else togglePanel('ordersPanel','toggleOrders')};
+$('closePositions').onclick=()=>{if(isMobileLayout())setMobileSheet('');else togglePanel('bottomPanel','togglePositions')};
+
+if($('mobileSheetBackdrop')) $('mobileSheetBackdrop').onclick=()=>{if(isMobileLayout())setMobileSheet('')};
+if($('mobileNavChart')) $('mobileNavChart').onclick=()=>{if(isMobileLayout())setMobileSheet('')};
+if($('mobileNavWatchlist')) $('mobileNavWatchlist').onclick=()=>{if(isMobileLayout())setMobileSheet('watchlist')};
+if($('mobileNavOrders')) $('mobileNavOrders').onclick=()=>{if(isMobileLayout())setMobileSheet('orders')};
+if($('mobileNavPositions')) $('mobileNavPositions').onclick=()=>{if(isMobileLayout())setMobileSheet('positions')};
 
 // Sync when resizing between desktop and mobile
 const syncLayoutMode=()=>{
   if(isMobileLayout()){
     if(!__mobilePrevState) __mobilePrevState=captureDesktopPanelState();
-    if(!document.body.dataset.mobileView) setMobileView('chart');
+    setMobileSheet(document.body.dataset.mobileSheet||'');
     return;
   }
-  if(document.body.dataset.mobileView){
-    delete document.body.dataset.mobileView;
+  if(document.body.dataset.mobileSheet){
+    delete document.body.dataset.mobileSheet;
   }
   if(__mobilePrevState){
     restoreDesktopPanelState(__mobilePrevState);
