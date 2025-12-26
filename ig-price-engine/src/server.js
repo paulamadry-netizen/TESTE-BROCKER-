@@ -626,6 +626,14 @@ app.get('/api/history/:epic', async (req, res) => {
       });
     }
 
+    try {
+      const derived = await liveCandleService.getDerivedHistory(epic, resolution, maxNum);
+      if (derived && derived.length > 0) {
+        alignLastCandleToLive(epic, derived);
+        return res.json({ epic, resolution, count: derived.length, source: 'live_derived', candles: derived, error: errorCode || undefined });
+      }
+    } catch (e) {}
+
     res.status(502).json({
       epic,
       resolution,
