@@ -10,6 +10,7 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
+const { Firestore } = require('@google-cloud/firestore');
 
 const igAuthService = require('./services/igAuthService');
 const priceService = require('./services/priceService');
@@ -20,6 +21,14 @@ const PORT = process.env.PORT || 8080;
 const NODE_ENV = process.env.NODE_ENV || 'development';
 
 const historyCache = new Map();
+let firestoreClient = null;
+const HISTORY_COLLECTION = process.env.HISTORY_CACHE_COLLECTION || 'ig_history_cache';
+
+const getFirestore = () => {
+  if (firestoreClient) return firestoreClient;
+  firestoreClient = new Firestore();
+  return firestoreClient;
+};
 
 const getHistoryTtlMs = (resolution) => {
   switch (String(resolution)) {
@@ -37,6 +46,35 @@ const getHistoryTtlMs = (resolution) => {
       return 6 * 60 * 60 * 1000;
     default:
       return 10 * 60 * 1000;
+  }
+};
+
+const getHistoryDocId = (epic, resolution, max) => `${epic}|${resolution}|${max}`;
+
+const readHistoryFromFirestore = async (docId) => {
+  try {
+    const db = getFirestore();
+    const snap = await db.collection(HISTORY_COLLECTION).doc(docId).get();
+    if (!snap.exists) return null;
+    const data = snap.data();
+    if (!data || !Array.isArray(data.candles) || data.candles.length === 0) return null;
+    return {
+      candles: data.candles,
+      allowance: data.allowance || null,
+      fetchedAt: typeof data.fetchedAt === 'number' ? data.fetchedAt : (data.fetchedAt && typeof data.fetchedAt.toMillis === 'function' ? data.fetchedAt.toMillis() : null),
+    };
+  } catch (e) {
+    console.warn('[History] Firestore read failed:', e.message);
+    return null;
+  }
+};
+
+const writeHistoryToFirestore = async (docId, payload) => {
+  try {
+    const db = getFirestore();
+    await db.collection(HISTORY_COLLECTION).doc(docId).set(payload, { merge: true });
+  } catch (e) {
+    console.warn('[History] Firestore write failed:', e.message);
   }
 };
 
@@ -254,7 +292,7 @@ app.get('/api/history/:epic', async (req, res) => {
   const { resolution = 'HOUR', max = 100 } = req.query;
   
   try {
-    const cacheKey = `${epic}|${resolution}|${max}`;
+    const cacheKey = getHistoryDocId(epic, resolution, max);
     const cached = historyCache.get(cacheKey);
     const ttlMs = getHistoryTtlMs(resolution);
     if (cached && cached.candles && cached.fetchedAt && (Date.now() - cached.fetchedAt) < ttlMs) {
@@ -267,6 +305,25 @@ app.get('/api/history/:epic', async (req, res) => {
         candles: cached.candles,
         cachedAt: new Date(cached.fetchedAt).toISOString(),
       });
+    }
+
+    // L2 cache: Firestore
+    const firestoreCached = await readHistoryFromFirestore(cacheKey);
+    if (firestoreCached && firestoreCached.candles && firestoreCached.fetchedAt) {
+      const isFresh = (Date.now() - firestoreCached.fetchedAt) < ttlMs;
+      // promote to L1
+      historyCache.set(cacheKey, firestoreCached);
+      if (isFresh) {
+        return res.json({
+          epic,
+          resolution,
+          count: firestoreCached.candles.length,
+          allowance: firestoreCached.allowance,
+          source: 'firestore_cache',
+          candles: firestoreCached.candles,
+          cachedAt: new Date(firestoreCached.fetchedAt).toISOString(),
+        });
+      }
     }
 
     let client = igAuthService.getClient();
@@ -321,6 +378,16 @@ app.get('/api/history/:epic', async (req, res) => {
         allowance: response.data.allowance,
         fetchedAt: Date.now(),
       });
+
+      await writeHistoryToFirestore(cacheKey, {
+        epic,
+        resolution,
+        max: Number(max),
+        candles,
+        allowance: response.data.allowance || null,
+        fetchedAt: Date.now(),
+        updatedAt: Date.now(),
+      });
       
       res.json({
         epic,
@@ -338,7 +405,7 @@ app.get('/api/history/:epic', async (req, res) => {
 
     const errorCode = error.response?.data?.errorCode;
     if (errorCode === 'error.public-api.exceeded-account-historical-data-allowance') {
-      const cacheKey = `${epic}|${resolution}|${max}`;
+      const cacheKey = getHistoryDocId(epic, resolution, max);
       const cached = historyCache.get(cacheKey);
       if (cached && cached.candles && cached.candles.length > 0) {
         return res.json({
@@ -349,6 +416,21 @@ app.get('/api/history/:epic', async (req, res) => {
           source: 'cache_stale',
           candles: cached.candles,
           cachedAt: new Date(cached.fetchedAt).toISOString(),
+          error: errorCode,
+        });
+      }
+
+      const firestoreCached = await readHistoryFromFirestore(cacheKey);
+      if (firestoreCached && firestoreCached.candles && firestoreCached.candles.length > 0) {
+        historyCache.set(cacheKey, firestoreCached);
+        return res.json({
+          epic,
+          resolution,
+          count: firestoreCached.candles.length,
+          allowance: firestoreCached.allowance,
+          source: 'firestore_cache_stale',
+          candles: firestoreCached.candles,
+          cachedAt: firestoreCached.fetchedAt ? new Date(firestoreCached.fetchedAt).toISOString() : null,
           error: errorCode,
         });
       }
