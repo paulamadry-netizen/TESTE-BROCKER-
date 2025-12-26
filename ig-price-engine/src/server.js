@@ -19,6 +19,27 @@ const { getAllEpics, getEpicInfo, EPICS } = require('./config/epics');
 const PORT = process.env.PORT || 8080;
 const NODE_ENV = process.env.NODE_ENV || 'development';
 
+const historyCache = new Map();
+
+const getHistoryTtlMs = (resolution) => {
+  switch (String(resolution)) {
+    case 'MINUTE':
+      return 60 * 1000;
+    case 'MINUTE_5':
+      return 3 * 60 * 1000;
+    case 'MINUTE_15':
+      return 5 * 60 * 1000;
+    case 'HOUR':
+      return 15 * 60 * 1000;
+    case 'HOUR_4':
+      return 30 * 60 * 1000;
+    case 'DAY':
+      return 6 * 60 * 60 * 1000;
+    default:
+      return 10 * 60 * 1000;
+  }
+};
+
 // Initialize Express
 const app = express();
 const server = http.createServer(app);
@@ -233,6 +254,21 @@ app.get('/api/history/:epic', async (req, res) => {
   const { resolution = 'HOUR', max = 100 } = req.query;
   
   try {
+    const cacheKey = `${epic}|${resolution}|${max}`;
+    const cached = historyCache.get(cacheKey);
+    const ttlMs = getHistoryTtlMs(resolution);
+    if (cached && cached.candles && cached.fetchedAt && (Date.now() - cached.fetchedAt) < ttlMs) {
+      return res.json({
+        epic,
+        resolution,
+        count: cached.candles.length,
+        allowance: cached.allowance,
+        source: 'cache',
+        candles: cached.candles,
+        cachedAt: new Date(cached.fetchedAt).toISOString(),
+      });
+    }
+
     let client = igAuthService.getClient();
     if (!client) {
       try {
@@ -279,6 +315,12 @@ app.get('/api/history/:epic', async (req, res) => {
         if (currentPrice > lastCandle.high) lastCandle.high = currentPrice;
         if (currentPrice < lastCandle.low) lastCandle.low = currentPrice;
       }
+
+      historyCache.set(cacheKey, {
+        candles,
+        allowance: response.data.allowance,
+        fetchedAt: Date.now(),
+      });
       
       res.json({
         epic,
@@ -293,6 +335,33 @@ app.get('/api/history/:epic', async (req, res) => {
     }
   } catch (error) {
     console.error(`[History] Error fetching ${epic}:`, error.response?.data || error.message);
+
+    const errorCode = error.response?.data?.errorCode;
+    if (errorCode === 'error.public-api.exceeded-account-historical-data-allowance') {
+      const cacheKey = `${epic}|${resolution}|${max}`;
+      const cached = historyCache.get(cacheKey);
+      if (cached && cached.candles && cached.candles.length > 0) {
+        return res.json({
+          epic,
+          resolution,
+          count: cached.candles.length,
+          allowance: cached.allowance,
+          source: 'cache_stale',
+          candles: cached.candles,
+          cachedAt: new Date(cached.fetchedAt).toISOString(),
+          error: errorCode,
+        });
+      }
+
+      return res.status(429).json({
+        epic,
+        resolution,
+        source: 'ig_allowance',
+        error: errorCode,
+        details: error.response?.data,
+      });
+    }
+
     res.status(502).json({
       epic,
       resolution,

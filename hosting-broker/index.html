@@ -1348,6 +1348,11 @@ const loadHistoricalData=async(epic,timeframe)=>{
       showToast('Historique IG indisponible (mode mock)','error',4000);
       return null;
     }
+    if(data && data.source==='ig_allowance'){
+      debugLog(`History blocked (allowance): ${epic}`);
+      showToast('IG: limite historique atteinte (réessaie plus tard)','error',5000);
+      return null;
+    }
     if(data && data.error && (!data.candles || !Array.isArray(data.candles))){
       debugLog(`History error payload: ${epic} ${String(data.error)}`);
       return null;
