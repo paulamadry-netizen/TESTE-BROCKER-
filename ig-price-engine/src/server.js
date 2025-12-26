@@ -24,6 +24,7 @@ const NODE_ENV = process.env.NODE_ENV || 'development';
 const historyCache = new Map();
 let firestoreClient = null;
 const HISTORY_COLLECTION = process.env.HISTORY_CACHE_COLLECTION || 'ig_history_cache';
+const ADMIN_TOKEN = process.env.ADMIN_TOKEN || '';
 
 const getFirestore = () => {
   if (firestoreClient) return firestoreClient;
@@ -50,7 +51,33 @@ const getHistoryTtlMs = (resolution) => {
   }
 };
 
+const readBestHistoryFromFirestore = async (epic, resolution, max) => {
+  const docIds = getFirestoreDocIdsForRequest(epic, resolution, max);
+  for (const docId of docIds) {
+    const hit = await readHistoryFromFirestore(docId);
+    if (hit && hit.candles && hit.candles.length > 0) {
+      return { ...hit, docId };
+    }
+  }
+  return null;
+};
+
 const getHistoryDocId = (epic, resolution, max) => `${epic}|${resolution}|${max}`;
+
+const parseBool = (v) => String(v || '').toLowerCase() === 'true';
+
+const normalizeMax = (max, fallback) => {
+  const n = Number.parseInt(String(max), 10);
+  if (!Number.isFinite(n) || n <= 0) return fallback;
+  return Math.min(Math.max(n, 1), 5000);
+};
+
+const getFirestoreDocIdsForRequest = (epic, resolution, max) => {
+  const requested = normalizeMax(max, 100);
+  const candidates = [requested, 500, 1000, 2000].filter((x) => Number.isFinite(x) && x >= requested);
+  const unique = Array.from(new Set(candidates));
+  return unique.map((m) => getHistoryDocId(epic, resolution, m));
+};
 
 const readHistoryFromFirestore = async (docId) => {
   try {
@@ -225,6 +252,79 @@ app.get('/status', (req, res) => {
   });
 });
 
+app.post('/api/backfill', async (req, res) => {
+  const tokenHeader = req.headers.authorization || '';
+  const token = String(tokenHeader).toLowerCase().startsWith('bearer ') ? String(tokenHeader).slice(7) : '';
+  if (!ADMIN_TOKEN || token !== ADMIN_TOKEN) {
+    return res.status(401).json({ success: false, error: 'unauthorized' });
+  }
+
+  const resolution = String(req.body?.resolution || 'HOUR');
+  const maxNum = normalizeMax(req.body?.max, 500);
+  const epics = Array.isArray(req.body?.epics) && req.body.epics.length > 0 ? req.body.epics : getAllEpics();
+
+  let client = igAuthService.getClient();
+  if (!client) {
+    try {
+      await igAuthService.login();
+    } catch (e) {
+    }
+    client = igAuthService.getClient();
+  }
+  if (!client) {
+    return res.status(503).json({ success: false, error: 'Not authenticated', source: 'auth' });
+  }
+
+  const results = [];
+  for (const epic of epics) {
+    const startedAt = Date.now();
+    try {
+      const response = await client.get(`/prices/${epic}`, {
+        params: { resolution, max: maxNum, pageSize: maxNum },
+        headers: { 'Version': '3' }
+      });
+
+      if (!response.data || !Array.isArray(response.data.prices)) {
+        results.push({ epic, ok: false, error: 'no_data' });
+        continue;
+      }
+
+      const candles = response.data.prices.map(p => ({
+        time: new Date(p.snapshotTimeUTC || p.snapshotTime).getTime() / 1000,
+        open: (p.openPrice.bid + p.openPrice.ask) / 2,
+        high: (p.highPrice.bid + p.highPrice.ask) / 2,
+        low: (p.lowPrice.bid + p.lowPrice.ask) / 2,
+        close: (p.closePrice.bid + p.closePrice.ask) / 2,
+        volume: p.lastTradedVolume || 0
+      }));
+
+      const cacheKey = getHistoryDocId(epic, resolution, maxNum);
+      historyCache.set(cacheKey, {
+        candles,
+        allowance: response.data.allowance,
+        fetchedAt: Date.now(),
+      });
+      await writeHistoryToFirestore(cacheKey, {
+        epic,
+        resolution,
+        max: maxNum,
+        candles,
+        allowance: response.data.allowance || null,
+        fetchedAt: Date.now(),
+        updatedAt: Date.now(),
+      });
+
+      results.push({ epic, ok: true, count: candles.length, allowance: response.data.allowance || null, ms: Date.now() - startedAt });
+    } catch (error) {
+      const errorCode = error.response?.data?.errorCode || error.message;
+      results.push({ epic, ok: false, error: errorCode, details: error.response?.data || null, ms: Date.now() - startedAt });
+      if (error.response?.data?.errorCode === 'error.public-api.exceeded-account-historical-data-allowance') break;
+    }
+  }
+
+  res.json({ success: true, resolution, max: maxNum, count: results.length, results });
+});
+
 // Restart polling endpoint (for recovery)
 app.post('/api/restart-polling', async (req, res) => {
   console.log('[API] Manual restart-polling requested');
@@ -292,10 +392,12 @@ const generateMockCandles = (epic, resolution, count, currentPrice) => {
 // Resolution: MINUTE, MINUTE_5, MINUTE_15, HOUR, HOUR_4, DAY
 app.get('/api/history/:epic', async (req, res) => {
   const { epic } = req.params;
-  const { resolution = 'HOUR', max = 100 } = req.query;
+  const { resolution = 'HOUR', max = 100, refresh } = req.query;
+  const maxNum = normalizeMax(max, 100);
+  const shouldRefresh = parseBool(refresh);
   
   try {
-    const cacheKey = getHistoryDocId(epic, resolution, max);
+    const cacheKey = getHistoryDocId(epic, resolution, maxNum);
     const cached = historyCache.get(cacheKey);
     const ttlMs = getHistoryTtlMs(resolution);
     if (cached && cached.candles && cached.fetchedAt && (Date.now() - cached.fetchedAt) < ttlMs) {
@@ -310,22 +412,40 @@ app.get('/api/history/:epic', async (req, res) => {
       });
     }
 
-    // L2 cache: Firestore
-    const firestoreCached = await readHistoryFromFirestore(cacheKey);
-    if (firestoreCached && firestoreCached.candles && firestoreCached.fetchedAt) {
-      const isFresh = (Date.now() - firestoreCached.fetchedAt) < ttlMs;
-      // promote to L1
-      historyCache.set(cacheKey, firestoreCached);
-      if (isFresh) {
-        return res.json({
-          epic,
-          resolution,
-          count: firestoreCached.candles.length,
+    if (!shouldRefresh) {
+      const firestoreCached = await readBestHistoryFromFirestore(epic, resolution, maxNum);
+      if (firestoreCached && firestoreCached.candles && firestoreCached.fetchedAt) {
+        const isFresh = (Date.now() - firestoreCached.fetchedAt) < ttlMs;
+        const sliced = firestoreCached.candles.length > maxNum ? firestoreCached.candles.slice(-maxNum) : firestoreCached.candles;
+        historyCache.set(cacheKey, {
+          candles: sliced,
           allowance: firestoreCached.allowance,
-          source: 'firestore_cache',
-          candles: firestoreCached.candles,
-          cachedAt: new Date(firestoreCached.fetchedAt).toISOString(),
+          fetchedAt: firestoreCached.fetchedAt,
         });
+
+        if (isFresh) {
+          return res.json({
+            epic,
+            resolution,
+            count: sliced.length,
+            allowance: firestoreCached.allowance,
+            source: 'firestore_cache',
+            candles: sliced,
+            cachedAt: new Date(firestoreCached.fetchedAt).toISOString(),
+          });
+        }
+
+        if (['HOUR', 'HOUR_4', 'DAY'].includes(String(resolution))) {
+          return res.json({
+            epic,
+            resolution,
+            count: sliced.length,
+            allowance: firestoreCached.allowance,
+            source: 'firestore_cache_stale',
+            candles: sliced,
+            cachedAt: new Date(firestoreCached.fetchedAt).toISOString(),
+          });
+        }
       }
     }
 
@@ -341,7 +461,7 @@ app.get('/api/history/:epic', async (req, res) => {
 
     if (!client) {
       try {
-        const derived = await liveCandleService.getDerivedHistory(epic, resolution, max);
+        const derived = await liveCandleService.getDerivedHistory(epic, resolution, maxNum);
         if (derived && derived.length > 0) {
           return res.json({ epic, resolution, count: derived.length, source: 'live_derived', candles: derived });
         }
@@ -356,7 +476,7 @@ app.get('/api/history/:epic', async (req, res) => {
     
     // IG API v3 uses query params: /prices/{epic}?resolution=X&max=Y
     const response = await client.get(`/prices/${epic}`, {
-      params: { resolution, max, pageSize: max },
+      params: { resolution, max: maxNum, pageSize: maxNum },
       headers: { 'Version': '3' }
     });
     
@@ -391,7 +511,7 @@ app.get('/api/history/:epic', async (req, res) => {
       await writeHistoryToFirestore(cacheKey, {
         epic,
         resolution,
-        max: Number(max),
+        max: maxNum,
         candles,
         allowance: response.data.allowance || null,
         fetchedAt: Date.now(),
@@ -414,7 +534,7 @@ app.get('/api/history/:epic', async (req, res) => {
 
     const errorCode = error.response?.data?.errorCode;
     if (errorCode === 'error.public-api.exceeded-account-historical-data-allowance') {
-      const cacheKey = getHistoryDocId(epic, resolution, max);
+      const cacheKey = getHistoryDocId(epic, resolution, maxNum);
       const cached = historyCache.get(cacheKey);
       if (cached && cached.candles && cached.candles.length > 0) {
         return res.json({
@@ -429,23 +549,28 @@ app.get('/api/history/:epic', async (req, res) => {
         });
       }
 
-      const firestoreCached = await readHistoryFromFirestore(cacheKey);
+      const firestoreCached = await readBestHistoryFromFirestore(epic, resolution, maxNum);
       if (firestoreCached && firestoreCached.candles && firestoreCached.candles.length > 0) {
-        historyCache.set(cacheKey, firestoreCached);
+        const sliced = firestoreCached.candles.length > maxNum ? firestoreCached.candles.slice(-maxNum) : firestoreCached.candles;
+        historyCache.set(cacheKey, {
+          candles: sliced,
+          allowance: firestoreCached.allowance,
+          fetchedAt: firestoreCached.fetchedAt,
+        });
         return res.json({
           epic,
           resolution,
-          count: firestoreCached.candles.length,
+          count: sliced.length,
           allowance: firestoreCached.allowance,
           source: 'firestore_cache_stale',
-          candles: firestoreCached.candles,
+          candles: sliced,
           cachedAt: firestoreCached.fetchedAt ? new Date(firestoreCached.fetchedAt).toISOString() : null,
           error: errorCode,
         });
       }
 
       try {
-        const derived = await liveCandleService.getDerivedHistory(epic, resolution, max);
+        const derived = await liveCandleService.getDerivedHistory(epic, resolution, maxNum);
         if (derived && derived.length > 0) {
           return res.json({ epic, resolution, count: derived.length, source: 'live_derived', candles: derived, error: errorCode });
         }
