@@ -400,6 +400,18 @@ class PriceService {
       return null;
     } catch (error) {
       console.error(`[PriceService] Error fetching price for ${epic}:`, error.message);
+
+      try {
+        const cached = this.finnhubService.getCachedPrice(epic);
+        if (cached) {
+          this.priceCache.set(epic, cached);
+          try {
+            liveCandleService.ingestPrice(cached);
+          } catch (e) {}
+          return cached;
+        }
+      } catch (e) {}
+
       return null;
     }
   }
@@ -544,13 +556,10 @@ class PriceService {
   getCachedPrice(epic) {
     const cached = this.priceCache.get(epic) || null;
     if (cached) return cached;
-    if (this._isFinnhubEpic(epic)) {
-      try {
-        return this.finnhubService.getCachedPrice(epic) || null;
-      } catch (e) {
-        return null;
-      }
-    }
+    try {
+      const fh = this.finnhubService.getCachedPrice(epic) || null;
+      if (fh) return fh;
+    } catch (e) {}
     return null;
   }
 
