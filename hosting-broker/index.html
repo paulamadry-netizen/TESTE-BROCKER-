@@ -1343,6 +1343,15 @@ const loadHistoricalData=async(epic,timeframe)=>{
     const resp=await fetch(url);
     if(!resp.ok){debugLog(`HTTP ${resp.status}`);return null}
     const data=await resp.json();
+    if(data && data.source==='mock'){
+      debugLog(`History rejected (mock source): ${epic}`);
+      showToast('Historique IG indisponible (mode mock)','error',4000);
+      return null;
+    }
+    if(data && data.error && (!data.candles || !Array.isArray(data.candles))){
+      debugLog(`History error payload: ${epic} ${String(data.error)}`);
+      return null;
+    }
     const raw=(data&&data.candles)?data.candles:(Array.isArray(data)?data:[]);
     const normalized=normalizeCandles(raw);
     if(!normalized||normalized.length===0){debugLog('No candles');return null}

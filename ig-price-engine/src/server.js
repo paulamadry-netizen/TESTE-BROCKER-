@@ -233,13 +233,23 @@ app.get('/api/history/:epic', async (req, res) => {
   const { resolution = 'HOUR', max = 100 } = req.query;
   
   try {
-    const client = igAuthService.getClient();
+    let client = igAuthService.getClient();
     if (!client) {
-      // Fallback to mock data if not authenticated
-      const cachedPrice = priceService.getCachedPrice(epic);
-      const basePrice = cachedPrice?.bid || 1.0;
-      const candles = generateMockCandles(epic, resolution, parseInt(max), basePrice);
-      return res.json({ epic, resolution, count: candles.length, source: 'mock', candles });
+      try {
+        await igAuthService.login();
+      } catch (e) {
+        // ignore; handled below
+      }
+      client = igAuthService.getClient();
+    }
+
+    if (!client) {
+      return res.status(503).json({
+        error: 'Not authenticated',
+        epic,
+        resolution,
+        source: 'auth'
+      });
     }
     
     // IG API v3 uses query params: /prices/{epic}?resolution=X&max=Y
@@ -275,6 +285,7 @@ app.get('/api/history/:epic', async (req, res) => {
         resolution,
         count: candles.length,
         allowance: response.data.allowance,
+        source: 'ig',
         candles
       });
     } else {
@@ -282,11 +293,13 @@ app.get('/api/history/:epic', async (req, res) => {
     }
   } catch (error) {
     console.error(`[History] Error fetching ${epic}:`, error.response?.data || error.message);
-    // Fallback to mock data on API error (rate limit, etc.)
-    const cachedPrice = priceService.getCachedPrice(epic);
-    const basePrice = cachedPrice?.bid || 1.0;
-    const candles = generateMockCandles(epic, resolution, parseInt(max), basePrice);
-    res.json({ epic, resolution, count: candles.length, source: 'mock', error: error.response?.data?.errorCode, candles });
+    res.status(502).json({
+      epic,
+      resolution,
+      source: 'ig_error',
+      error: error.response?.data?.errorCode || error.message,
+      details: error.response?.data
+    });
   }
 });
 
