@@ -217,9 +217,9 @@ export default function PayoutPage() {
     try {
       const functions = getFunctions();
       const upgradeChallenge = httpsCallable(functions, 'upgradeChallenge');
-      const result = await upgradeChallenge({ accountId: activeAccount?.id });
+      const result: any = await upgradeChallenge({ accountId: activeAccount?.id });
 
-      alert('✅ Challenge validé ! Votre compte est maintenant financé.');
+      alert('✅ ' + (result?.data?.message || 'Félicitations ! Votre compte funded est activé.'));
       window.location.reload();
     } catch (error: any) {
       alert('❌ ' + (error.message || 'Erreur lors de l\'upgrade'));
@@ -291,6 +291,7 @@ export default function PayoutPage() {
     const currentBalance = userData.accountBalance;
     const profitPercent = ((currentBalance - initialBalance) / initialBalance) * 100;
     const tradingDays = userData.tradingDays || 0;
+    const isChallengeSuccess = profitPercent >= 10 && tradingDays >= 3 && userData.accountStatus === 'active';
 
     return (
       <div className="flex flex-col gap-6 p-8">
@@ -303,6 +304,38 @@ export default function PayoutPage() {
           </div>
           <AccountSelector />
         </div>
+
+        {isChallengeSuccess && (
+          <Card className="border-green-500 bg-green-500/5">
+            <CardContent className="pt-6">
+              <div className="flex items-start gap-4">
+                <CheckCircle className="h-6 w-6 text-green-600 mt-0.5" />
+                <div className="flex-1">
+                  <h3 className="font-semibold text-green-700">
+                    Félicitations, challenge réussi !
+                  </h3>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Vous avez atteint les conditions requises. Cliquez ci-dessous pour activer votre compte funded.
+                  </p>
+                  <Button
+                    onClick={handleUpgradeChallenge}
+                    disabled={processing || !activeAccount}
+                    className="w-full mt-4"
+                  >
+                    {processing ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Activation...
+                      </>
+                    ) : (
+                      'Activer compte funded'
+                    )}
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         <Card>
           <CardHeader>
@@ -339,20 +372,22 @@ export default function PayoutPage() {
               </div>
             </div>
 
-            <Button
-              onClick={handleUpgradeChallenge}
-              disabled={processing || !activeAccount || userData.accountStatus !== 'active'}
-              className="w-full mt-4"
-            >
-              {processing ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Validation...
-                </>
-              ) : (
-                'Valider le Challenge'
-              )}
-            </Button>
+            {!isChallengeSuccess && (
+              <Button
+                onClick={handleUpgradeChallenge}
+                disabled={processing || !activeAccount || userData.accountStatus !== 'active'}
+                className="w-full mt-4"
+              >
+                {processing ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Validation...
+                  </>
+                ) : (
+                  'Activer compte funded'
+                )}
+              </Button>
+            )}
 
             {userData.role === 'admin' && (
               <Button

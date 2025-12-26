@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useLanguage } from "@/context/LanguageContext";
 import { useAccount } from "@/context/AccountContext";
@@ -7,11 +8,14 @@ import { CheckCircle2, XCircle, Clock, Target, TrendingUp, AlertTriangle, Loader
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { getFunctions, httpsCallable } from "firebase/functions";
 
 export default function ChallengePage() {
   const { user, loading: authLoading } = useAuth();
   const { t } = useLanguage();
   const { activeAccount, loading: accountLoading } = useAccount();
+  const [processing, setProcessing] = useState(false);
 
   if (authLoading || accountLoading) {
     return (
@@ -35,6 +39,25 @@ export default function ChallengePage() {
   const profitTargetAmount = (initialBalance * (activeAccount.profitTarget || 10)) / 100;
   const maxDrawdownAmount = (initialBalance * (activeAccount.maxDrawdown || 8)) / 100;
   const progressPercentage = profitTargetAmount > 0 ? (profitLoss / profitTargetAmount) * 100 : 0;
+
+  const tradingDays = activeAccount.tradingDays || 0;
+  const isChallengeSuccess = profitLoss >= profitTargetAmount && tradingDays >= 3 && activeAccount.accountStatus === 'active';
+
+  const handleUpgradeChallenge = async () => {
+    if (!activeAccount) return;
+    setProcessing(true);
+    try {
+      const functions = getFunctions();
+      const upgradeChallenge = httpsCallable(functions, 'upgradeChallenge');
+      const result: any = await upgradeChallenge({ accountId: activeAccount.id });
+      alert('✅ ' + (result?.data?.message || 'Félicitations ! Votre compte funded est activé.'));
+      window.location.reload();
+    } catch (error: any) {
+      alert('❌ ' + (error.message || "Erreur lors de l'upgrade"));
+    } finally {
+      setProcessing(false);
+    }
+  };
 
   // Calculate daily loss limit (3% of initial balance)
   const dailyLossLimit = initialBalance * 0.03;
@@ -170,6 +193,37 @@ export default function ChallengePage() {
       {/* Challenge Rules */}
       <div>
         <h2 className="text-2xl font-bold mb-4">{t("challenge.challengeRules")}</h2>
+        {isChallengeSuccess && (
+          <Card className="border-green-500 bg-green-500/5 mb-4">
+            <CardContent className="pt-6">
+              <div className="flex items-start gap-4">
+                <CheckCircle2 className="h-6 w-6 text-green-600 mt-0.5" />
+                <div className="flex-1">
+                  <h3 className="font-semibold text-green-700">
+                    Félicitations, challenge réussi !
+                  </h3>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Vous avez atteint les conditions requises. Cliquez ci-dessous pour activer votre compte funded.
+                  </p>
+                  <Button
+                    onClick={handleUpgradeChallenge}
+                    disabled={processing}
+                    className="w-full mt-4"
+                  >
+                    {processing ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Activation...
+                      </>
+                    ) : (
+                      'Activer compte funded'
+                    )}
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
         <div className="grid gap-4">
           {challengeRules.map((rule, index) => {
             const isCompleted = rule.status === "PASSED";
