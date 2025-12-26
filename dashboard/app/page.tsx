@@ -76,14 +76,14 @@ export default function DashboardPage() {
   // Check if user has any accounts
   if (!activeAccount || accounts.length === 0) {
     return (
-      <div className="flex flex-col gap-6 p-8">
+      <div className="flex flex-col gap-6 p-4 sm:p-6 lg:p-8">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">{t("dashboard.title")}</h1>
           <p className="text-muted-foreground">{t("dashboard.subtitle")}</p>
         </div>
         
         <Card className="bg-gradient-to-r from-orange-500/10 to-yellow-500/10 border-orange-500/20">
-          <CardContent className="flex flex-col items-center justify-center p-12 text-center">
+          <CardContent className="flex flex-col items-center justify-center p-8 sm:p-10 lg:p-12 text-center">
             <Target className="h-16 w-16 text-orange-500 mb-4" />
             <h2 className="text-2xl font-bold mb-2">{t("dashboard.noActiveAccount") || "Pas de compte actif"}</h2>
             <p className="text-muted-foreground mb-6 max-w-md">
@@ -203,14 +203,12 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="flex flex-col gap-6 p-8">
+    <div className="flex flex-col gap-6 p-4 sm:p-6 lg:p-8">
       {/* Header with Account Selector */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">{t("dashboard.title")}</h1>
-          <p className="text-muted-foreground">
-            {t("dashboard.subtitle")}
-          </p>
+          <p className="text-muted-foreground">{t("dashboard.subtitle")}</p>
         </div>
         <AccountSelector />
       </div>

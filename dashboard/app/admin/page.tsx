@@ -168,7 +168,7 @@ export default function AdminPage() {
 
   if (!isAdmin) {
     return (
-      <div className="p-8">
+      <div className="p-4 sm:p-6 lg:p-8">
         <Card>
           <CardHeader>
             <CardTitle>Accès refusé</CardTitle>
@@ -182,11 +182,11 @@ export default function AdminPage() {
   }
 
   return (
-    <div className="flex flex-col gap-6 p-8">
+    <div className="flex flex-col gap-6 p-4 sm:p-6 lg:p-8">
       <div className="flex items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Admin</h1>
-          <p className="text-muted-foreground">Gestion des demandes de payout</p>
+          <p className="text-muted-foreground">Demandes de payout en attente</p>
         </div>
         {headerRight}
       </div>

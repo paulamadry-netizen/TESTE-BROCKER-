@@ -596,6 +596,38 @@ html,body{height:100%;background:linear-gradient(135deg,var(--bg-primary) 0%,var
 ::-webkit-scrollbar-thumb:hover{background:var(--text-muted)}
 @media (max-width:1400px){.watchlist-panel{width:280px}.orders-panel{width:340px}.header-account{display:none}}
 @media (max-width:1100px){.workspace{flex-direction:column}.watchlist-panel,.orders-panel{width:100%;border:none;border-bottom:1px solid var(--border)}.bottom-panel{flex-direction:column;height:auto}.header-account{display:none}}
+
+@media (max-width:900px){
+  html,body{overflow:auto}
+  .workspace{overflow:auto}
+  .resizable-panel{width:100% !important;min-width:0}
+  .chart-panel{min-width:0}
+  .watchlist-panel{width:100%}
+  .orders-panel{width:100%}
+  .bottom-panel{height:auto}
+}
+
+@media (max-width:768px){
+  .header{flex-wrap:wrap;gap:8px;padding:10px 12px}
+  .header-left{flex-wrap:wrap;gap:10px}
+  .header-symbol{width:100%}
+  .view-controls{padding-left:0;border-left:none}
+  .workspace{flex-direction:column}
+  .panel-header{padding:12px}
+  .panel-content{padding:10px}
+  .chart-panel{flex:unset;min-width:0}
+  .watchlist-panel,.orders-panel{border-left:none;border-right:none}
+  .order-form{padding:12px}
+  .toast{right:12px;left:12px;min-width:unset}
+}
+
+@media (max-width:520px){
+  .logo{font-size:14px}
+  .logo-icon{width:24px;height:24px}
+  .icon-btn{width:34px;height:34px}
+  .btn{padding:10px 12px;font-size:11px}
+  .chart-overlay{right:40px}
+}
 </style>
 </head>
 <body>

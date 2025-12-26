@@ -294,7 +294,7 @@ export default function PayoutPage() {
     const isChallengeSuccess = profitPercent >= 10 && tradingDays >= 3 && userData.accountStatus === 'active';
 
     return (
-      <div className="flex flex-col gap-6 p-8">
+      <div className="flex flex-col gap-6 p-4 sm:p-6 lg:p-8">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Upgrade Challenge</h1>
@@ -408,7 +408,7 @@ export default function PayoutPage() {
   // Si c'est un compte financé mais pas KYC vérifié
   if (!userData.kycVerified) {
     return (
-      <div className="flex flex-col gap-6 p-8">
+      <div className="flex flex-col gap-6 p-4 sm:p-6 lg:p-8">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Vérification d'Identité Requise</h1>
@@ -499,7 +499,7 @@ export default function PayoutPage() {
   );
 
   return (
-    <div className="flex flex-col gap-6 p-8">
+    <div className="flex flex-col gap-6 p-4 sm:p-6 lg:p-8">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">

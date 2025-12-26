@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { collection, query, where, getDocs, orderBy } from "firebase/firestore";
 import { db } from "@/lib/firebase/config";
 import { useAuth } from "@/context/AuthContext";
+import { useAccount } from "@/context/AccountContext";
 import { useLanguage } from "@/context/LanguageContext";
 import { History, TrendingUp, TrendingDown, DollarSign, Loader2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -25,29 +26,29 @@ interface Trade {
 
 export default function TradesPage() {
   const { user, loading: authLoading } = useAuth();
+  const { activeAccount, loading: accountLoading } = useAccount();
   const { t } = useLanguage();
   const [trades, setTrades] = useState<Trade[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function loadTrades() {
-      if (!user) {
+      if (!user || !activeAccount) {
         setLoading(false);
         return;
       }
 
       try {
         const tradesRef = collection(db, "trades");
-        // Simplified query without orderBy to avoid index requirement
-        const q = query(
-          tradesRef,
-          where("userId", "==", user.uid)
-        );
+        // Query by userId only (avoid composite index), then filter by active account
+        const q = query(tradesRef, where("userId", "==", user.uid));
         const querySnapshot = await getDocs(q);
 
         const loadedTrades: Trade[] = [];
         querySnapshot.forEach((doc) => {
           const data = doc.data();
+          if (!data) return;
+          if (!data.accountId || data.accountId !== activeAccount.id) return;
           loadedTrades.push({
             id: doc.id,
             symbol: data.symbol,
@@ -74,12 +75,12 @@ export default function TradesPage() {
       }
     }
 
-    if (!authLoading) {
+    if (!authLoading && !accountLoading) {
       loadTrades();
     }
-  }, [user, authLoading]);
+  }, [user, authLoading, activeAccount, accountLoading]);
 
-  if (loading || authLoading) {
+  if (loading || authLoading || accountLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <Loader2 className="h-8 w-8 animate-spin" />
@@ -105,7 +106,7 @@ export default function TradesPage() {
   const worstTrade = closedTrades.length > 0 ? Math.min(...closedTrades.map(t => t.pnl || 0)) : 0;
 
   return (
-    <div className="flex flex-col gap-6 p-8">
+    <div className="flex flex-col gap-6 p-4 sm:p-6 lg:p-8">
       {/* Header */}
       <div>
         <h1 className="text-3xl font-bold tracking-tight">{t("trades.title")}</h1>
