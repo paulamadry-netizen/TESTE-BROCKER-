@@ -6,6 +6,7 @@
 const igApiClient = require('./igApiClient');
 const { getAllEpics, getEpicInfo } = require('../config/epics');
 const { FinnhubService } = require('./finnhubService');
+const liveCandleService = require('./liveCandleService');
 
 // Finnhub API Key
 const FINNHUB_API_KEY = process.env.FINNHUB_API_KEY || 'd4os009r01qnosaacr50d4os009r01qnosaacr5g';
@@ -66,6 +67,10 @@ class PriceService {
 
     this.io = io;
     this.isRunning = true;
+
+    try {
+      liveCandleService.start();
+    } catch (e) {}
     
     // Try streaming first
     const streamingStarted = await this._tryStartStreaming();
@@ -93,6 +98,10 @@ class PriceService {
     this.finnhubService.connect((priceData) => {
       // Update cache with Finnhub price
       this.priceCache.set(priceData.epic, priceData);
+
+      try {
+        liveCandleService.ingestPrice(priceData);
+      } catch (e) {}
       
       // Broadcast to WebSocket clients
       if (this.io) {
@@ -130,6 +139,10 @@ class PriceService {
       await igStreamingService.subscribeToEpics(epics, (priceData) => {
         this.priceCache.set(priceData.epic, priceData);
         this.lastUpdate = new Date();
+
+        try {
+          liveCandleService.ingestPrice(priceData);
+        } catch (e) {}
       });
 
       this.useStreaming = true;
@@ -149,6 +162,10 @@ class PriceService {
       clearInterval(this.updateInterval);
       this.updateInterval = null;
     }
+
+    try {
+      liveCandleService.stop();
+    } catch (e) {}
     if (this.useStreaming) {
       try {
         const igStreamingService = require('./igStreamingService');
@@ -291,6 +308,9 @@ class PriceService {
       if (response.data) {
         const price = this._processMarketData(epic, response.data);
         this.priceCache.set(epic, price);
+        try {
+          liveCandleService.ingestPrice(price);
+        } catch (e) {}
         return price;
       }
       
@@ -337,6 +357,9 @@ class PriceService {
       
       const price = this._processMarketData(epic, market);
       this.priceCache.set(epic, price);
+      try {
+        liveCandleService.ingestPrice(price);
+      } catch (e) {}
       prices.push(price);
     }
     

@@ -642,6 +642,9 @@ async function startServer() {
     
     // Step 3: Start price service after auth
     console.log('[Server] Starting price service...');
+    try {
+      liveCandleService.start();
+    } catch (e) {}
     priceService.start(io);
   } catch (error) {
     console.error('[Server] ⚠️ Authentication failed:', error.message);
