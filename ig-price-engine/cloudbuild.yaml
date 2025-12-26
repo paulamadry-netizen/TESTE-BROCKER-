@@ -33,7 +33,7 @@ steps:
       - '--set-env-vars'
       - 'NODE_ENV=production'
       - '--set-secrets'
-      - 'IG_API_KEY=ig-api-key:latest,IG_IDENTIFIER=ig-identifier:latest,IG_PASSWORD=ig-password:latest'
+      - 'IG_API_KEY=ig-api-key:latest,IG_IDENTIFIER=ig-identifier:latest,IG_PASSWORD=ig-password:latest,ADMIN_TOKEN=ig-admin-token:latest'
       - '--min-instances'
       - '1'
       - '--max-instances'
