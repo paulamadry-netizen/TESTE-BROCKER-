@@ -14,6 +14,7 @@ const { Firestore } = require('@google-cloud/firestore');
 
 const igAuthService = require('./services/igAuthService');
 const priceService = require('./services/priceService');
+const liveCandleService = require('./services/liveCandleService');
 const { getAllEpics, getEpicInfo, EPICS } = require('./config/epics');
 
 // Configuration
@@ -203,6 +204,7 @@ app.get('/api/status', (req, res) => {
       ...priceStatus,
       lastUpdateAgeMs: lastUpdateMs ? (now - lastUpdateMs) : null,
     },
+    liveHistory: liveCandleService.getStatus(),
     connections: io.engine.clientsCount
   });
 });
@@ -218,6 +220,7 @@ app.get('/status', (req, res) => {
       ...priceStatus,
       lastUpdateAgeMs: lastUpdateMs ? (now - lastUpdateMs) : null,
     },
+    liveHistory: liveCandleService.getStatus(),
     connections: io.engine.clientsCount
   });
 });
@@ -337,6 +340,12 @@ app.get('/api/history/:epic', async (req, res) => {
     }
 
     if (!client) {
+      try {
+        const derived = await liveCandleService.getDerivedHistory(epic, resolution, max);
+        if (derived && derived.length > 0) {
+          return res.json({ epic, resolution, count: derived.length, source: 'live_derived', candles: derived });
+        }
+      } catch (e) {}
       return res.status(503).json({
         error: 'Not authenticated',
         epic,
@@ -434,6 +443,13 @@ app.get('/api/history/:epic', async (req, res) => {
           error: errorCode,
         });
       }
+
+      try {
+        const derived = await liveCandleService.getDerivedHistory(epic, resolution, max);
+        if (derived && derived.length > 0) {
+          return res.json({ epic, resolution, count: derived.length, source: 'live_derived', candles: derived, error: errorCode });
+        }
+      } catch (e) {}
 
       return res.status(429).json({
         epic,
