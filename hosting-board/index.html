@@ -13,6 +13,14 @@
     .btn{display:inline-flex;align-items:center;justify-content:center;height:34px;padding:0 12px;border-radius:10px;border:1px solid rgba(255,255,255,0.12);background:rgba(255,255,255,0.04);color:#e8edf4;text-decoration:none;font-size:13px}
     .btn:hover{background:rgba(255,255,255,0.08)}
     .frame{position:fixed;left:0;right:0;bottom:0;top:56px;width:100%;height:calc(100% - 56px);border:0;background:#0b0f19}
+    .loader{position:fixed;left:0;right:0;bottom:0;top:56px;display:flex;align-items:center;justify-content:center;padding:20px;}
+    .loader-card{max-width:560px;width:100%;border:1px solid rgba(255,255,255,0.10);background:rgba(255,255,255,0.04);border-radius:18px;padding:18px 18px 16px;box-shadow:0 16px 40px rgba(0,0,0,0.45)}
+    .loader-title{font-weight:900;font-size:18px;margin:0 0 6px}
+    .loader-sub{margin:0;color:rgba(232,237,244,0.75);line-height:1.6;font-size:13px}
+    .loader-row{display:flex;align-items:center;gap:10px;margin-top:14px}
+    .spinner{width:18px;height:18px;border-radius:999px;border:2px solid rgba(255,255,255,0.18);border-top-color:#00d4aa;animation:spin .8s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .muted{color:rgba(232,237,244,0.65)}
   </style>
 </head>
 <body>
@@ -22,6 +30,52 @@
       <a class="btn" href="https://teste-brocker-dash.onrender.com" target="_blank" rel="noopener noreferrer">Ouvrir dans un nouvel onglet</a>
     </div>
   </div>
-  <iframe class="frame" src="https://teste-brocker-dash.onrender.com" title="AMA Dash Board"></iframe>
+  <div class="loader" id="loader">
+    <div class="loader-card">
+      <h2 class="loader-title">Chargement du dashboard…</h2>
+      <p class="loader-sub">Le service démarre. Ceci peut prendre quelques secondes lors du premier accès.</p>
+      <div class="loader-row">
+        <div class="spinner" aria-hidden="true"></div>
+        <div class="muted" id="loaderStatus">Vérification du serveur…</div>
+      </div>
+    </div>
+  </div>
+  <iframe class="frame" id="dashFrame" title="AMA Dash Board" style="display:none"></iframe>
+
+  <script>
+    const RENDER_URL = 'https://teste-brocker-dash.onrender.com';
+    const READY_ENDPOINT = 'https://us-central1-teste-brocker.cloudfunctions.net/renderDashboardReady';
+
+    const loaderEl = document.getElementById('loader');
+    const statusEl = document.getElementById('loaderStatus');
+    const frameEl = document.getElementById('dashFrame');
+
+    let tries = 0;
+
+    async function checkReady() {
+      tries += 1;
+      if (statusEl) statusEl.textContent = `Démarrage du serveur… (${tries})`;
+
+      try {
+        const resp = await fetch(READY_ENDPOINT, { cache: 'no-store' });
+        const data = await resp.json();
+        if (data && data.ready) {
+          if (statusEl) statusEl.textContent = 'Ouverture du dashboard…';
+          if (frameEl) {
+            frameEl.src = RENDER_URL;
+            frameEl.style.display = 'block';
+          }
+          if (loaderEl) loaderEl.style.display = 'none';
+          return;
+        }
+      } catch (e) {
+        // ignore, retry
+      }
+
+      setTimeout(checkReady, Math.min(1500 + tries * 250, 3500));
+    }
+
+    checkReady();
+  </script>
 </body>
 </html>

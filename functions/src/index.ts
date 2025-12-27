@@ -224,6 +224,83 @@ export const brokerLogin = onCall(
   }
 );
 
+const RENDER_DASHBOARD_URL = 'https://teste-brocker-dash.onrender.com';
+
+const fetchFn = (globalThis as any).fetch as (input: any, init?: any) => Promise<any>;
+
+function looksLikeRenderWakingUp(html: string): boolean {
+  const hay = String(html || '').toLowerCase();
+  if (!hay) return false;
+  return (
+    hay.includes('service waking up') ||
+    hay.includes('service is waking up') ||
+    hay.includes('allocating compute resources') ||
+    hay.includes('preparing instance') ||
+    hay.includes('render.com') && hay.includes('waking')
+  );
+}
+
+export const renderDashboardReady = onRequest(
+  {
+    cors: true,
+    invoker: 'public',
+  },
+  async (req, res) => {
+    res.set('Access-Control-Allow-Origin', '*');
+    res.set('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.set('Access-Control-Allow-Headers', 'Content-Type, Accept');
+    res.set('Cache-Control', 'no-store');
+
+    if (req.method === 'OPTIONS') {
+      res.status(204).send('');
+      return;
+    }
+
+    if (req.method !== 'GET') {
+      res.status(405).json({ ready: false, error: 'Method not allowed' });
+      return;
+    }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 4500);
+
+    try {
+      const resp = await fetchFn(RENDER_DASHBOARD_URL, {
+        method: 'GET',
+        redirect: 'follow',
+        signal: controller.signal,
+        headers: {
+          'User-Agent': 'AMA-FIRM-ReadyCheck/1.0',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        },
+      });
+
+      const status = resp.status;
+      const contentType = String(resp.headers.get('content-type') || '').toLowerCase();
+      const body = await resp.text();
+
+      const waking = looksLikeRenderWakingUp(body);
+      const ready = status >= 200 && status < 400 && !waking;
+
+      res.status(200).json({
+        ready,
+        status,
+        contentType,
+        checkedAt: Date.now(),
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      res.status(200).json({
+        ready: false,
+        error: message,
+        checkedAt: Date.now(),
+      });
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+);
+
 export const contactPublicHttpV1 = functionsV1.region('us-central1').https.onRequest(async (req, res) => {
   res.set('Access-Control-Allow-Origin', '*');
   res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
