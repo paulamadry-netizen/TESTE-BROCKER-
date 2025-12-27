@@ -664,16 +664,83 @@
       transform: translateX(-50%);
       background: var(--gradient-1);
       color: var(--bg-dark);
-      padding: 0.25rem 1rem;
+      padding: 0.4rem 1.2rem;
       border-radius: 20px;
       font-size: 0.75rem;
       font-weight: 700;
+      letter-spacing: 0.5px;
     }
 
-    .plan-name {
-      font-size: 1.25rem;
+    .funded-capital-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      width: 100%;
+      margin-bottom: 1.25rem;
+    }
+
+    @media (min-width: 520px) {
+      .funded-capital-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+    }
+
+    .funded-capital-card {
+      position: relative;
+      width: 100%;
+      text-align: left;
+      background: rgba(18, 18, 26, 0.65);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 12px 12px;
+      cursor: pointer;
+      transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+      color: var(--text-primary);
+    }
+
+    .funded-capital-card:hover {
+      border-color: rgba(0, 212, 170, 0.55);
+      transform: translateY(-2px);
+    }
+
+    .funded-capital-card[aria-pressed="true"] {
+      border-color: var(--primary);
+      background: linear-gradient(180deg, rgba(0, 212, 170, 0.12) 0%, rgba(18, 18, 26, 0.75) 100%);
+      box-shadow: 0 10px 30px rgba(0, 212, 170, 0.12);
+    }
+
+    .funded-capital-amount {
+      font-weight: 900;
+      letter-spacing: -0.2px;
+      font-size: 0.98rem;
+    }
+
+    .funded-capital-price {
+      color: var(--text-secondary);
       font-weight: 700;
-      margin-bottom: 0.5rem;
+      font-size: 0.86rem;
+      margin-top: 2px;
+    }
+
+    .funded-capital-price span {
+      font-weight: 600;
+      color: var(--text-muted);
+      margin-left: 6px;
+      font-size: 0.82rem;
+    }
+
+    .funded-capital-badge {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      border: 1px solid rgba(0, 212, 170, 0.35);
+      background: rgba(0, 212, 170, 0.08);
+      color: var(--primary);
+      border-radius: 999px;
+      padding: 4px 8px;
+      font-size: 0.72rem;
+      font-weight: 800;
+      letter-spacing: 0.3px;
     }
 
     .plan-capital {
@@ -1791,17 +1858,12 @@
       <div class="section-header">
         <div class="section-tag">Funded</div>
         <h2 class="section-title">Comptes financés</h2>
-        <p class="section-subtitle">Choisissez votre capital pour afficher l'offre.</p>
+        <p class="section-subtitle">Choisissez votre montant instant funding pour afficher l'offre.</p>
       </div>
 
       <div class="pricing-grid" style="grid-template-columns: 1fr; margin-top: 2rem;">
         <div class="pricing-card featured" style="max-width: 560px; margin: 0 auto;">
-          <div style="display:flex;gap:10px;align-items:center;justify-content:space-between;margin-bottom:1.25rem;flex-wrap:wrap;">
-            <div style="display:flex;gap:10px;align-items:center;">
-              <span style="color:var(--text-secondary);font-weight:600;font-size:0.95rem;">Montant</span>
-              <select id="fundedCapitalSelect" style="padding:10px 12px;border-radius:12px;border:1px solid var(--border);background:rgba(18,18,26,0.65);color:var(--text-primary);font-weight:700;"></select>
-            </div>
-          </div>
+          <div id="fundedCapitalGrid" class="funded-capital-grid" role="group" aria-label="Choix du montant"></div>
 
           <div class="plan-name" id="fundedPlanName">Funded</div>
           <div class="plan-capital" id="fundedPlanCapital">—</div>
@@ -2176,14 +2238,14 @@
     };
 
     (function initFundedPricing() {
-      const capitalSelect = document.getElementById('fundedCapitalSelect');
+      const capitalGrid = document.getElementById('fundedCapitalGrid');
       const planNameEl = document.getElementById('fundedPlanName');
       const planCapitalEl = document.getElementById('fundedPlanCapital');
       const planPriceEl = document.getElementById('fundedPlanPrice');
       const planFeaturesEl = document.getElementById('fundedPlanFeatures');
       const ctaBtn = document.getElementById('fundedPlanCta');
 
-      if (!capitalSelect || !planNameEl || !planCapitalEl || !planPriceEl || !planFeaturesEl || !ctaBtn) {
+      if (!capitalGrid || !planNameEl || !planCapitalEl || !planPriceEl || !planFeaturesEl || !ctaBtn) {
         return;
       }
 
@@ -2260,18 +2322,56 @@
       };
 
       const keys = Object.keys(FUNDED_PLANS).map((k) => Number(k)).sort((a, b) => a - b);
-      capitalSelect.innerHTML = '';
-      keys.forEach((k) => {
-        const opt = document.createElement('option');
-        opt.value = String(k);
-        opt.textContent = FUNDED_PLANS[k].capitalLabel;
-        capitalSelect.appendChild(opt);
-      });
-      capitalSelect.value = String(keys[0]);
+      let selectedKey = keys[0];
+
+      const renderCapitalCards = () => {
+        capitalGrid.innerHTML = '';
+        keys.forEach((k) => {
+          const plan = FUNDED_PLANS[k];
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'funded-capital-card';
+          btn.setAttribute('data-capital', String(k));
+          btn.setAttribute('aria-pressed', String(k === selectedKey));
+
+          if (k === 20000) {
+            const badge = document.createElement('span');
+            badge.className = 'funded-capital-badge';
+            badge.textContent = 'POPULAIRE';
+            btn.appendChild(badge);
+          }
+
+          const amount = document.createElement('div');
+          amount.className = 'funded-capital-amount';
+          amount.textContent = plan.capitalLabel;
+
+          const price = document.createElement('div');
+          price.className = 'funded-capital-price';
+          price.innerHTML = plan.priceLabel;
+
+          btn.appendChild(amount);
+          btn.appendChild(price);
+
+          btn.addEventListener('click', () => {
+            selectedKey = k;
+            updateSelectedState();
+            renderPlan();
+          });
+
+          capitalGrid.appendChild(btn);
+        });
+      };
+
+      const updateSelectedState = () => {
+        const items = capitalGrid.querySelectorAll('[data-capital]');
+        items.forEach((el) => {
+          const v = Number(el.getAttribute('data-capital') || '0');
+          el.setAttribute('aria-pressed', String(v === selectedKey));
+        });
+      };
 
       const renderPlan = () => {
-        const selected = Number(capitalSelect.value);
-        const plan = FUNDED_PLANS[selected];
+        const plan = FUNDED_PLANS[selectedKey];
         if (!plan) return;
 
         planNameEl.textContent = plan.name;
@@ -2288,7 +2388,7 @@
         ctaBtn.onclick = () => selectPlan(plan.key, plan.stripeUrl);
       };
 
-      capitalSelect.addEventListener('change', () => renderPlan());
+      renderCapitalCards();
       renderPlan();
     })();
 
