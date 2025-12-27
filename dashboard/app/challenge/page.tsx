@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useLanguage } from "@/context/LanguageContext";
 import { useAccount } from "@/context/AccountContext";
@@ -10,14 +10,138 @@ import { Badge } from "@/components/ui/badge";
 import { formatCurrency } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { getFunctions, httpsCallable } from "firebase/functions";
+import { collection, getDocs, query, where } from "firebase/firestore";
+import { db } from "@/lib/firebase/config";
 
 export default function ChallengePage() {
   const { user, loading: authLoading } = useAuth();
   const { t } = useLanguage();
   const { activeAccount, loading: accountLoading } = useAccount();
   const [processing, setProcessing] = useState(false);
+  const [statsLoading, setStatsLoading] = useState(false);
+  const [stats, setStats] = useState<{
+    tradingDays: number;
+    dailyPnl: number;
+    dailyLoss: number;
+    dailyLossPercent: number;
+    peakBalance: number;
+    totalDrawdown: number;
+    totalDrawdownPercent: number;
+  } | null>(null);
 
-  if (authLoading || accountLoading) {
+  const toJsDate = (value: any): Date | null => {
+    try {
+      if (!value) return null;
+      if (typeof (value as any)?.toDate === "function") return (value as any).toDate();
+      if (typeof value === "number") return new Date(value);
+      if (typeof value === "string") return new Date(value);
+      if (typeof value === "object" && typeof (value as any).seconds === "number") return new Date((value as any).seconds * 1000);
+      const d = new Date(value);
+      return isNaN(d.getTime()) ? null : d;
+    } catch {
+      return null;
+    }
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadStats() {
+      if (!user || !activeAccount) {
+        setStats(null);
+        setStatsLoading(false);
+        return;
+      }
+      setStatsLoading(true);
+      try {
+        const tradesSnap = await getDocs(
+          query(collection(db, "trades"), where("userId", "==", user.uid))
+        );
+
+        const accId = activeAccount.id;
+        const allTrades: any[] = [];
+        const closedTrades: any[] = [];
+
+        tradesSnap.forEach((d) => {
+          const t = d.data() as any;
+          if (!t) return;
+          const tradeAccountId = typeof t.accountId === "string" ? t.accountId : (typeof t.activeAccountId === "string" ? t.activeAccountId : "");
+          if (tradeAccountId !== accId) return;
+          allTrades.push({ id: d.id, ...t });
+          if (t.status === "closed") {
+            closedTrades.push({ id: d.id, ...t });
+          }
+        });
+
+        const tradingDaySet = new Set<string>();
+        allTrades.forEach((t) => {
+          const dateRaw = t.openedAt || t.closedAt || t.createdAt;
+          const dt = toJsDate(dateRaw);
+          if (!dt) return;
+          tradingDaySet.add(dt.toISOString().slice(0, 10));
+        });
+
+        const initialBalance = Number(activeAccount.initialBalance || activeAccount.accountBalance || 0);
+        const currentBalance = Number(activeAccount.accountBalance || 0);
+
+        const sortedClosed = closedTrades
+          .map((t) => ({
+            ...t,
+            __closedAtMs: toJsDate(t.closedAt)?.getTime() ?? 0,
+          }))
+          .sort((a, b) => a.__closedAtMs - b.__closedAtMs);
+
+        let calculatedBalance = initialBalance;
+        let peakBalance = initialBalance;
+        sortedClosed.forEach((t) => {
+          const pnl = Number(t.pnl) || 0;
+          calculatedBalance += pnl;
+          if (calculatedBalance > peakBalance) peakBalance = calculatedBalance;
+        });
+
+        const safeCurrent = Math.max(Number.isFinite(currentBalance) ? currentBalance : calculatedBalance, 0.01);
+        const totalDrawdown = Math.max(0, peakBalance - safeCurrent);
+        const totalDrawdownPercent = peakBalance > 0 ? (totalDrawdown / peakBalance) * 100 : 0;
+
+        const todayStart = new Date();
+        todayStart.setUTCHours(0, 0, 0, 0);
+
+        let dailyPnl = 0;
+        closedTrades.forEach((t) => {
+          const dt = toJsDate(t.closedAt);
+          if (!dt) return;
+          if (dt < todayStart) return;
+          dailyPnl += Number(t.pnl) || 0;
+        });
+
+        const dailyLoss = dailyPnl < 0 ? Math.abs(dailyPnl) : 0;
+        const dailyLossPercent = initialBalance > 0 ? (dailyLoss / initialBalance) * 100 : 0;
+
+        if (!cancelled) {
+          setStats({
+            tradingDays: tradingDaySet.size,
+            dailyPnl,
+            dailyLoss,
+            dailyLossPercent,
+            peakBalance,
+            totalDrawdown,
+            totalDrawdownPercent,
+          });
+        }
+      } catch (e) {
+        if (!cancelled) setStats(null);
+      } finally {
+        if (!cancelled) setStatsLoading(false);
+      }
+    }
+
+    loadStats();
+    return () => {
+      cancelled = true;
+    };
+  }, [user, activeAccount?.id]);
+
+  if (authLoading || accountLoading || statsLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <Loader2 className="h-8 w-8 animate-spin" />
@@ -46,7 +170,7 @@ export default function ChallengePage() {
   const maxDrawdownAmount = (initialBalance * resolvedMaxTotalDrawdownPercent) / 100;
   const progressPercentage = profitTargetAmount > 0 ? (profitLoss / profitTargetAmount) * 100 : 0;
 
-  const tradingDays = activeAccount.tradingDays || 0;
+  const tradingDays = Math.max(activeAccount.tradingDays || 0, stats?.tradingDays || 0);
   const isChallengeSuccess = !isFunded && profitLoss >= profitTargetAmount && tradingDays >= 3 && activeAccount.accountStatus === 'active';
 
   const handleUpgradeChallenge = async () => {
@@ -72,6 +196,12 @@ export default function ChallengePage() {
   const dailyLossLimit = maxDailyDrawdownPercent === null ? null : (initialBalance * (maxDailyDrawdownPercent / 100));
   const totalLossLimit = initialBalance * (resolvedMaxTotalDrawdownPercent / 100);
 
+  const dailyLoss = stats?.dailyLoss || 0;
+  const totalDrawdown = stats?.totalDrawdown || 0;
+
+  const isDailyOk = maxDailyDrawdownPercent === null ? true : dailyLoss <= (dailyLossLimit || 0);
+  const isTotalOk = totalDrawdown <= totalLossLimit;
+
   // Challenge rules based on real data
   const challengeRules = [
     {
@@ -87,42 +217,26 @@ export default function ChallengePage() {
       description: maxDailyDrawdownPercent === null
         ? `${t("challenge.maxPerDay")} (illimité)`
         : `${t("challenge.maxPerDay")} (${formatCurrency(dailyLossLimit || 0)})`,
-      status: "PASSED",
-      current: 0,
+      status: isDailyOk ? "PASSED" : "FAILED",
+      current: dailyLoss,
       target: dailyLossLimit || 0,
       critical: true,
     },
     {
       name: t("challenge.maxTotalLoss"),
       description: `${t("challenge.maxTotalDrawdown")} ${resolvedMaxTotalDrawdownPercent}% ${t("challenge.ofTotalLoss")} (${formatCurrency(totalLossLimit)})`,
-      status: "PASSED",
-      current: Math.abs(Math.min(profitLoss, 0)),
+      status: isTotalOk ? "PASSED" : "FAILED",
+      current: totalDrawdown,
       target: totalLossLimit,
       critical: true,
     },
     {
       name: t("challenge.minTradingDays"),
       description: t("challenge.tradeAtLeast"),
-      status: (activeAccount.tradingDays || 0) >= 3 ? "PASSED" : (activeAccount.tradingDays || 0) > 0 ? "IN_PROGRESS" : "PENDING",
-      current: activeAccount.tradingDays || 0,
+      status: tradingDays >= 3 ? "PASSED" : tradingDays > 0 ? "IN_PROGRESS" : "PENDING",
+      current: tradingDays,
       target: 3,
       critical: false,
-    },
-    {
-      name: t("challenge.overnightPositions"),
-      description: t("challenge.allowedExcept"),
-      status: "PASSED",
-      current: 0,
-      target: 0,
-      critical: true,
-    },
-    {
-      name: t("challenge.weekendPositions"),
-      description: t("challenge.forbidden"),
-      status: "PASSED",
-      current: 0,
-      target: 0,
-      critical: true,
     },
   ];
 
@@ -333,7 +447,7 @@ export default function ChallengePage() {
             <div className="flex justify-between">
               <span className="text-muted-foreground">{t("challenge.currentDrawdown")}</span>
               <span className="font-semibold">
-                {formatCurrency(0)}
+                {formatCurrency(totalDrawdown)}
               </span>
             </div>
             <div className="flex justify-between">
@@ -344,15 +458,15 @@ export default function ChallengePage() {
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">{t("challenge.remainingBuffer")}</span>
-              <span className="font-semibold text-green-500">
-                {formatCurrency(maxDrawdownAmount)}
+              <span className={`font-semibold ${isTotalOk ? 'text-green-500' : 'text-red-500'}`}>
+                {formatCurrency(Math.max(0, totalLossLimit - totalDrawdown))}
               </span>
             </div>
             <div className="h-2 bg-secondary rounded-full overflow-hidden mt-2">
               <div
                 className="h-full bg-green-500 transition-all"
                 style={{
-                  width: `0%`,
+                  width: `${Math.min(100, Math.max(0, (totalDrawdown / Math.max(1, totalLossLimit)) * 100))}%`,
                 }}
               />
             </div>
@@ -376,10 +490,10 @@ export default function ChallengePage() {
               </div>
               <div className="text-right">
                 <p className="text-2xl font-bold">
-                  {activeAccount.tradingDays || 0} / 30
+                  {tradingDays} / 3
                 </p>
-                <Badge variant={(activeAccount.tradingDays || 0) >= 5 ? "success" : "secondary"}>
-                  {(activeAccount.tradingDays || 0) >= 5 ? t("challenge.requirementMet") : t("challenge.inProgress")}
+                <Badge variant={tradingDays >= 3 ? "success" : "secondary"}>
+                  {tradingDays >= 3 ? t("challenge.requirementMet") : t("challenge.inProgress")}
                 </Badge>
               </div>
             </div>
@@ -387,7 +501,7 @@ export default function ChallengePage() {
               <div
                 className="h-full bg-blue-500 transition-all"
                 style={{
-                  width: `${((activeAccount.tradingDays || 0) / 30) * 100}%`,
+                  width: `${Math.min(100, (tradingDays / 3) * 100)}%`,
                 }}
               />
             </div>
