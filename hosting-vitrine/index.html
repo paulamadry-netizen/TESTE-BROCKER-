@@ -1719,162 +1719,25 @@
         <h2 class="section-title">Choisissez votre plan</h2>
         <p class="section-subtitle">Des comptes adaptés à tous les profils de traders.</p>
       </div>
-      <div class="pricing-grid">
-        <!-- Plan Bronze -->
-        <div class="pricing-card">
-          <div class="plan-name">Plan Bronze</div>
-          <div class="plan-capital">25 000 $</div>
-          <div class="plan-price">200 € <span>une fois</span></div>
-          <ul class="plan-features">
-            <li><i class="fas fa-check"></i> Payouts tous les <strong>15 jours</strong></li>
-            <li><i class="fas fa-check"></i> Objectif Profit: <strong>10% (2 500 $)</strong></li>
-            <li><i class="fas fa-check"></i> Max perte journalière: <strong>3% (750 $)</strong></li>
-            <li><i class="fas fa-check"></i> Max perte totale: <strong>8% (2 000 $)</strong></li>
-            <li><i class="fas fa-check"></i> Partage profit: <strong>80%</strong> (+10% en 6 mois)</li>
-            <li><i class="fas fa-check"></i> Jours minimum: <strong>3</strong></li>
-            <li><i class="fas fa-check"></i> Positions de nuit: <strong>Oui</strong></li>
-          </ul>
-          <button class="plan-cta" onclick="selectPlan('bronze', 'https://buy.stripe.com/test_eVq00jfY0evn51obaT1ZS01')">Commencer</button>
-        </div>
 
-        <!-- Plan Argent -->
-        <div class="pricing-card featured">
-          <div class="plan-name">Plan Argent</div>
-          <div class="plan-capital">50 000 $</div>
-          <div class="plan-price">285 € <span>une fois</span></div>
-          <ul class="plan-features">
-            <li><i class="fas fa-check"></i> Payouts tous les <strong>15 jours</strong></li>
-            <li><i class="fas fa-check"></i> Objectif Profit: <strong>10% (5 000 $)</strong></li>
-            <li><i class="fas fa-check"></i> Max perte journalière: <strong>3% (1 500 $)</strong></li>
-            <li><i class="fas fa-check"></i> Max perte totale: <strong>8% (4 000 $)</strong></li>
-            <li><i class="fas fa-check"></i> Partage profit: <strong>80%</strong> (+10% en 6 mois)</li>
-            <li><i class="fas fa-check"></i> Jours minimum: <strong>3</strong></li>
-            <li><i class="fas fa-check"></i> Positions de nuit: <strong>Oui</strong></li>
-          </ul>
-          <button class="plan-cta" onclick="selectPlan('argent', 'https://buy.stripe.com/test_3cIaEX9zCaf7gK6baT1ZS00')">Commencer</button>
-        </div>
+      <div class="pricing-grid" style="grid-template-columns: 1fr; margin-top: 2rem;">
+        <div class="pricing-card featured" style="max-width: 560px; margin: 0 auto;">
+          <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between;margin-bottom:1.25rem;">
+            <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+              <button class="btn-secondary" id="pricingModeChallenge" type="button">Challenge</button>
+              <button class="btn-secondary" id="pricingModeFunded" type="button">Funded</button>
+            </div>
+            <div style="display:flex;gap:10px;align-items:center;">
+              <span style="color:var(--text-secondary);font-weight:600;font-size:0.95rem;">Capital</span>
+              <select id="pricingCapitalSelect" style="padding:10px 12px;border-radius:12px;border:1px solid var(--border);background:rgba(18,18,26,0.65);color:var(--text-primary);font-weight:700;"></select>
+            </div>
+          </div>
 
-        <!-- Plan Or -->
-        <div class="pricing-card">
-          <div class="plan-name">Plan Or</div>
-          <div class="plan-capital">100 000 $</div>
-          <div class="plan-price">550 € <span>une fois</span></div>
-          <ul class="plan-features">
-            <li><i class="fas fa-check"></i> Payouts tous les <strong>15 jours</strong></li>
-            <li><i class="fas fa-check"></i> Objectif Profit: <strong>10% (10 000 $)</strong></li>
-            <li><i class="fas fa-check"></i> Max perte journalière: <strong>3% (3 000 $)</strong></li>
-            <li><i class="fas fa-check"></i> Max perte totale: <strong>8% (8 000 $)</strong></li>
-            <li><i class="fas fa-check"></i> Partage profit: <strong>80%</strong> (+10% en 6 mois)</li>
-            <li><i class="fas fa-check"></i> Jours minimum: <strong>3</strong></li>
-            <li><i class="fas fa-check"></i> Positions de nuit: <strong>Oui</strong></li>
-          </ul>
-          <button class="plan-cta" onclick="selectPlan('or', 'https://buy.stripe.com/test_3cI3cv27adrj51o2En1ZS02')">Commencer</button>
-        </div>
-      </div>
-
-      <div class="section-header" style="margin-top: 3.5rem;">
-        <div class="section-tag">Financement instantané</div>
-        <h2 class="section-title">Accès direct au compte funded</h2>
-        <p class="section-subtitle">Pas de challenge : vous tradez immédiatement sur un compte financé, avec des règles adaptées.</p>
-      </div>
-
-      <div class="pricing-grid">
-        <div class="pricing-card">
-          <div class="plan-name">Instant Funding</div>
-          <div class="plan-capital">2 500 $</div>
-          <div class="plan-price">112 € <span>une fois</span></div>
-          <ul class="plan-features">
-            <li><i class="fas fa-check"></i> Compte financé: <strong>immédiat</strong></li>
-            <li><i class="fas fa-check"></i> Objectif profit: <strong>0%</strong></li>
-            <li><i class="fas fa-check"></i> Max perte journalière: <strong>illimité</strong></li>
-            <li><i class="fas fa-check"></i> Max perte totale: <strong>10%</strong></li>
-            <li><i class="fas fa-check"></i> Payouts: <strong>15 jours</strong></li>
-          </ul>
-          <button class="plan-cta" onclick="selectPlan('instant_2500', 'https://buy.stripe.com/test_fZueVd136drj2Tgen51ZS04')">Commencer</button>
-        </div>
-
-        <div class="pricing-card featured">
-          <div class="plan-name">Instant Funding</div>
-          <div class="plan-capital">5 000 $</div>
-          <div class="plan-price">210 € <span>une fois</span></div>
-          <ul class="plan-features">
-            <li><i class="fas fa-check"></i> Compte financé: <strong>immédiat</strong></li>
-            <li><i class="fas fa-check"></i> Objectif profit: <strong>0%</strong></li>
-            <li><i class="fas fa-check"></i> Max perte journalière: <strong>illimité</strong></li>
-            <li><i class="fas fa-check"></i> Max perte totale: <strong>10%</strong></li>
-            <li><i class="fas fa-check"></i> Payouts: <strong>15 jours</strong></li>
-          </ul>
-          <button class="plan-cta" onclick="selectPlan('instant_5000', 'https://buy.stripe.com/test_00wfZhcLOcnf0L87YH1ZS05')">Commencer</button>
-        </div>
-
-        <div class="pricing-card">
-          <div class="plan-name">Instant Funding</div>
-          <div class="plan-capital">10 000 $</div>
-          <div class="plan-price">400 € <span>une fois</span></div>
-          <ul class="plan-features">
-            <li><i class="fas fa-check"></i> Compte financé: <strong>immédiat</strong></li>
-            <li><i class="fas fa-check"></i> Objectif profit: <strong>0%</strong></li>
-            <li><i class="fas fa-check"></i> Max perte journalière: <strong>illimité</strong></li>
-            <li><i class="fas fa-check"></i> Max perte totale: <strong>10%</strong></li>
-            <li><i class="fas fa-check"></i> Payouts: <strong>15 jours</strong></li>
-          </ul>
-          <button class="plan-cta" onclick="selectPlan('instant_10000', 'https://buy.stripe.com/test_6oU5kD27a0ExdxU4Mv1ZS06')">Commencer</button>
-        </div>
-
-        <div class="pricing-card">
-          <div class="plan-name">Instant Funding</div>
-          <div class="plan-capital">20 000 $</div>
-          <div class="plan-price">770 € <span>une fois</span></div>
-          <ul class="plan-features">
-            <li><i class="fas fa-check"></i> Compte financé: <strong>immédiat</strong></li>
-            <li><i class="fas fa-check"></i> Objectif profit: <strong>0%</strong></li>
-            <li><i class="fas fa-check"></i> Max perte journalière: <strong>illimité</strong></li>
-            <li><i class="fas fa-check"></i> Max perte totale: <strong>10%</strong></li>
-            <li><i class="fas fa-check"></i> Payouts: <strong>15 jours</strong></li>
-          </ul>
-          <button class="plan-cta" onclick="selectPlan('instant_20000', 'https://buy.stripe.com/test_eVqbJ1bHK2MF1Pcgvd1ZS07')">Commencer</button>
-        </div>
-
-        <div class="pricing-card">
-          <div class="plan-name">Instant Funding</div>
-          <div class="plan-capital">40 000 $</div>
-          <div class="plan-price">1 650 € <span>une fois</span></div>
-          <ul class="plan-features">
-            <li><i class="fas fa-check"></i> Compte financé: <strong>immédiat</strong></li>
-            <li><i class="fas fa-check"></i> Objectif profit: <strong>0%</strong></li>
-            <li><i class="fas fa-check"></i> Max perte journalière: <strong>illimité</strong></li>
-            <li><i class="fas fa-check"></i> Max perte totale: <strong>10%</strong></li>
-            <li><i class="fas fa-check"></i> Payouts: <strong>15 jours</strong></li>
-          </ul>
-          <button class="plan-cta" onclick="selectPlan('instant_40000', 'https://buy.stripe.com/test_4gM4gz4fi4UNfG20wf1ZS08')">Commencer</button>
-        </div>
-
-        <div class="pricing-card">
-          <div class="plan-name">Instant Funding</div>
-          <div class="plan-capital">80 000 $</div>
-          <div class="plan-price">3 290 € <span>une fois</span></div>
-          <ul class="plan-features">
-            <li><i class="fas fa-check"></i> Compte financé: <strong>immédiat</strong></li>
-            <li><i class="fas fa-check"></i> Objectif profit: <strong>0%</strong></li>
-            <li><i class="fas fa-check"></i> Max perte journalière: <strong>illimité</strong></li>
-            <li><i class="fas fa-check"></i> Max perte totale: <strong>10%</strong></li>
-            <li><i class="fas fa-check"></i> Payouts: <strong>15 jours</strong></li>
-          </ul>
-          <button class="plan-cta" onclick="selectPlan('instant_80000', 'https://buy.stripe.com/test_bJefZhbHKcnfalI92L1ZS09')">Commencer</button>
-        </div>
-
-        <div class="pricing-card">
-          <div class="plan-name">Instant Funding</div>
-          <div class="plan-capital">120 000 $</div>
-          <div class="plan-price">5 000 € <span>une fois</span></div>
-          <ul class="plan-features">
-            <li><i class="fas fa-check"></i> Compte financé: <strong>immédiat</strong></li>
-            <li><i class="fas fa-check"></i> Objectif profit: <strong>0%</strong></li>
-            <li><i class="fas fa-check"></i> Max perte journalière: <strong>illimité</strong></li>
-            <li><i class="fas fa-check"></i> Max perte totale: <strong>10%</strong></li>
-            <li><i class="fas fa-check"></i> Payouts: <strong>15 jours</strong></li>
-          </ul>
-          <button class="plan-cta" onclick="selectPlan('instant_120000', 'https://buy.stripe.com/test_7sYfZh5jm72V2Tgfr91ZS0a')">Commencer</button>
+          <div class="plan-name" id="dynamicPlanName">Plan</div>
+          <div class="plan-capital" id="dynamicPlanCapital">—</div>
+          <div class="plan-price" id="dynamicPlanPrice">—</div>
+          <ul class="plan-features" id="dynamicPlanFeatures"></ul>
+          <button class="plan-cta" id="dynamicPlanCta" type="button">Commencer</button>
         </div>
       </div>
     </div>
@@ -2234,6 +2097,249 @@
         return null;
       }
     };
+
+    (function initDynamicPricing() {
+      const modeChallengeBtn = document.getElementById('pricingModeChallenge');
+      const modeFundedBtn = document.getElementById('pricingModeFunded');
+      const capitalSelect = document.getElementById('pricingCapitalSelect');
+      const planNameEl = document.getElementById('dynamicPlanName');
+      const planCapitalEl = document.getElementById('dynamicPlanCapital');
+      const planPriceEl = document.getElementById('dynamicPlanPrice');
+      const planFeaturesEl = document.getElementById('dynamicPlanFeatures');
+      const ctaBtn = document.getElementById('dynamicPlanCta');
+
+      if (!modeChallengeBtn || !modeFundedBtn || !capitalSelect || !planNameEl || !planCapitalEl || !planPriceEl || !planFeaturesEl || !ctaBtn) {
+        return;
+      }
+
+      const CHALLENGE_PLANS = {
+        25000: {
+          key: 'bronze',
+          name: 'Plan Bronze',
+          capitalLabel: '25 000 $',
+          priceLabel: '200 € <span>une fois</span>',
+          stripeUrl: 'https://buy.stripe.com/test_eVq00jfY0evn51obaT1ZS01',
+          features: [
+            'Payouts tous les <strong>15 jours</strong>',
+            'Objectif Profit: <strong>10% (2 500 $)</strong>',
+            'Max perte journalière: <strong>3% (750 $)</strong>',
+            'Max perte totale: <strong>8% (2 000 $)</strong>',
+            'Partage profit: <strong>80%</strong> (+10% en 6 mois)',
+            'Jours minimum: <strong>3</strong>',
+            'Positions de nuit: <strong>Oui</strong>'
+          ],
+        },
+        50000: {
+          key: 'argent',
+          name: 'Plan Argent',
+          capitalLabel: '50 000 $',
+          priceLabel: '285 € <span>une fois</span>',
+          stripeUrl: 'https://buy.stripe.com/test_3cIaEX9zCaf7gK6baT1ZS00',
+          features: [
+            'Payouts tous les <strong>15 jours</strong>',
+            'Objectif Profit: <strong>10% (5 000 $)</strong>',
+            'Max perte journalière: <strong>3% (1 500 $)</strong>',
+            'Max perte totale: <strong>8% (4 000 $)</strong>',
+            'Partage profit: <strong>80%</strong> (+10% en 6 mois)',
+            'Jours minimum: <strong>3</strong>',
+            'Positions de nuit: <strong>Oui</strong>'
+          ],
+        },
+        100000: {
+          key: 'or',
+          name: 'Plan Or',
+          capitalLabel: '100 000 $',
+          priceLabel: '550 € <span>une fois</span>',
+          stripeUrl: 'https://buy.stripe.com/test_3cI3cv27adrj51o2En1ZS02',
+          features: [
+            'Payouts tous les <strong>15 jours</strong>',
+            'Objectif Profit: <strong>10% (10 000 $)</strong>',
+            'Max perte journalière: <strong>3% (3 000 $)</strong>',
+            'Max perte totale: <strong>8% (8 000 $)</strong>',
+            'Partage profit: <strong>80%</strong> (+10% en 6 mois)',
+            'Jours minimum: <strong>3</strong>',
+            'Positions de nuit: <strong>Oui</strong>'
+          ],
+        },
+      };
+
+      const FUNDED_PLANS = {
+        2500: {
+          key: 'instant_2500',
+          name: 'Funded (Instant)',
+          capitalLabel: '2 500 $',
+          priceLabel: '112 € <span>une fois</span>',
+          stripeUrl: 'https://buy.stripe.com/test_fZueVd136drj2Tgen51ZS04',
+          features: [
+            'Compte financé: <strong>immédiat</strong>',
+            'Objectif profit: <strong>0%</strong>',
+            'Max perte journalière: <strong>illimité</strong>',
+            'Max perte totale: <strong>10%</strong>',
+            'Payouts: <strong>15 jours</strong>'
+          ],
+        },
+        5000: {
+          key: 'instant_5000',
+          name: 'Funded (Instant)',
+          capitalLabel: '5 000 $',
+          priceLabel: '210 € <span>une fois</span>',
+          stripeUrl: 'https://buy.stripe.com/test_00wfZhcLOcnf0L87YH1ZS05',
+          features: [
+            'Compte financé: <strong>immédiat</strong>',
+            'Objectif profit: <strong>0%</strong>',
+            'Max perte journalière: <strong>illimité</strong>',
+            'Max perte totale: <strong>10%</strong>',
+            'Payouts: <strong>15 jours</strong>'
+          ],
+        },
+        10000: {
+          key: 'instant_10000',
+          name: 'Funded (Instant)',
+          capitalLabel: '10 000 $',
+          priceLabel: '400 € <span>une fois</span>',
+          stripeUrl: 'https://buy.stripe.com/test_6oU5kD27a0ExdxU4Mv1ZS06',
+          features: [
+            'Compte financé: <strong>immédiat</strong>',
+            'Objectif profit: <strong>0%</strong>',
+            'Max perte journalière: <strong>illimité</strong>',
+            'Max perte totale: <strong>10%</strong>',
+            'Payouts: <strong>15 jours</strong>'
+          ],
+        },
+        20000: {
+          key: 'instant_20000',
+          name: 'Funded (Instant)',
+          capitalLabel: '20 000 $',
+          priceLabel: '770 € <span>une fois</span>',
+          stripeUrl: 'https://buy.stripe.com/test_eVqbJ1bHK2MF1Pcgvd1ZS07',
+          features: [
+            'Compte financé: <strong>immédiat</strong>',
+            'Objectif profit: <strong>0%</strong>',
+            'Max perte journalière: <strong>illimité</strong>',
+            'Max perte totale: <strong>10%</strong>',
+            'Payouts: <strong>15 jours</strong>'
+          ],
+        },
+        40000: {
+          key: 'instant_40000',
+          name: 'Funded (Instant)',
+          capitalLabel: '40 000 $',
+          priceLabel: '1 650 € <span>une fois</span>',
+          stripeUrl: 'https://buy.stripe.com/test_4gM4gz4fi4UNfG20wf1ZS08',
+          features: [
+            'Compte financé: <strong>immédiat</strong>',
+            'Objectif profit: <strong>0%</strong>',
+            'Max perte journalière: <strong>illimité</strong>',
+            'Max perte totale: <strong>10%</strong>',
+            'Payouts: <strong>15 jours</strong>'
+          ],
+        },
+        80000: {
+          key: 'instant_80000',
+          name: 'Funded (Instant)',
+          capitalLabel: '80 000 $',
+          priceLabel: '3 290 € <span>une fois</span>',
+          stripeUrl: 'https://buy.stripe.com/test_bJefZhbHKcnfalI92L1ZS09',
+          features: [
+            'Compte financé: <strong>immédiat</strong>',
+            'Objectif profit: <strong>0%</strong>',
+            'Max perte journalière: <strong>illimité</strong>',
+            'Max perte totale: <strong>10%</strong>',
+            'Payouts: <strong>15 jours</strong>'
+          ],
+        },
+        120000: {
+          key: 'instant_120000',
+          name: 'Funded (Instant)',
+          capitalLabel: '120 000 $',
+          priceLabel: '5 000 € <span>une fois</span>',
+          stripeUrl: 'https://buy.stripe.com/test_7sYfZh5jm72V2Tgfr91ZS0a',
+          features: [
+            'Compte financé: <strong>immédiat</strong>',
+            'Objectif profit: <strong>0%</strong>',
+            'Max perte journalière: <strong>illimité</strong>',
+            'Max perte totale: <strong>10%</strong>',
+            'Payouts: <strong>15 jours</strong>'
+          ],
+        },
+      };
+
+      let currentMode = 'challenge';
+
+      const setModeUi = () => {
+        if (currentMode === 'challenge') {
+          modeChallengeBtn.style.opacity = '1';
+          modeChallengeBtn.style.borderColor = 'rgba(0, 212, 170, 0.45)';
+          modeFundedBtn.style.opacity = '0.75';
+          modeFundedBtn.style.borderColor = 'var(--border)';
+        } else {
+          modeFundedBtn.style.opacity = '1';
+          modeFundedBtn.style.borderColor = 'rgba(0, 212, 170, 0.45)';
+          modeChallengeBtn.style.opacity = '0.75';
+          modeChallengeBtn.style.borderColor = 'var(--border)';
+        }
+      };
+
+      const fillSelect = () => {
+        const plans = currentMode === 'challenge' ? CHALLENGE_PLANS : FUNDED_PLANS;
+        const keys = Object.keys(plans).map((k) => Number(k)).sort((a, b) => a - b);
+        const prev = capitalSelect.value;
+        capitalSelect.innerHTML = '';
+        keys.forEach((k) => {
+          const opt = document.createElement('option');
+          opt.value = String(k);
+          opt.textContent = plans[k].capitalLabel;
+          capitalSelect.appendChild(opt);
+        });
+        if (prev && plans[Number(prev)]) {
+          capitalSelect.value = prev;
+        } else {
+          capitalSelect.value = String(keys[0]);
+        }
+      };
+
+      const renderPlan = () => {
+        const plans = currentMode === 'challenge' ? CHALLENGE_PLANS : FUNDED_PLANS;
+        const selected = Number(capitalSelect.value);
+        const plan = plans[selected];
+        if (!plan) return;
+
+        planNameEl.textContent = plan.name;
+        planCapitalEl.textContent = plan.capitalLabel;
+        planPriceEl.innerHTML = plan.priceLabel;
+
+        planFeaturesEl.innerHTML = '';
+        plan.features.forEach((txt) => {
+          const li = document.createElement('li');
+          li.innerHTML = `<i class="fas fa-check"></i> ${txt}`;
+          planFeaturesEl.appendChild(li);
+        });
+
+        ctaBtn.onclick = () => selectPlan(plan.key, plan.stripeUrl);
+      };
+
+      modeChallengeBtn.addEventListener('click', () => {
+        currentMode = 'challenge';
+        setModeUi();
+        fillSelect();
+        renderPlan();
+      });
+
+      modeFundedBtn.addEventListener('click', () => {
+        currentMode = 'funded';
+        setModeUi();
+        fillSelect();
+        renderPlan();
+      });
+
+      capitalSelect.addEventListener('change', () => {
+        renderPlan();
+      });
+
+      setModeUi();
+      fillSelect();
+      renderPlan();
+    })();
 
     const getRegisterProfilePayload = () => {
       const dob = (document.getElementById('registerDob')?.value || '').trim();
