@@ -15,3 +15,17 @@ yarn-error.log*
 # OS
 .DS_Store
 Thumbs.db
+
+# Firebase
+.firebase/
+
+# Firebase Functions build output
+functions/lib/
+
+# Backups
+*.bak.*
+
+# Local duplicates (not deployed)
+broker.html
+verify-pending.html
+extensions/

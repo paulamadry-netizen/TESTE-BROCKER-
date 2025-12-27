@@ -1,0 +1,345 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Login - AmABrocker</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+body {
+  font-family: 'Inter', sans-serif;
+  background: linear-gradient(135deg, #0a0e1a 0%, #0f1419 100%);
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #e8edf4;
+}
+.login-container {
+  background: #1a1f2e;
+  border: 1px solid #252b3d;
+  border-radius: 16px;
+  padding: 48px;
+  width: 100%;
+  max-width: 420px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+}
+.logo {
+  text-align: center;
+  margin-bottom: 32px;
+}
+.logo h1 {
+  font-size: 32px;
+  font-weight: 700;
+  background: linear-gradient(135deg, #00d9b8, #00f0cc);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  margin-bottom: 8px;
+}
+.logo p {
+  color: #9ba3b4;
+  font-size: 14px;
+}
+.form-group {
+  margin-bottom: 24px;
+}
+.form-group label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #9ba3b4;
+}
+.form-group input {
+  width: 100%;
+  padding: 12px 16px;
+  background: #0f1419;
+  border: 1px solid #252b3d;
+  border-radius: 8px;
+  color: #e8edf4;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+.password-field {
+  position: relative;
+}
+
+.password-field input {
+  padding-right: 88px;
+}
+
+.password-toggle {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: 1px solid #252b3d;
+  color: #9ba3b4;
+  border-radius: 8px;
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.password-toggle:hover {
+  color: #e8edf4;
+  border-color: #00d9b8;
+}
+.form-group input:focus {
+  outline: none;
+  border-color: #00d9b8;
+  box-shadow: 0 0 0 3px rgba(0, 217, 184, 0.1);
+}
+.btn-login {
+  width: 100%;
+  padding: 14px;
+  background: linear-gradient(135deg, #00d9b8, #00f0cc);
+  border: none;
+  border-radius: 8px;
+  color: #0a0e1a;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.btn-login:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 217, 184, 0.3);
+}
+.btn-login:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+.error-message {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid #ef4444;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 24px;
+  color: #ef4444;
+  font-size: 14px;
+  display: none;
+}
+.error-message.show {
+  display: block;
+}
+.loading {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid #0a0e1a;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+.dashboard-link {
+  text-align: center;
+  margin-top: 24px;
+  font-size: 14px;
+  color: #9ba3b4;
+}
+.dashboard-link a {
+  color: #00d9b8;
+  text-decoration: none;
+}
+.dashboard-link a:hover {
+  text-decoration: underline;
+}
+</style>
+</head>
+<body>
+<div class="login-container">
+  <div class="logo">
+    <h1>AmABrocker</h1>
+    <p>Pro Trading Platform</p>
+  </div>
+
+  <div id="errorMessage" class="error-message"></div>
+
+  <form id="loginForm">
+    <div class="form-group">
+      <label for="login">Identifiant</label>
+      <input type="text" id="login" placeholder="AMA-XXXXXXX" required autocomplete="username">
+    </div>
+
+    <div class="form-group">
+      <label for="password">Password</label>
+      <div class="password-field">
+        <input type="password" id="password" placeholder="••••••••" required autocomplete="current-password">
+        <button type="button" class="password-toggle" id="togglePasswordBtn">Afficher</button>
+      </div>
+    </div>
+
+    <button type="submit" class="btn-login" id="loginBtn">
+      <span id="btnText">Login</span>
+    </button>
+  </form>
+
+  <div class="dashboard-link">
+    Don't have an account? <a href="/dashboard">Go to Dashboard</a>
+  </div>
+</div>
+
+<script type="module">
+  import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+  import { getAuth, signInWithEmailAndPassword, signInWithCustomToken } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+  import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-functions.js';
+  import { getFirestore, doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyBCAeaaJMMw3_Egf-6-4i63IhAUy4EyzBc",
+    authDomain: "teste-brocker.firebaseapp.com",
+    projectId: "teste-brocker",
+    storageBucket: "teste-brocker.firebasestorage.app",
+    messagingSenderId: "44407447466",
+    appId: "1:44407447466:web:ce5fde6a8104a1b82bd5d3",
+    measurementId: "G-MHKNE6H1ZS"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const functions = getFunctions(app, 'us-central1');
+  const brokerLoginFn = httpsCallable(functions, 'brokerLogin');
+  const db = getFirestore(app);
+
+  const loginForm = document.getElementById('loginForm');
+  const loginInput = document.getElementById('login');
+  const passwordInput = document.getElementById('password');
+  const togglePasswordBtn = document.getElementById('togglePasswordBtn');
+  const loginBtn = document.getElementById('loginBtn');
+  const btnText = document.getElementById('btnText');
+  const errorMessage = document.getElementById('errorMessage');
+
+  if (togglePasswordBtn && passwordInput) {
+    togglePasswordBtn.addEventListener('click', () => {
+      const isPassword = passwordInput.type === 'password';
+      passwordInput.type = isPassword ? 'text' : 'password';
+      togglePasswordBtn.textContent = isPassword ? 'Masquer' : 'Afficher';
+    });
+  }
+
+  function showError(message) {
+    errorMessage.textContent = message;
+    errorMessage.classList.add('show');
+    setTimeout(() => {
+      errorMessage.classList.remove('show');
+    }, 5000);
+  }
+
+  loginForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const login = loginInput.value.trim();
+    const password = passwordInput.value.trim();
+
+    if (!login || !password) {
+      showError('Please fill in all fields');
+      return;
+    }
+
+    loginBtn.disabled = true;
+    btnText.innerHTML = '<span class="loading"></span>';
+
+    try {
+      // Auth d'abord: tente Firebase Auth password; si échec, fallback brokerPassword via Cloud Function
+      let userId = null;
+      try {
+        if (login.includes('@')) {
+          const credential = await signInWithEmailAndPassword(auth, login.toLowerCase(), password);
+          userId = credential.user.uid;
+        } else {
+          throw new Error('Skip email auth');
+        }
+      } catch (authError) {
+        try {
+          const result = await brokerLoginFn({ login, password });
+          const token = result && result.data ? result.data.token : null;
+          if (!token) throw new Error('Missing token');
+          const tokenCredential = await signInWithCustomToken(auth, token);
+          userId = tokenCredential.user.uid;
+        } catch (fallbackError) {
+          throw authError;
+        }
+      }
+
+      if (!userId) {
+        showError('Login failed. Please try again.');
+        loginBtn.disabled = false;
+        btnText.textContent = 'Login';
+        return;
+      }
+
+      // Charger le profil utilisateur
+      const userRef = doc(db, 'users', userId);
+      const userSnap = await getDoc(userRef);
+      if (!userSnap.exists()) {
+        showError('Account not found. Please contact support.');
+        loginBtn.disabled = false;
+        btnText.textContent = 'Login';
+        return;
+      }
+
+      const userData = userSnap.data();
+
+      // Charger le compte actif si présent
+      let activeAccountData = null;
+      if (userData && userData.activeAccountId) {
+        const accountRef = doc(db, 'users', userId, 'accounts', userData.activeAccountId);
+        const accountSnap = await getDoc(accountRef);
+        if (accountSnap.exists()) {
+          activeAccountData = accountSnap.data();
+        }
+      }
+
+      const accountStatusToCheck = (activeAccountData && activeAccountData.accountStatus)
+        ? activeAccountData.accountStatus
+        : userData.accountStatus;
+
+      if (accountStatusToCheck && accountStatusToCheck !== 'active') {
+        showError('Your account is not active. Please purchase a plan first.');
+        loginBtn.disabled = false;
+        btnText.textContent = 'Login';
+        return;
+      }
+
+      console.log('✅ Broker login successful for:', login);
+
+      // Stocker les infos de session dans localStorage
+      localStorage.setItem('brokerUser', JSON.stringify({
+        uid: userId,
+        email: userData.email || null,
+        brokerIdentifier: userData.brokerIdentifier || login,
+        activeAccountId: userData.activeAccountId || null,
+        accountBalance: (activeAccountData && activeAccountData.accountBalance) ? activeAccountData.accountBalance : userData.accountBalance,
+        accountStatus: (activeAccountData && activeAccountData.accountStatus) ? activeAccountData.accountStatus : userData.accountStatus,
+        challengeType: (activeAccountData && activeAccountData.challengeType) ? activeAccountData.challengeType : userData.challengeType
+      }));
+
+      // Redirect to broker
+      window.location.href = '/index.html';
+    } catch (error) {
+      console.error('❌ Login error:', error);
+      const code = error && error.code ? error.code : '';
+      if (code === 'auth/user-not-found' || code === 'functions/not-found') showError('No account found with this email');
+      else if (code === 'auth/wrong-password' || code === 'auth/invalid-credential' || code === 'functions/permission-denied') showError('Incorrect email or password');
+      else if (code === 'auth/too-many-requests') showError('Too many attempts. Try again later.');
+      else showError('Login failed. Please try again.');
+      loginBtn.disabled = false;
+      btnText.textContent = 'Login';
+    }
+  });
+</script>
+</body>
+</html>

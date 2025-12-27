@@ -33,15 +33,21 @@ export default function ChallengePage() {
     );
   }
 
+  const isFunded = Boolean((activeAccount as any)?.isFunded) || String((activeAccount as any)?.accountType || '').toLowerCase() === 'funded';
+
   const initialBalance = activeAccount.initialBalance || activeAccount.accountBalance;
   const currentBalance = activeAccount.accountBalance;
   const profitLoss = currentBalance - initialBalance;
   const profitTargetAmount = (initialBalance * (activeAccount.profitTarget || 10)) / 100;
-  const maxDrawdownAmount = (initialBalance * (activeAccount.maxDrawdown || 8)) / 100;
+  const maxTotalDrawdownPercent = Number((activeAccount as any)?.maxTotalDrawdownPercent);
+  const resolvedMaxTotalDrawdownPercent = Number.isFinite(maxTotalDrawdownPercent) && maxTotalDrawdownPercent > 0
+    ? maxTotalDrawdownPercent
+    : (activeAccount.maxDrawdown || 8);
+  const maxDrawdownAmount = (initialBalance * resolvedMaxTotalDrawdownPercent) / 100;
   const progressPercentage = profitTargetAmount > 0 ? (profitLoss / profitTargetAmount) * 100 : 0;
 
   const tradingDays = activeAccount.tradingDays || 0;
-  const isChallengeSuccess = profitLoss >= profitTargetAmount && tradingDays >= 3 && activeAccount.accountStatus === 'active';
+  const isChallengeSuccess = !isFunded && profitLoss >= profitTargetAmount && tradingDays >= 3 && activeAccount.accountStatus === 'active';
 
   const handleUpgradeChallenge = async () => {
     if (!activeAccount) return;
@@ -59,9 +65,12 @@ export default function ChallengePage() {
     }
   };
 
-  // Calculate daily loss limit (3% of initial balance)
-  const dailyLossLimit = initialBalance * 0.03;
-  const totalLossLimit = initialBalance * 0.08;
+  const rawMaxDaily = (activeAccount as any)?.maxDailyDrawdownPercent;
+  const maxDailyDrawdownPercent = rawMaxDaily === null
+    ? null
+    : (Number.isFinite(Number(rawMaxDaily)) && Number(rawMaxDaily) > 0 ? Number(rawMaxDaily) : 3);
+  const dailyLossLimit = maxDailyDrawdownPercent === null ? null : (initialBalance * (maxDailyDrawdownPercent / 100));
+  const totalLossLimit = initialBalance * (resolvedMaxTotalDrawdownPercent / 100);
 
   // Challenge rules based on real data
   const challengeRules = [
@@ -75,15 +84,17 @@ export default function ChallengePage() {
     },
     {
       name: t("challenge.maxDailyLoss"),
-      description: `${t("challenge.maxPerDay")} (${formatCurrency(dailyLossLimit)})`,
+      description: maxDailyDrawdownPercent === null
+        ? `${t("challenge.maxPerDay")} (illimité)`
+        : `${t("challenge.maxPerDay")} (${formatCurrency(dailyLossLimit || 0)})`,
       status: "PASSED",
       current: 0,
-      target: dailyLossLimit,
+      target: dailyLossLimit || 0,
       critical: true,
     },
     {
       name: t("challenge.maxTotalLoss"),
-      description: `${t("challenge.maxTotalDrawdown")} ${activeAccount.maxDrawdown || 8}% ${t("challenge.ofTotalLoss")} (${formatCurrency(totalLossLimit)})`,
+      description: `${t("challenge.maxTotalDrawdown")} ${resolvedMaxTotalDrawdownPercent}% ${t("challenge.ofTotalLoss")} (${formatCurrency(totalLossLimit)})`,
       status: "PASSED",
       current: Math.abs(Math.min(profitLoss, 0)),
       target: totalLossLimit,

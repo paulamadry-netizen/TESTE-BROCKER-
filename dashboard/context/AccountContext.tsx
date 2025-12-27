@@ -11,11 +11,17 @@ export interface TradingAccount {
   accountStatus: string;
   accountBalance: number;
   initialBalance: number;
+  accountType?: string;
+  isFunded?: boolean;
+  fundedAt?: any;
+  initialFundedBalance?: number;
   brokerPassword: string;
   challengeType: string;
   planType: string;
   profitTarget: number;
   maxDrawdown: number;
+  maxTotalDrawdownPercent?: number;
+  maxDailyDrawdownPercent?: number | null;
   tradingDays: number;
   createdAt: any;
 }

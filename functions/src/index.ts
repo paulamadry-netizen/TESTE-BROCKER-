@@ -14,6 +14,70 @@ import { UserDocument, EmailTemplate } from './types/firebase.types';
 // Initialiser Firebase Admin
 admin.initializeApp();
 
+type PurchasedPlanKind = 'challenge' | 'instant_funded';
+
+interface PurchasedPlan {
+  code: string;
+  kind: PurchasedPlanKind;
+  tradingCapital: number;
+  planName: string;
+  targetPriceEur: number;
+}
+
+const PLAN_CATALOG: PurchasedPlan[] = [
+  // Challenges
+  { code: 'CHALLENGE_25K', kind: 'challenge', tradingCapital: 25000, planName: 'Bronze', targetPriceEur: 200 },
+  { code: 'CHALLENGE_50K', kind: 'challenge', tradingCapital: 50000, planName: 'Argent', targetPriceEur: 285 },
+  { code: 'CHALLENGE_100K', kind: 'challenge', tradingCapital: 100000, planName: 'Or', targetPriceEur: 550 },
+
+  // Instant funded
+  { code: 'INSTANT_2500', kind: 'instant_funded', tradingCapital: 2500, planName: 'Instant 2 500$', targetPriceEur: 112 },
+  { code: 'INSTANT_5000', kind: 'instant_funded', tradingCapital: 5000, planName: 'Instant 5 000$', targetPriceEur: 210 },
+  { code: 'INSTANT_10000', kind: 'instant_funded', tradingCapital: 10000, planName: 'Instant 10 000$', targetPriceEur: 400 },
+  { code: 'INSTANT_20000', kind: 'instant_funded', tradingCapital: 20000, planName: 'Instant 20 000$', targetPriceEur: 770 },
+  { code: 'INSTANT_40000', kind: 'instant_funded', tradingCapital: 40000, planName: 'Instant 40 000$', targetPriceEur: 1650 },
+  { code: 'INSTANT_80000', kind: 'instant_funded', tradingCapital: 80000, planName: 'Instant 80 000$', targetPriceEur: 3290 },
+  { code: 'INSTANT_120000', kind: 'instant_funded', tradingCapital: 120000, planName: 'Instant 120 000$', targetPriceEur: 5000 },
+];
+
+function determinePurchasedPlan(amountInEuros: number): PurchasedPlan | null {
+  const amount = Number(amountInEuros);
+  if (!Number.isFinite(amount) || amount <= 0) return null;
+
+  const candidates = PLAN_CATALOG
+    .map((p) => {
+      const tolerance = Math.max(5, p.targetPriceEur * 0.1);
+      const diff = Math.abs(amount - p.targetPriceEur);
+      return { p, diff, tolerance };
+    })
+    .filter((x) => x.diff <= x.tolerance)
+    .sort((a, b) => a.diff - b.diff);
+
+  return candidates.length ? candidates[0].p : null;
+}
+
+function resolvePurchasedPlanFromSession(session: StripeCheckoutSession, amountInEuros: number): PurchasedPlan {
+  const md = (session as any)?.metadata || {};
+  const kind = typeof md.planKind === 'string' ? String(md.planKind).trim() : '';
+  const code = typeof md.planCode === 'string' ? String(md.planCode).trim() : '';
+  const tradingCapitalRaw = typeof md.tradingCapital === 'string' ? String(md.tradingCapital).trim() : '';
+  const tradingCapital = tradingCapitalRaw ? Number(tradingCapitalRaw) : NaN;
+
+  if (kind && code && Number.isFinite(tradingCapital) && tradingCapital > 0) {
+    const matched = PLAN_CATALOG.find((p) => p.code === code);
+    if (matched && matched.kind === kind && matched.tradingCapital === tradingCapital) {
+      return matched;
+    }
+  }
+
+  const fallback = determinePurchasedPlan(amountInEuros);
+  if (!fallback) {
+    console.warn(`⚠️ Montant ${amountInEuros}€ ne correspond à aucune tranche connue.`);
+    return PLAN_CATALOG[0];
+  }
+  return fallback;
+}
+
 export const brokerLogin = onCall(
   {
     cors: true,
@@ -360,14 +424,8 @@ export const createCheckoutFromPaymentLink = onCall(
 
     console.log('🧾 createCheckoutFromPaymentLink paymentLinkUrl:', paymentLinkUrl);
 
-    const allowedPaymentLinks = new Set<string>([
-      'https://buy.stripe.com/test_eVq00jfY0evn51obaT1ZS01',
-      'https://buy.stripe.com/test_3cIaEX9zCaf7gK6baT1ZS00',
-      'https://buy.stripe.com/test_3cI3cv27adrj51o2En1ZS02',
-    ]);
-
-    if (!allowedPaymentLinks.has(paymentLinkUrl)) {
-      throw new HttpsError('invalid-argument', 'Unknown payment link');
+    if (!paymentLinkUrl) {
+      throw new HttpsError('invalid-argument', 'Missing payment link');
     }
 
     const stripe = new Stripe(stripeSecretKey.value(), {
@@ -405,6 +463,23 @@ export const createCheckoutFromPaymentLink = onCall(
     if (!line_items.length) {
       throw new HttpsError('failed-precondition', 'Payment link has no line items');
     }
+
+    // Calculer le capital du plan à partir du montant (Stripe en centimes)
+    const estimatedAmountCents = paymentLinkLineItems.data
+      .map((li) => {
+        const price = li ? (li as any).price : null;
+        const unitAmount = typeof price?.unit_amount === 'number' ? price.unit_amount : null;
+        const quantity = typeof li?.quantity === 'number' ? li.quantity : 1;
+        if (!unitAmount) return 0;
+        return unitAmount * quantity;
+      })
+      .reduce((sum, v) => sum + v, 0);
+    const estimatedAmountEuros = estimatedAmountCents / 100;
+    const purchasedPlan = determinePurchasedPlan(estimatedAmountEuros);
+    if (!purchasedPlan) {
+      throw new HttpsError('invalid-argument', 'Unknown plan');
+    }
+    const estimatedTradingCapital = purchasedPlan.tradingCapital;
 
     // ================================
     // LIMITES D'ACHAT
@@ -444,25 +519,12 @@ export const createCheckoutFromPaymentLink = onCall(
       activeChallengesCount += 1;
     });
 
-    if (activeChallengesCount >= 3) {
+    if (purchasedPlan.kind === 'challenge' && activeChallengesCount >= 3) {
       throw new HttpsError(
         'failed-precondition',
         'Vous avez déjà 3 challenges en cours. Terminez-en un avant d\'en acheter un nouveau.'
       );
     }
-
-    // Calculer le capital du nouveau challenge à partir du montant (Stripe en centimes)
-    const estimatedAmountCents = paymentLinkLineItems.data
-      .map((li) => {
-        const price = li ? (li as any).price : null;
-        const unitAmount = typeof price?.unit_amount === 'number' ? price.unit_amount : null;
-        const quantity = typeof li?.quantity === 'number' ? li.quantity : 1;
-        if (!unitAmount) return 0;
-        return unitAmount * quantity;
-      })
-      .reduce((sum, v) => sum + v, 0);
-    const estimatedAmountEuros = estimatedAmountCents / 100;
-    const estimatedTradingCapital = determineTradingCapital(estimatedAmountEuros);
 
     const FUNDED_CAP = 1_000_000;
     if (totalFundedCapital >= FUNDED_CAP) {
@@ -490,6 +552,9 @@ export const createCheckoutFromPaymentLink = onCall(
       metadata: {
         uid: request.auth.uid,
         authEmail: authEmail || '',
+        planCode: purchasedPlan.code,
+        planKind: purchasedPlan.kind,
+        tradingCapital: String(purchasedPlan.tradingCapital),
       },
     } as any);
 
@@ -655,8 +720,9 @@ async function handleCheckoutCompleted(
     const customerId = typeof session.customer === 'string' ? session.customer : '';
     const amountTotal = session.amount_total || 0;
     const amountInEuros = amountTotal / 100;
-    const tradingCapital = determineTradingCapital(amountInEuros);
-    const planName = tradingCapital === 100000 ? 'Or' : tradingCapital === 50000 ? 'Argent' : 'Bronze';
+    const purchasedPlan = resolvePurchasedPlanFromSession(session, amountInEuros);
+    const tradingCapital = purchasedPlan.tradingCapital;
+    const planName = purchasedPlan.planName;
 
     const accountEmail = resolvedEmailForProcessing;
 
@@ -689,7 +755,9 @@ async function handleCheckoutCompleted(
       .collection('users').doc(userRecord.uid)
       .collection('accounts').get();
     const accountNumber = accountsSnapshot.size + 1;
-    const accountName = `Challenge ${planName} #${accountNumber}`;
+    const accountName = purchasedPlan.kind === 'instant_funded'
+      ? `Financement instantané ${tradingCapital.toLocaleString('fr-FR')} $ #${accountNumber}`
+      : `Challenge ${planName} #${accountNumber}`;
 
     const newAccountRef = await admin.firestore()
       .collection('users').doc(userRecord.uid)
@@ -700,10 +768,16 @@ async function handleCheckoutCompleted(
         accountBalance: tradingCapital,
         initialBalance: tradingCapital,
         brokerPassword: brokerPassword,
-        challengeType: 'standard',
+        accountType: purchasedPlan.kind === 'instant_funded' ? 'funded' : 'challenge',
+        isFunded: purchasedPlan.kind === 'instant_funded',
+        fundedAt: purchasedPlan.kind === 'instant_funded' ? admin.firestore.FieldValue.serverTimestamp() : null,
+        initialFundedBalance: purchasedPlan.kind === 'instant_funded' ? tradingCapital : null,
+        challengeType: purchasedPlan.kind === 'instant_funded' ? 'instant_funded' : 'standard',
         planType: planName,
-        profitTarget: 10,
-        maxDrawdown: 5,
+        profitTarget: purchasedPlan.kind === 'instant_funded' ? 0 : 10,
+        maxDrawdown: purchasedPlan.kind === 'instant_funded' ? 10 : 8,
+        maxTotalDrawdownPercent: purchasedPlan.kind === 'instant_funded' ? 10 : 8,
+        maxDailyDrawdownPercent: purchasedPlan.kind === 'instant_funded' ? null : 3,
         tradingDays: 0,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -755,9 +829,12 @@ async function handleCheckoutCompleted(
     const amountInEuros = amountTotal / 100; // Stripe utilise les centimes
 
     // Déterminer le capital de trading en fonction du montant payé
-    const tradingCapital = determineTradingCapital(amountInEuros);
-    const planName = tradingCapital === 100000 ? 'Or' : tradingCapital === 50000 ? 'Argent' : 'Bronze';
-    const accountName = `Challenge ${planName} #1`;
+    const purchasedPlan = resolvePurchasedPlanFromSession(session, amountInEuros);
+    const tradingCapital = purchasedPlan.tradingCapital;
+    const planName = purchasedPlan.planName;
+    const accountName = purchasedPlan.kind === 'instant_funded'
+      ? `Financement instantané ${tradingCapital.toLocaleString('fr-FR')} $ #1`
+      : `Challenge ${planName} #1`;
 
     console.log(`💰 Montant payé: ${amountInEuros}€ → Capital de trading: ${tradingCapital}$`);
 
@@ -771,10 +848,16 @@ async function handleCheckoutCompleted(
         accountBalance: tradingCapital,
         initialBalance: tradingCapital,
         brokerPassword: randomPassword,
-        challengeType: 'standard',
+        accountType: purchasedPlan.kind === 'instant_funded' ? 'funded' : 'challenge',
+        isFunded: purchasedPlan.kind === 'instant_funded',
+        fundedAt: purchasedPlan.kind === 'instant_funded' ? admin.firestore.FieldValue.serverTimestamp() : null,
+        initialFundedBalance: purchasedPlan.kind === 'instant_funded' ? tradingCapital : null,
+        challengeType: purchasedPlan.kind === 'instant_funded' ? 'instant_funded' : 'standard',
         planType: planName,
-        profitTarget: 10,
-        maxDrawdown: 5,
+        profitTarget: purchasedPlan.kind === 'instant_funded' ? 0 : 10,
+        maxDrawdown: purchasedPlan.kind === 'instant_funded' ? 10 : 8,
+        maxTotalDrawdownPercent: purchasedPlan.kind === 'instant_funded' ? 10 : 8,
+        maxDailyDrawdownPercent: purchasedPlan.kind === 'instant_funded' ? null : 3,
         tradingDays: 0,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -809,8 +892,9 @@ async function handleCheckoutCompleted(
       const customerId = typeof session.customer === 'string' ? session.customer : '';
       const amountTotal = session.amount_total || 0;
       const amountInEuros = amountTotal / 100;
-      const tradingCapital = determineTradingCapital(amountInEuros);
-      const planName = tradingCapital === 100000 ? 'Or' : tradingCapital === 50000 ? 'Argent' : 'Bronze';
+      const purchasedPlan = resolvePurchasedPlanFromSession(session, amountInEuros);
+      const tradingCapital = purchasedPlan.tradingCapital;
+      const planName = purchasedPlan.planName;
 
       // Générer un mot de passe unique pour ce compte broker
       const brokerPassword: string = generateSecurePassword();
@@ -821,7 +905,9 @@ async function handleCheckoutCompleted(
         .collection('users').doc(existingUser.uid)
         .collection('accounts').get();
       const accountNumber = accountsSnapshot.size + 1;
-      const accountName = `Challenge ${planName} #${accountNumber}`;
+      const accountName = purchasedPlan.kind === 'instant_funded'
+        ? `Financement instantané ${tradingCapital.toLocaleString('fr-FR')} $ #${accountNumber}`
+        : `Challenge ${planName} #${accountNumber}`;
 
       // Créer un nouveau compte dans la sous-collection accounts
       const newAccountRef = await admin.firestore()
@@ -833,10 +919,16 @@ async function handleCheckoutCompleted(
           accountBalance: tradingCapital,
           initialBalance: tradingCapital,
           brokerPassword: brokerPassword,
-          challengeType: 'standard',
+          accountType: purchasedPlan.kind === 'instant_funded' ? 'funded' : 'challenge',
+          isFunded: purchasedPlan.kind === 'instant_funded',
+          fundedAt: purchasedPlan.kind === 'instant_funded' ? admin.firestore.FieldValue.serverTimestamp() : null,
+          initialFundedBalance: purchasedPlan.kind === 'instant_funded' ? tradingCapital : null,
+          challengeType: purchasedPlan.kind === 'instant_funded' ? 'instant_funded' : 'standard',
           planType: planName,
-          profitTarget: 10,
-          maxDrawdown: 5,
+          profitTarget: purchasedPlan.kind === 'instant_funded' ? 0 : 10,
+          maxDrawdown: purchasedPlan.kind === 'instant_funded' ? 10 : 8,
+          maxTotalDrawdownPercent: purchasedPlan.kind === 'instant_funded' ? 10 : 8,
+          maxDailyDrawdownPercent: purchasedPlan.kind === 'instant_funded' ? null : 3,
           tradingDays: 0,
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -1007,8 +1099,9 @@ async function sendWelcomeEmail(
 
   const amountTotal = session.amount_total || 0;
   const amountInEuros = amountTotal / 100;
-  const tradingCapital = determineTradingCapital(amountInEuros);
-  const planName = accountName || (tradingCapital === 100000 ? 'Plan Or' : tradingCapital === 50000 ? 'Plan Argent' : 'Plan Bronze');
+  const purchasedPlan = resolvePurchasedPlanFromSession(session, amountInEuros);
+  const tradingCapital = purchasedPlan.tradingCapital;
+  const planName = accountName || (purchasedPlan.kind === 'instant_funded' ? 'Financement instantané' : (tradingCapital === 100000 ? 'Plan Or' : tradingCapital === 50000 ? 'Plan Argent' : 'Plan Bronze'));
   const safePlanName = escapeHtml(planName);
   const safeEmail = escapeHtml(email);
   const safeBrokerIdentifier = escapeHtml(brokerIdentifier);

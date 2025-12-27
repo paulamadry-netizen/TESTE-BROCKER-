@@ -259,7 +259,13 @@ async function getAccountTradeStats(userId: string, accountId: string) {
   };
 }
 
-async function validateAccountTotalDrawdown(userId: string, accountId: string, initialBalance: number, currentBalance: number) {
+async function validateAccountTotalDrawdown(
+  userId: string,
+  accountId: string,
+  initialBalance: number,
+  currentBalance: number,
+  maxTotalDrawdownPercent: number
+) {
   const stats = await getAccountTradeStats(userId, accountId);
   if (!stats.closedTrades.length) return { allowed: true };
 
@@ -280,13 +286,20 @@ async function validateAccountTotalDrawdown(userId: string, accountId: string, i
   const safeCurrent = Math.max(Number.isFinite(currentBalance) ? currentBalance : calculatedBalance, 0.01);
   const drawdown = peakBalance - safeCurrent;
   const drawdownPercent = peakBalance > 0 ? (drawdown / peakBalance) * 100 : 0;
-  if (drawdownPercent > 8) {
-    return { allowed: false, reason: `Drawdown total ${drawdownPercent.toFixed(2)}% (max 8%)` };
+  if (drawdownPercent > maxTotalDrawdownPercent) {
+    return { allowed: false, reason: `Drawdown total ${drawdownPercent.toFixed(2)}% (max ${maxTotalDrawdownPercent}%)` };
   }
   return { allowed: true };
 }
 
-async function validateAccountDailyDrawdown(userId: string, accountId: string, initialBalance: number) {
+async function validateAccountDailyDrawdown(
+  userId: string,
+  accountId: string,
+  initialBalance: number,
+  maxDailyDrawdownPercent: number | null
+) {
+  if (maxDailyDrawdownPercent === null) return { allowed: true };
+
   const stats = await getAccountTradeStats(userId, accountId);
   const todayStart = new Date();
   todayStart.setUTCHours(0, 0, 0, 0);
@@ -303,8 +316,8 @@ async function validateAccountDailyDrawdown(userId: string, accountId: string, i
 
   if (todayPnl >= 0) return { allowed: true };
   const dailyLossPercent = initialBalance > 0 ? (Math.abs(todayPnl) / initialBalance) * 100 : 0;
-  if (dailyLossPercent > 3) {
-    return { allowed: false, reason: `Drawdown journalier ${dailyLossPercent.toFixed(2)}% (max 3%)` };
+  if (dailyLossPercent > maxDailyDrawdownPercent) {
+    return { allowed: false, reason: `Drawdown journalier ${dailyLossPercent.toFixed(2)}% (max ${maxDailyDrawdownPercent}%)` };
   }
   return { allowed: true };
 }
@@ -653,14 +666,23 @@ export const executeTrade = onCall({ secrets: [finnhubApiKey] }, async (request)
   const initialBalance = Number(accountData?.initialBalance ?? accountData?.accountBalance ?? 25000);
   const currentBalance = Number(accountData?.accountBalance ?? initialBalance);
 
+  const maxTotalDrawdownPercent = Number(accountData?.maxTotalDrawdownPercent);
+  const resolvedMaxTotal = Number.isFinite(maxTotalDrawdownPercent) && maxTotalDrawdownPercent > 0 ? maxTotalDrawdownPercent : 8;
+  const rawMaxDaily = accountData?.maxDailyDrawdownPercent;
+  const maxDailyDrawdownPercent = rawMaxDaily === null
+    ? null
+    : Number.isFinite(Number(rawMaxDaily)) && Number(rawMaxDaily) > 0
+      ? Number(rawMaxDaily)
+      : 3;
+
   // 5. VALIDATION DRAWDOWN TOTAL
-  const totalDrawdownCheck = await validateAccountTotalDrawdown(userId, resolvedAccountId, initialBalance, currentBalance);
+  const totalDrawdownCheck = await validateAccountTotalDrawdown(userId, resolvedAccountId, initialBalance, currentBalance, resolvedMaxTotal);
   if (!totalDrawdownCheck.allowed) {
     throw new HttpsError('failed-precondition', totalDrawdownCheck.reason!);
   }
 
   // 6. VALIDATION DRAWDOWN JOURNALIER
-  const dailyDrawdownCheck = await validateAccountDailyDrawdown(userId, resolvedAccountId, initialBalance);
+  const dailyDrawdownCheck = await validateAccountDailyDrawdown(userId, resolvedAccountId, initialBalance, maxDailyDrawdownPercent);
   if (!dailyDrawdownCheck.allowed) {
     throw new HttpsError('failed-precondition', dailyDrawdownCheck.reason!);
   }
@@ -846,8 +868,18 @@ export const closeTrade = onCall({ secrets: [finnhubApiKey] }, async (request) =
       const accountData = accountDoc.exists ? (accountDoc.data() as any) : {};
       const initialBalance = Number(accountData?.initialBalance ?? accountData?.accountBalance ?? 25000);
       const currentBalance = Number(accountData?.accountBalance ?? 0);
-      await validateAccountTotalDrawdown(userId, resolvedAccountId, initialBalance, currentBalance);
-      await validateAccountDailyDrawdown(userId, resolvedAccountId, initialBalance);
+
+      const maxTotalDrawdownPercent = Number(accountData?.maxTotalDrawdownPercent);
+      const resolvedMaxTotal = Number.isFinite(maxTotalDrawdownPercent) && maxTotalDrawdownPercent > 0 ? maxTotalDrawdownPercent : 8;
+      const rawMaxDaily = accountData?.maxDailyDrawdownPercent;
+      const maxDailyDrawdownPercent = rawMaxDaily === null
+        ? null
+        : Number.isFinite(Number(rawMaxDaily)) && Number(rawMaxDaily) > 0
+          ? Number(rawMaxDaily)
+          : 3;
+
+      await validateAccountTotalDrawdown(userId, resolvedAccountId, initialBalance, currentBalance, resolvedMaxTotal);
+      await validateAccountDailyDrawdown(userId, resolvedAccountId, initialBalance, maxDailyDrawdownPercent);
     }
 
     console.log(`✅ Trade fermé: ${tradeId}`);
@@ -1204,11 +1236,20 @@ export const upgradeChallenge = onCall(async (request) => {
     throw new HttpsError('failed-precondition', `Profit insuffisant. Requis: 10%, Actuel: ${profitPercent.toFixed(2)}%`);
   }
 
-  const totalDrawdownCheck = await validateAccountTotalDrawdown(userId, activeAccountId, initialBalance, currentBalance);
+  const maxTotalDrawdownPercent = Number(accountData?.maxTotalDrawdownPercent);
+  const resolvedMaxTotal = Number.isFinite(maxTotalDrawdownPercent) && maxTotalDrawdownPercent > 0 ? maxTotalDrawdownPercent : 8;
+  const rawMaxDaily = accountData?.maxDailyDrawdownPercent;
+  const maxDailyDrawdownPercent = rawMaxDaily === null
+    ? null
+    : Number.isFinite(Number(rawMaxDaily)) && Number(rawMaxDaily) > 0
+      ? Number(rawMaxDaily)
+      : 3;
+
+  const totalDrawdownCheck = await validateAccountTotalDrawdown(userId, activeAccountId, initialBalance, currentBalance, resolvedMaxTotal);
   if (!totalDrawdownCheck.allowed) {
     throw new HttpsError('failed-precondition', totalDrawdownCheck.reason || 'Violation drawdown total');
   }
-  const dailyDrawdownCheck = await validateAccountDailyDrawdown(userId, activeAccountId, initialBalance);
+  const dailyDrawdownCheck = await validateAccountDailyDrawdown(userId, activeAccountId, initialBalance, maxDailyDrawdownPercent);
   if (!dailyDrawdownCheck.allowed) {
     throw new HttpsError('failed-precondition', dailyDrawdownCheck.reason || 'Violation drawdown journalier');
   }

@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Documentation / Règles - AMA FIRM</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    :root{--bg:#0b1220;--card:#0f1b33;--muted:#94a3b8;--text:#e2e8f0;--border:rgba(148,163,184,.18);--accent:#6366f1;--success:#22c55e;--danger:#ef4444;--shadow:0 10px 30px rgba(0,0,0,.35)}
+    *{box-sizing:border-box}
+    body{margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:radial-gradient(1200px 800px at 10% 10%, rgba(99,102,241,.22), transparent 55%),radial-gradient(900px 600px at 90% 20%, rgba(34,197,94,.15), transparent 55%),var(--bg);color:var(--text)}
+    a{color:inherit}
+    .container{max-width:1100px;margin:0 auto;padding:28px 20px 60px}
+    .topbar{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 16px;border:1px solid var(--border);background:rgba(15,27,51,.7);backdrop-filter:blur(10px);border-radius:14px;box-shadow:var(--shadow)}
+    .brand{font-weight:800;letter-spacing:.4px;text-decoration:none}
+    .btn{display:inline-flex;align-items:center;gap:10px;padding:10px 14px;border-radius:12px;border:1px solid var(--border);background:rgba(226,232,240,.06);text-decoration:none;font-weight:600}
+    .btn:hover{border-color:rgba(226,232,240,.25)}
+    h1{margin:18px 0 6px;font-size:30px;line-height:1.15}
+    .subtitle{margin:0;color:var(--muted);line-height:1.7}
+    .grid{margin-top:18px;display:grid;grid-template-columns:1fr;gap:14px}
+    @media (min-width: 1000px){.grid{grid-template-columns:1fr 1fr}}
+    .card{border:1px solid var(--border);background:rgba(15,27,51,.6);backdrop-filter:blur(10px);border-radius:16px;box-shadow:var(--shadow);overflow:hidden}
+    .inner{padding:20px}
+    h2{margin:0 0 10px;font-size:18px}
+    h3{margin:16px 0 10px;font-size:15px;color:#cbd5e1}
+    p{margin:0 0 12px;line-height:1.7}
+    ul{margin:0 0 12px;padding-left:18px;line-height:1.7}
+    .kpi{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px}
+    .pill{display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border-radius:999px;border:1px solid var(--border);color:var(--muted);font-size:12px}
+    .pill strong{color:var(--text)}
+    .ok{color:var(--success)}
+    .no{color:var(--danger)}
+    .footer{margin-top:26px;padding-top:18px;border-top:1px solid var(--border);color:var(--muted);font-size:13px;display:flex;flex-direction:column;gap:8px}
+    .toc a{text-decoration:none}
+    .toc a:hover{text-decoration:underline}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="topbar">
+      <a class="brand" href="/">AMA FIRM</a>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end">
+        <a class="btn" href="mentions-legales.html">Mentions légales</a>
+        <a class="btn" href="/">Retour au site</a>
+      </div>
+    </div>
+
+    <h1>Documentation / Règles</h1>
+    <p class="subtitle">Cette page résume le fonctionnement de la plateforme, les règles de trading et les conditions principales (challenge, funded, payouts). Elle est alignée avec les contrôles implémentés côté système.</p>
+
+    <div class="grid">
+      <div class="card">
+        <div class="inner toc">
+          <h2>Sommaire</h2>
+          <ul>
+            <li><a href="#fonctionnement">Fonctionnement global</a></li>
+            <li><a href="#challenge">Règles Challenge</a></li>
+            <li><a href="#risque">Règles de risque (drawdowns)</a></li>
+            <li><a href="#horaires">Horaires & week-end</a></li>
+            <li><a href="#produits">Produits & levier</a></li>
+            <li><a href="#payout">Règles de payout (comptes funded)</a></li>
+            <li><a href="#kyc">KYC (vérification d’identité)</a></li>
+            <li><a href="#multi">Multi-comptes & données</a></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="inner">
+          <h2>Chiffres clés</h2>
+          <div class="kpi">
+            <span class="pill">Objectif profit challenge: <strong>10%</strong></span>
+            <span class="pill">Drawdown journalier max: <strong>3%</strong></span>
+            <span class="pill">Drawdown total max: <strong>8%</strong></span>
+            <span class="pill">Trading min (challenge): <strong>3 jours</strong></span>
+            <span class="pill">Auto-close week-end: <strong>vendredi 21:00 UTC</strong></span>
+            <span class="pill">Levier indicatif: <strong>1:20</strong></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" id="fonctionnement" style="margin-top:14px;">
+      <div class="inner">
+        <h2>Fonctionnement global</h2>
+        <p>La plateforme fournit un environnement de trading simulé pour évaluer le respect des règles (risque, discipline, cohérence). Les opérations, soldes, trades et règles sont suivis et contrôlés.</p>
+        <h3>Étapes</h3>
+        <ul>
+          <li>Création de compte et achat d’un plan (challenge).</li>
+          <li>Trading dans le broker (positions, SL/TP, ordres).</li>
+          <li>Respect des règles de risque (suspension automatique en cas de violation).</li>
+          <li>Validation du challenge (objectif + jours minimum) puis passage en funded.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="card" id="challenge" style="margin-top:14px;">
+      <div class="inner">
+        <h2>Règles Challenge</h2>
+        <ul>
+          <li>Objectif de profit: <strong>+10%</strong> (par rapport au solde initial du compte).</li>
+          <li>Minimum: <strong>3 jours</strong> de trading.</li>
+          <li>Compte doit rester <strong>actif</strong> (pas de suspension).</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="card" id="risque" style="margin-top:14px;">
+      <div class="inner">
+        <h2>Règles de risque (drawdowns)</h2>
+        <h3>Drawdown journalier</h3>
+        <ul>
+          <li>Perte maximale journalière: <strong>3%</strong>.</li>
+          <li>En cas de dépassement: <span class="no"><strong>suspension automatique</strong></span>.</li>
+        </ul>
+        <h3>Drawdown total</h3>
+        <ul>
+          <li>Perte maximale totale: <strong>8%</strong>.</li>
+          <li>Le calcul est basé sur l’évolution du solde (pic/peak vs solde courant) afin de refléter le risque réel.</li>
+          <li>En cas de dépassement: <span class="no"><strong>suspension automatique</strong></span>.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="card" id="horaires" style="margin-top:14px;">
+      <div class="inner">
+        <h2>Horaires & week-end</h2>
+        <ul>
+          <li><strong>Trading interdit le week-end</strong> (samedi & dimanche, UTC).</li>
+          <li><strong>Trading interdit entre 22:00 et 00:00 (UTC)</strong>.</li>
+          <li>Fermeture automatique des positions avant le week-end: <strong>vendredi 21:00 UTC</strong>.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="card" id="produits" style="margin-top:14px;">
+      <div class="inner">
+        <h2>Produits & levier</h2>
+        <p>Selon l’instrument, la taille de contrat varie. Le système calcule la marge avec un levier indicatif <strong>1:20</strong>.</p>
+        <ul>
+          <li>Forex: 1 lot ≈ 100 000 unités</li>
+          <li>Métaux (ex: XAU/XAG): 1 lot ≈ 100 oz</li>
+          <li>Actions/ETF: 1 lot ≈ 100 unités</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="card" id="payout" style="margin-top:14px;">
+      <div class="inner">
+        <h2>Règles de payout (comptes funded)</h2>
+        <p>Les retraits sont disponibles pour les comptes funded sous conditions.</p>
+        <ul>
+          <li>Premier payout: <strong>après 15 jours</strong> depuis le passage funded.</li>
+          <li>Solde requis: <strong>105%</strong> du solde initial funded.</li>
+          <li>Performance requise: <strong>$150</strong> de profit sur <strong>4 jours</strong> différents (après le passage funded).</li>
+          <li>Montant maximum: la partie au-dessus du solde initial funded.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="card" id="kyc" style="margin-top:14px;">
+      <div class="inner">
+        <h2>KYC (vérification d’identité)</h2>
+        <p>Pour effectuer des retraits, une vérification d’identité peut être requise. La vérification est effectuée via un prestataire tiers.</p>
+      </div>
+    </div>
+
+    <div class="card" id="multi" style="margin-top:14px;">
+      <div class="inner">
+        <h2>Multi-comptes & données</h2>
+        <ul>
+          <li>Un utilisateur peut posséder plusieurs comptes.</li>
+          <li>Le dashboard et le broker affichent et filtrent les données (trades / ordres / solde) selon le <strong>compte actif</strong>.</li>
+          <li>Si vous changez de compte actif, les trades affichés changent en conséquence.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="footer">
+      <div>Dernière mise à jour : <strong>25/12/2025</strong></div>
+      <div><a href="/">Accueil</a> · <a href="mentions-legales.html">Mentions légales</a></div>
+    </div>
+  </div>
+</body>
+</html>
