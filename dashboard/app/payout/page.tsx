@@ -36,6 +36,9 @@ export default function PayoutPage() {
   const [processing, setProcessing] = useState(false);
   const [payoutAmount, setPayoutAmount] = useState('');
   const [eligibilityInfo, setEligibilityInfo] = useState<any>(null);
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [rib, setRib] = useState('');
 
   const toJsDate = (value: any): Date | null => {
     try {
@@ -139,7 +142,7 @@ export default function PayoutPage() {
         }
 
         if (mergedData.accountType === 'funded') {
-          await checkEligibility(mergedData);
+          await refreshEligibility(activeAccount.id);
         }
       } catch (error) {
         console.error("Error loading user data:", error);
@@ -153,62 +156,15 @@ export default function PayoutPage() {
     }
   }, [user, authLoading, activeAccount, accountLoading]);
 
-  const checkEligibility = async (data: UserData) => {
+  const refreshEligibility = async (accountId: string) => {
     try {
-      const payoutsReceived = data.payoutsReceived || 0;
-      const fundedAt = data.fundedAt?.toDate ? data.fundedAt.toDate() : (data.fundedAt ? new Date(data.fundedAt) : null);
-      if (!fundedAt) {
-        setEligibilityInfo(null);
-        return;
-      }
-      const daysSinceFunding = Math.floor((Date.now() - fundedAt.getTime()) / (1000 * 60 * 60 * 24));
-
-      const initialBalance = data.initialFundedBalance || data.initialBalance;
-      const currentBalance = data.accountBalance;
-      const requiredBalance = initialBalance * 1.05;
-
-      // Vérifier $150 sur 4 jours
-      const tradesSnapshot = await getDocs(
-        query(
-          collection(db, 'trades'),
-          where('userId', '==', user!.uid)
-        )
-      );
-
-      const profitByDay = new Map<string, number>();
-      tradesSnapshot.forEach((doc) => {
-        const trade = doc.data();
-        if (!trade) return;
-        if (!activeAccount || !trade.accountId || trade.accountId !== activeAccount.id) return;
-        if (trade.status !== 'closed') return;
-        if (!trade.closedAt) return;
-        const closedDate = toJsDate(trade.closedAt);
-        if (!closedDate) return;
-        if (closedDate.getTime() < fundedAt.getTime()) return;
-        const dateKey = closedDate.toISOString().split('T')[0];
-        const currentProfit = profitByDay.get(dateKey) || 0;
-        profitByDay.set(dateKey, currentProfit + (trade.pnl || 0));
-      });
-
-      let daysWithTarget = 0;
-      for (const [day, profit] of profitByDay.entries()) {
-        if (profit >= 150) {
-          daysWithTarget++;
-        }
-      }
-
-      setEligibilityInfo({
-        isFirstPayout: payoutsReceived === 0,
-        daysSinceFunding,
-        requiredDays: 15,
-        currentBalance,
-        requiredBalance,
-        daysWithTarget,
-        requiredDaysWithTarget: 4,
-        maxPayout: Math.max(0, currentBalance - initialBalance)
-      });
+      const functions = getFunctions();
+      const checkPayoutEligibility = httpsCallable(functions, 'checkPayoutEligibility');
+      const result: any = await checkPayoutEligibility({ accountId });
+      setEligibilityInfo(result?.data || null);
     } catch (error) {
       console.error('Error checking eligibility:', error);
+      setEligibilityInfo(null);
     }
   };
 
@@ -253,17 +209,51 @@ export default function PayoutPage() {
       return;
     }
 
+    if (!firstName.trim() || !lastName.trim() || !rib.trim()) {
+      alert('❌ Prénom, Nom et RIB requis');
+      return;
+    }
+
+    const max = Number(eligibilityInfo?.maxPayout || 0);
+    if (Number.isFinite(max) && parseFloat(payoutAmount) > max) {
+      alert(`❌ Montant trop élevé. Max: ${max.toFixed(2)} USD`);
+      return;
+    }
+
     setProcessing(true);
     try {
       const functions = getFunctions();
       const requestPayout = httpsCallable(functions, 'requestPayout');
-      const result: any = await requestPayout({ amount: parseFloat(payoutAmount), accountId: activeAccount?.id });
+      const result: any = await requestPayout({
+        amount: parseFloat(payoutAmount),
+        accountId: activeAccount?.id,
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        rib: rib.trim(),
+      });
 
       alert('✅ ' + result.data.message);
       setPayoutAmount('');
-      window.location.reload();
+      await refreshEligibility(activeAccount?.id || '');
     } catch (error: any) {
       alert('❌ ' + (error.message || 'Erreur demande payout'));
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const handleAdminForcePayoutEligible = async () => {
+    if (!user || !activeAccount) return;
+    setProcessing(true);
+    try {
+      const functions = getFunctions();
+      const adminForcePayoutEligible = httpsCallable(functions, 'adminForcePayoutEligible');
+      const result: any = await adminForcePayoutEligible({ userId: user.uid, accountId: activeAccount.id });
+      const bonus = Number(result?.data?.bonusProfit || 0);
+      alert(`✅ Eligibilité activée (+${bonus.toFixed(2)} USD)`);
+      await refreshEligibility(activeAccount.id);
+    } catch (error: any) {
+      alert('❌ ' + (error.message || 'Erreur admin payout'));
     } finally {
       setProcessing(false);
     }
@@ -490,13 +480,8 @@ export default function PayoutPage() {
   }
 
   // Si compte financé + KYC vérifié = Formulaire payout
-  const isEligible = eligibilityInfo && (
-    !eligibilityInfo.isFirstPayout || (
-      eligibilityInfo.daysSinceFunding >= eligibilityInfo.requiredDays &&
-      eligibilityInfo.currentBalance >= eligibilityInfo.requiredBalance &&
-      eligibilityInfo.daysWithTarget >= eligibilityInfo.requiredDaysWithTarget
-    )
-  );
+  const isEligible = Boolean(eligibilityInfo?.eligible);
+  const maxPayout = Number(eligibilityInfo?.maxPayout || 0);
 
   return (
     <div className="flex flex-col gap-6 p-4 sm:p-6 lg:p-8">
@@ -513,44 +498,44 @@ export default function PayoutPage() {
         <AccountSelector />
       </div>
 
-      {eligibilityInfo && eligibilityInfo.isFirstPayout && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Conditions Premier Payout</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-sm">15 jours depuis financement</span>
-              <div className="flex items-center gap-2">
-                <span className={`font-bold ${eligibilityInfo.daysSinceFunding >= 15 ? 'text-green-600' : 'text-orange-600'}`}>
-                  {eligibilityInfo.daysSinceFunding}/{eligibilityInfo.requiredDays}
-                </span>
-                {eligibilityInfo.daysSinceFunding >= 15 && <CheckCircle className="h-4 w-4 text-green-600" />}
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <span className="text-sm">Solde à 105%</span>
-              <div className="flex items-center gap-2">
-                <span className={`font-bold ${eligibilityInfo.currentBalance >= eligibilityInfo.requiredBalance ? 'text-green-600' : 'text-orange-600'}`}>
-                  {formatCurrency(eligibilityInfo.currentBalance)} / {formatCurrency(eligibilityInfo.requiredBalance)}
-                </span>
-                {eligibilityInfo.currentBalance >= eligibilityInfo.requiredBalance && <CheckCircle className="h-4 w-4 text-green-600" />}
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <span className="text-sm">$150 sur 4 jours différents</span>
-              <div className="flex items-center gap-2">
-                <span className={`font-bold ${eligibilityInfo.daysWithTarget >= 4 ? 'text-green-600' : 'text-orange-600'}`}>
-                  {eligibilityInfo.daysWithTarget}/{eligibilityInfo.requiredDaysWithTarget} jours
-                </span>
-                {eligibilityInfo.daysWithTarget >= 4 && <CheckCircle className="h-4 w-4 text-green-600" />}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between gap-3">
+            <span className="flex items-center gap-2"><AlertCircle className="h-5 w-5" /> Éligibilité</span>
+            <Button
+              variant="secondary"
+              onClick={() => activeAccount?.id && refreshEligibility(activeAccount.id)}
+              disabled={processing || !activeAccount}
+            >
+              Actualiser
+            </Button>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-sm">Statut</span>
+            <span className={`font-bold ${isEligible ? 'text-green-600' : 'text-orange-600'}`}>{isEligible ? 'Éligible' : 'Non éligible'}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-sm">Raison</span>
+            <span className="text-sm text-muted-foreground text-right">{String(eligibilityInfo?.reason || '—')}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-sm">Max disponible</span>
+            <span className="font-bold">{formatCurrency(Number.isFinite(maxPayout) ? maxPayout : 0)}</span>
+          </div>
+          {userData.role === 'admin' && userData.accountType === 'funded' && (
+            <Button
+              onClick={handleAdminForcePayoutEligible}
+              disabled={processing || !activeAccount}
+              variant="secondary"
+              className="w-full"
+            >
+              Forcer éligibilité (+10%) (admin)
+            </Button>
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
@@ -568,6 +553,40 @@ export default function PayoutPage() {
             </div>
           ) : (
             <>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-sm font-medium">Prénom</label>
+                  <input
+                    type="text"
+                    value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
+                    placeholder="Prénom"
+                    className="w-full mt-1 px-3 py-2 border border-input rounded-lg bg-background"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Nom</label>
+                  <input
+                    type="text"
+                    value={lastName}
+                    onChange={(e) => setLastName(e.target.value)}
+                    placeholder="Nom"
+                    className="w-full mt-1 px-3 py-2 border border-input rounded-lg bg-background"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium">RIB / IBAN</label>
+                <input
+                  type="text"
+                  value={rib}
+                  onChange={(e) => setRib(e.target.value)}
+                  placeholder="FR76..."
+                  className="w-full mt-1 px-3 py-2 border border-input rounded-lg bg-background"
+                />
+              </div>
+
               <div>
                 <label className="text-sm font-medium">Montant (USD)</label>
                 <input
@@ -575,11 +594,11 @@ export default function PayoutPage() {
                   value={payoutAmount}
                   onChange={(e) => setPayoutAmount(e.target.value)}
                   placeholder="0.00"
-                  max={eligibilityInfo?.maxPayout || 0}
-                  className="w-full mt-1 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                  max={maxPayout || 0}
+                  className="w-full mt-1 px-3 py-2 border border-input rounded-lg bg-background"
                 />
                 <p className="text-xs text-muted-foreground mt-1">
-                  Maximum disponible: {formatCurrency(eligibilityInfo?.maxPayout || 0)}
+                  Maximum disponible: {formatCurrency(Number.isFinite(maxPayout) ? maxPayout : 0)}
                 </p>
               </div>
 
