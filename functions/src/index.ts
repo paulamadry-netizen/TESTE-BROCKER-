@@ -224,9 +224,367 @@ export const brokerLogin = onCall(
   }
 );
 
-const RENDER_DASHBOARD_URL = 'https://teste-brocker-dash.onrender.com';
-
 const fetchFn = (globalThis as any).fetch as (input: any, init?: any) => Promise<any>;
+
+type BrokerHistoryResolution = 'MINUTE' | 'MINUTE_5' | 'MINUTE_15' | 'HOUR' | 'HOUR_4' | 'DAY';
+
+type Candle = {
+  time: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+};
+
+type PackedCandles = {
+  t: number[];
+  o: number[];
+  h: number[];
+  l: number[];
+  c: number[];
+  v: number[];
+};
+
+const historyMemoryCache = new Map<string, { fetchedAt: number; candles: Candle[] }>();
+let yahooLastFetchAt = 0;
+
+function parseForexEpic(epic: string): { base: string; quote: string } | null {
+  const m = String(epic || '').match(/^CS\.D\.([A-Z]{6})\.CFD\.IP$/);
+  if (!m) return null;
+  const pair = m[1];
+  return { base: pair.slice(0, 3), quote: pair.slice(3, 6) };
+}
+
+function yahooSymbolForEpic(epic: string): string | null {
+  const parsed = parseForexEpic(epic);
+  if (parsed) return `${parsed.base}${parsed.quote}=X`;
+
+  switch (String(epic || '')) {
+    case 'CS.D.GD.CFD.IP':
+      return 'XAUUSD=X';
+    case 'CS.D.SI.CFD.IP':
+      return 'XAGUSD=X';
+    case 'TM.D.COPPER.CFD.IP':
+      return 'HG=F';
+    case 'CC.D.CL.UMA.IP':
+      return 'CL=F';
+    case 'CC.D.COFFEE.UMA.IP':
+      return 'KC=F';
+    case 'TM.D.ZINC.CFD.IP':
+      return null;
+
+    case 'IX.D.CAC.IFD.IP':
+      return '^FCHI';
+    case 'IX.D.DAX.IFD.IP':
+      return '^GDAXI';
+    case 'IX.D.DOW.IFD.IP':
+      return '^DJI';
+    case 'IX.D.NASDAQ.IFD.IP':
+      return '^IXIC';
+    case 'IX.D.SPTRD.IFD.IP':
+      return '^GSPC';
+    case 'IX.D.FTSE.IFD.IP':
+      return '^FTSE';
+    case 'IX.D.ASX.IFD.IP':
+      return '^AXJO';
+    case 'IX.D.STX.IFD.IP':
+      return '^STOXX50E';
+    case 'IX.D.IBEX.IFD.IP':
+      return '^IBEX';
+    case 'IX.D.NIKKEI.IFD.IP':
+      return '^N225';
+    case 'IX.D.SMI.IFD.IP':
+      return '^SSMI';
+    case 'IX.D.HSI.IFD.IP':
+      return '^HSI';
+    default:
+      return null;
+  }
+}
+
+function clampInt(value: unknown, def: number, min: number, max: number): number {
+  const n = Number.parseInt(String(value ?? ''), 10);
+  if (!Number.isFinite(n)) return def;
+  return Math.max(min, Math.min(max, n));
+}
+
+function ttlMsForResolution(resolution: BrokerHistoryResolution): number {
+  switch (resolution) {
+    case 'MINUTE':
+      return 5 * 60 * 1000;
+    case 'MINUTE_5':
+      return 10 * 60 * 1000;
+    case 'MINUTE_15':
+      return 20 * 60 * 1000;
+    case 'HOUR':
+    case 'HOUR_4':
+      return 60 * 60 * 1000;
+    case 'DAY':
+      return 6 * 60 * 60 * 1000;
+    default:
+      return 60 * 60 * 1000;
+  }
+}
+
+function yahooIntervalFor(resolution: BrokerHistoryResolution): string {
+  switch (resolution) {
+    case 'MINUTE':
+      return '1m';
+    case 'MINUTE_5':
+      return '5m';
+    case 'MINUTE_15':
+      return '15m';
+    case 'HOUR':
+    case 'HOUR_4':
+      return '60m';
+    case 'DAY':
+      return '1d';
+    default:
+      return '1d';
+  }
+}
+
+function yahooRangeFor(resolution: BrokerHistoryResolution): string {
+  switch (resolution) {
+    case 'MINUTE':
+      return '7d';
+    case 'MINUTE_5':
+      return '30d';
+    case 'MINUTE_15':
+      return '60d';
+    case 'HOUR':
+    case 'HOUR_4':
+      return '1y';
+    case 'DAY':
+      return '1y';
+    default:
+      return '1y';
+  }
+}
+
+function aggregateCandles(candles: Candle[], bucketSeconds: number): Candle[] {
+  if (!Array.isArray(candles) || candles.length === 0) return [];
+  const sorted = candles.slice().sort((a, b) => a.time - b.time);
+  const out: Candle[] = [];
+  let cur: Candle | null = null;
+  for (const c of sorted) {
+    const t = Number(c.time);
+    if (!Number.isFinite(t)) continue;
+    const bucket = Math.floor(t / bucketSeconds) * bucketSeconds;
+    if (!cur || cur.time !== bucket) {
+      if (cur) out.push(cur);
+      cur = { time: bucket, open: c.open, high: c.high, low: c.low, close: c.close, volume: c.volume || 0 };
+      continue;
+    }
+    cur.high = Math.max(cur.high, c.high);
+    cur.low = Math.min(cur.low, c.low);
+    cur.close = c.close;
+    cur.volume = (cur.volume || 0) + (c.volume || 0);
+  }
+  if (cur) out.push(cur);
+  return out;
+}
+
+function packCandles(candles: Candle[]): PackedCandles {
+  const t: number[] = [];
+  const o: number[] = [];
+  const h: number[] = [];
+  const l: number[] = [];
+  const c: number[] = [];
+  const v: number[] = [];
+  for (const x of candles) {
+    t.push(x.time);
+    o.push(x.open);
+    h.push(x.high);
+    l.push(x.low);
+    c.push(x.close);
+    v.push(x.volume || 0);
+  }
+  return { t, o, h, l, c, v };
+}
+
+function unpackCandles(packed: any): Candle[] {
+  const t: number[] = Array.isArray(packed?.t) ? packed.t : [];
+  const o: number[] = Array.isArray(packed?.o) ? packed.o : [];
+  const h: number[] = Array.isArray(packed?.h) ? packed.h : [];
+  const l: number[] = Array.isArray(packed?.l) ? packed.l : [];
+  const c: number[] = Array.isArray(packed?.c) ? packed.c : [];
+  const v: number[] = Array.isArray(packed?.v) ? packed.v : [];
+
+  const n = Math.min(t.length, o.length, h.length, l.length, c.length);
+  if (!n) return [];
+
+  const out: Candle[] = [];
+  for (let i = 0; i < n; i++) {
+    const time = Number(t[i]);
+    const open = Number(o[i]);
+    const high = Number(h[i]);
+    const low = Number(l[i]);
+    const close = Number(c[i]);
+    const volume = Number(v[i] ?? 0);
+    if (!Number.isFinite(time) || !Number.isFinite(open) || !Number.isFinite(high) || !Number.isFinite(low) || !Number.isFinite(close)) continue;
+    out.push({ time, open, high, low, close, volume: Number.isFinite(volume) ? volume : 0 });
+  }
+  return out;
+}
+
+export const marketHistoryYahoo = onRequest(
+  {
+    cors: true,
+    invoker: 'public',
+  },
+  async (req, res) => {
+    res.set('Access-Control-Allow-Origin', '*');
+    res.set('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.set('Access-Control-Allow-Headers', 'Content-Type, Accept');
+    res.set('Cache-Control', 'no-store');
+
+    if (req.method === 'OPTIONS') {
+      res.status(204).send('');
+      return;
+    }
+    if (req.method !== 'GET') {
+      res.status(405).json({ error: 'Method not allowed' });
+      return;
+    }
+
+    const epic = String(req.query?.epic || '').trim();
+    const resolution = String(req.query?.resolution || 'HOUR').trim().toUpperCase() as BrokerHistoryResolution;
+    const max = clampInt(req.query?.max, 500, 50, 10000);
+
+    if (!epic) {
+      res.status(400).json({ error: 'Missing epic' });
+      return;
+    }
+    if (!['MINUTE', 'MINUTE_5', 'MINUTE_15', 'HOUR', 'HOUR_4', 'DAY'].includes(resolution)) {
+      res.status(400).json({ error: 'Invalid resolution' });
+      return;
+    }
+
+    const symbol = yahooSymbolForEpic(epic);
+    if (!symbol) {
+      res.status(200).json({ epic, resolution, source: 'yahoo', error: 'SYMBOL_UNSUPPORTED', candles: [] });
+      return;
+    }
+
+    const range = yahooRangeFor(resolution);
+    const interval = yahooIntervalFor(resolution);
+    const cacheKey = `${epic}__${resolution}__${range}__${interval}`;
+    const ttlMs = ttlMsForResolution(resolution);
+
+    const mem = historyMemoryCache.get(cacheKey);
+    if (mem && mem.candles.length > 0 && (Date.now() - mem.fetchedAt) < ttlMs) {
+      const sliced = mem.candles.length > max ? mem.candles.slice(-max) : mem.candles;
+      res.status(200).json({ epic, resolution, source: 'yahoo_cache', symbol, range, interval, count: sliced.length, candles: sliced });
+      return;
+    }
+
+    try {
+      const docRef = admin.firestore().collection('market_history_cache').doc(cacheKey);
+      const snap = await docRef.get();
+      if (snap.exists) {
+        const d = snap.data() as any;
+        const fetchedAt = Number(d?.fetchedAt || 0);
+        const candles = Array.isArray(d?.candles)
+          ? (d.candles as Candle[])
+          : unpackCandles(d?.packedCandles);
+        if (candles.length > 0 && fetchedAt && (Date.now() - fetchedAt) < ttlMs) {
+          historyMemoryCache.set(cacheKey, { fetchedAt, candles });
+          const sliced = candles.length > max ? candles.slice(-max) : candles;
+          res.status(200).json({ epic, resolution, source: 'yahoo_firestore_cache', symbol, range, interval, count: sliced.length, candles: sliced });
+          return;
+        }
+      }
+    } catch (e) {
+      // ignore cache read errors
+    }
+
+    const now = Date.now();
+    if (now - yahooLastFetchAt < 400) {
+      await new Promise((r) => setTimeout(r, 400 - (now - yahooLastFetchAt)));
+    }
+    yahooLastFetchAt = Date.now();
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+
+    try {
+      const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=${encodeURIComponent(range)}&interval=${encodeURIComponent(interval)}&includePrePost=false&events=div%2Csplits`;
+      const resp = await fetchFn(url, {
+        method: 'GET',
+        redirect: 'follow',
+        signal: controller.signal,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (compatible; AMA-FIRM/1.0)',
+          'Accept': 'application/json,text/plain,*/*',
+        },
+      });
+
+      if (!resp || !resp.ok) {
+        res.status(200).json({ epic, resolution, source: 'yahoo', symbol, range, interval, error: `HTTP_${resp?.status || 'ERR'}`, candles: [] });
+        return;
+      }
+
+      const json = await resp.json();
+      const result = json?.chart?.result?.[0];
+      const ts: number[] = Array.isArray(result?.timestamp) ? result.timestamp : [];
+      const quote = result?.indicators?.quote?.[0] || {};
+      const opens: Array<number | null> = Array.isArray(quote?.open) ? quote.open : [];
+      const highs: Array<number | null> = Array.isArray(quote?.high) ? quote.high : [];
+      const lows: Array<number | null> = Array.isArray(quote?.low) ? quote.low : [];
+      const closes: Array<number | null> = Array.isArray(quote?.close) ? quote.close : [];
+      const vols: Array<number | null> = Array.isArray(quote?.volume) ? quote.volume : [];
+
+      const candlesRaw: Candle[] = [];
+      for (let i = 0; i < ts.length; i++) {
+        const time = Number(ts[i]);
+        const o = Number(opens[i]);
+        const h = Number(highs[i]);
+        const l = Number(lows[i]);
+        const c = Number(closes[i]);
+        const v = Number(vols[i] ?? 0);
+        if (!Number.isFinite(time) || !Number.isFinite(o) || !Number.isFinite(h) || !Number.isFinite(l) || !Number.isFinite(c)) continue;
+        candlesRaw.push({ time, open: o, high: h, low: l, close: c, volume: Number.isFinite(v) ? v : 0 });
+      }
+
+      let candles = candlesRaw;
+      if (resolution === 'HOUR_4') {
+        candles = aggregateCandles(candlesRaw, 4 * 60 * 60);
+      }
+
+      candles = candles.slice().sort((a, b) => a.time - b.time);
+      historyMemoryCache.set(cacheKey, { fetchedAt: Date.now(), candles });
+
+      try {
+        const packedCandles = packCandles(candles);
+        await admin.firestore().collection('market_history_cache').doc(cacheKey).set({
+          epic,
+          resolution,
+          symbol,
+          range,
+          interval,
+          source: 'yahoo',
+          packedCandles,
+          fetchedAt: Date.now(),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      } catch (e) {
+        // ignore cache write errors
+      }
+
+      const sliced = candles.length > max ? candles.slice(-max) : candles;
+      res.status(200).json({ epic, resolution, source: 'yahoo', symbol, range, interval, count: sliced.length, candles: sliced });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      res.status(200).json({ epic, resolution, source: 'yahoo', symbol, range, interval, error: message, candles: [] });
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+);
+
+const RENDER_DASHBOARD_URL = 'https://teste-brocker-dash.onrender.com';
 
 function looksLikeRenderWakingUp(html: string): boolean {
   const hay = String(html || '').toLowerCase();

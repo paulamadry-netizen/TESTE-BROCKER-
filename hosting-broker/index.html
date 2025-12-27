@@ -996,8 +996,9 @@ const marginRequirement=(s,lots,p)=>{const l=Number(lots);if(!l)return 0;if(isET
 // CHART SYSTEM - Lightweight Charts with IG Markets Data
 // ============================================
 const IG_API_BASE='https://ig-price-engine-44407447466.europe-west1.run.app';
+const YAHOO_HISTORY_ENDPOINT='https://us-central1-teste-brocker.cloudfunctions.net/marketHistoryYahoo';
 const TF_TO_RESOLUTION={'1':'MINUTE','5':'MINUTE_5','15':'MINUTE_15','60':'HOUR','240':'HOUR_4','1D':'DAY'};
-const TF_TO_MAX={'1':500,'5':500,'15':500,'60':500,'240':500,'1D':365};
+const TF_TO_MAX={'1':10000,'5':10000,'15':10000,'60':8760,'240':2190,'1D':365};
 let chartPriceLines=[],dragState=null,chartContainer=null;
 let indicatorsVisible=false,indicatorSeries={},indicatorState={};
 let drawMode=null,drawStep=0,drawAnchor1=null,drawAnchor2=null,activeDrawingId=null,drawings=[];
@@ -1505,20 +1506,41 @@ const recalcIndicators=()=>{
 const loadHistoricalData=async(epic,timeframe)=>{
   const resolution=TF_TO_RESOLUTION[timeframe]||'HOUR';
   const max=TF_TO_MAX[timeframe]||500;
-  const url=`${IG_API_BASE}/api/history/${encodeURIComponent(epic)}?resolution=${resolution}&max=${max}`;
+  const yahooUrl=`${YAHOO_HISTORY_ENDPOINT}?epic=${encodeURIComponent(epic)}&resolution=${encodeURIComponent(resolution)}&max=${encodeURIComponent(max)}`;
+  const igUrl=`${IG_API_BASE}/api/history/${encodeURIComponent(epic)}?resolution=${resolution}&max=${max}`;
   debugLog(`Loading history: ${epic} (${resolution}, max=${max})`);
   try{
-    const resp=await fetch(url);
-    if(!resp.ok){debugLog(`HTTP ${resp.status}`);return null}
+    // 1) Yahoo (best-effort + cached)
+    try{
+      const y=await fetch(yahooUrl,{cache:'no-store'});
+      if(y && y.ok){
+        const yd=await y.json();
+        const yraw=(yd&&yd.candles)?yd.candles:[];
+        const yn=normalizeCandles(yraw);
+        if(yn && yn.length>0){
+          debugLog(`Yahoo candles: ${yn.length} (${String(yd.source||'yahoo')})`);
+          return yn;
+        }
+        if(yd && yd.error){
+          debugLog(`Yahoo history error: ${String(yd.error)}`);
+        }
+      }else{
+        debugLog(`Yahoo HTTP ${(y&&y.status)||'ERR'}`);
+      }
+    }catch(e){debugLog(`Yahoo history error: ${e.message||e}`)}
+
+    // 2) Fallback to IG engine
+    const resp=await fetch(igUrl);
+    if(!resp.ok){debugLog(`IG HTTP ${resp.status}`);return null}
     const data=await resp.json();
     if(data && data.source==='mock'){
       debugLog(`History rejected (mock source): ${epic}`);
-      showToast('Historique IG indisponible (mode mock)','error',4000);
+      showToast('Historique indisponible','error',4000);
       return null;
     }
     if(data && data.source==='ig_allowance'){
       debugLog(`History blocked (allowance): ${epic}`);
-      showToast('IG: limite historique atteinte (réessaie plus tard)','error',5000);
+      showToast('Historique: limite atteinte (réessaie plus tard)','error',5000);
       return null;
     }
     if(data && data.error && (!data.candles || !Array.isArray(data.candles))){
@@ -1528,7 +1550,7 @@ const loadHistoricalData=async(epic,timeframe)=>{
     const raw=(data&&data.candles)?data.candles:(Array.isArray(data)?data:[]);
     const normalized=normalizeCandles(raw);
     if(!normalized||normalized.length===0){debugLog('No candles');return null}
-    debugLog(`Got ${normalized.length} candles`);
+    debugLog(`IG candles: ${normalized.length}`);
     return normalized;
   }catch(e){debugLog(`History error: ${e.message}`);return null}
 };
