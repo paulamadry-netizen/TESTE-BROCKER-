@@ -2682,16 +2682,81 @@ export const approvePayout = onCall(async (request) => {
           throw new HttpsError('not-found', 'Compte introuvable');
         }
 
+        const accountData = accountSnap.data() as any;
+        const nowMs = Date.now();
+
+        const accType = typeof accountData?.accountType === 'string' ? accountData.accountType.toLowerCase() : '';
+        const isFunded = Boolean(accountData?.isFunded) || accType === 'funded';
+
+        const fundedAtRaw = accountData?.fundedAt;
+        const fundedAtDate = toJsDate(fundedAtRaw);
+        const fundedAtMs = fundedAtDate ? fundedAtDate.getTime() : null;
+
+        const baselineBalance = Number(accountData?.initialFundedBalance ?? accountData?.initialBalance ?? 0);
+        const baseline = Number.isFinite(baselineBalance) && baselineBalance > 0 ? baselineBalance : 0;
+
+        const rawShare = Number(accountData?.profitSharePercent ?? 80);
+        const profitSharePercent = Number.isFinite(rawShare) && rawShare > 0 && rawShare <= 100 ? rawShare : 80;
+
+        const netAmount = (Number.isFinite(payoutAmount) && payoutAmount > 0)
+          ? (payoutAmount * profitSharePercent) / 100
+          : 0;
+
+        const prevNetTotal = Number(accountData?.totalNetPayoutAmount ?? 0);
+        const prevNetSinceScale = Number(accountData?.netPayoutSinceLastCapitalScale ?? 0);
+        const nextNetTotal = prevNetTotal + netAmount;
+        const nextNetSinceScale = prevNetSinceScale + netAmount;
+
+        const lastCapitalScaleAtDate = toJsDate(accountData?.lastCapitalScaleAt);
+        const lastCapitalScaleBaseMs = (lastCapitalScaleAtDate ? lastCapitalScaleAtDate.getTime() : (fundedAtMs ?? null));
+
+        const months6Ms = 1000 * 60 * 60 * 24 * 30 * 6;
+        const eligibleSixMonths = isFunded && fundedAtMs !== null && (nowMs - fundedAtMs) >= months6Ms;
+        const eligibleCapitalWindow = isFunded && lastCapitalScaleBaseMs !== null && (nowMs - lastCapitalScaleBaseMs) >= months6Ms;
+
+        const tenPercentThreshold = baseline > 0 ? baseline * 0.10 : 0;
+        const canEvaluate = baseline > 0 && tenPercentThreshold > 0;
+
         const updates: any = {
           payoutsReceived: admin.firestore.FieldValue.increment(1),
           lastPayoutAt: admin.firestore.FieldValue.serverTimestamp(),
           totalPayoutAmount: admin.firestore.FieldValue.increment(Number.isFinite(payoutAmount) ? payoutAmount : 0),
+          totalNetPayoutAmount: admin.firestore.FieldValue.increment(Number.isFinite(netAmount) ? netAmount : 0),
+          netPayoutSinceLastCapitalScale: admin.firestore.FieldValue.increment(Number.isFinite(netAmount) ? netAmount : 0),
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         };
 
+        let accountBalanceIncrement = 0;
+
         // Compat: si ancien payout (avant réservation), on déduit ici.
         if (!payoutReserved && Number.isFinite(payoutAmount) && payoutAmount > 0) {
-          updates.accountBalance = admin.firestore.FieldValue.increment(-payoutAmount);
+          accountBalanceIncrement += -payoutAmount;
+        }
+
+        // Scaling automatique (uniquement funded / instant funded)
+        if (canEvaluate) {
+          // 1) Profit split -> 90% après 6 mois + 10% du solde (net payouts)
+          if (eligibleSixMonths && profitSharePercent < 90 && nextNetTotal >= tenPercentThreshold) {
+            updates.profitSharePercent = 90;
+            updates.profitShareUpgradedAt = admin.firestore.FieldValue.serverTimestamp();
+          }
+
+          // 2) Capital scaling +25% tous les 6 mois si 10% retiré en payouts (net)
+          if (eligibleCapitalWindow && nextNetSinceScale >= tenPercentThreshold) {
+            const scaleIncrease = baseline * 0.25;
+            if (Number.isFinite(scaleIncrease) && scaleIncrease > 0) {
+              accountBalanceIncrement += scaleIncrease;
+              updates.initialBalance = admin.firestore.FieldValue.increment(scaleIncrease);
+              updates.initialFundedBalance = admin.firestore.FieldValue.increment(scaleIncrease);
+              updates.lastCapitalScaleAt = admin.firestore.FieldValue.serverTimestamp();
+              updates.capitalScaleCount = admin.firestore.FieldValue.increment(1);
+              updates.netPayoutSinceLastCapitalScale = 0;
+            }
+          }
+        }
+
+        if (Number.isFinite(accountBalanceIncrement) && accountBalanceIncrement !== 0) {
+          updates.accountBalance = admin.firestore.FieldValue.increment(accountBalanceIncrement);
         }
 
         transaction.update(accountRef, updates);

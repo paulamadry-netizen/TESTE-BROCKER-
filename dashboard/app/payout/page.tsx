@@ -483,7 +483,11 @@ export default function PayoutPage() {
   const isEligible = Boolean(eligibilityInfo?.eligible);
   const maxPayout = Number(eligibilityInfo?.maxPayout || 0);
   const amountNum = Number(payoutAmount || 0);
-  const estimatedReceived = Number.isFinite(amountNum) ? amountNum * 0.8 : 0;
+  const profitSharePercentRaw = Number((activeAccount as any)?.profitSharePercent ?? 80);
+  const profitSharePercent = Number.isFinite(profitSharePercentRaw) && profitSharePercentRaw > 0 && profitSharePercentRaw <= 100
+    ? profitSharePercentRaw
+    : 80;
+  const estimatedReceived = Number.isFinite(amountNum) ? (amountNum * profitSharePercent) / 100 : 0;
 
   return (
     <div className="flex flex-col gap-6 p-4 sm:p-6 lg:p-8">
@@ -560,7 +564,7 @@ export default function PayoutPage() {
                   Attention: vérifiez soigneusement votre <strong>RIB / IBAN</strong>. En cas d'erreur, nous ne pourrons pas récupérer les fonds.
                 </p>
                 <p className="text-sm text-foreground mt-2">
-                  Règle de partage: vous recevrez <strong>80%</strong> du montant demandé (20% de split).
+                  Règle de partage: vous recevrez <strong>{profitSharePercent}%</strong> du montant demandé ({Math.max(0, 100 - profitSharePercent)}% de split).
                 </p>
               </div>
 
@@ -612,7 +616,7 @@ export default function PayoutPage() {
                   Maximum disponible: {formatCurrency(Number.isFinite(maxPayout) ? maxPayout : 0)}
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Montant estimé reçu (80%): {formatCurrency(Number.isFinite(estimatedReceived) ? estimatedReceived : 0)}
+                  Montant estimé reçu ({profitSharePercent}%): {formatCurrency(Number.isFinite(estimatedReceived) ? estimatedReceived : 0)}
                 </p>
               </div>
 

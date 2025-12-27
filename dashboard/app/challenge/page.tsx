@@ -12,11 +12,18 @@ import { Button } from "@/components/ui/button";
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { collection, getDocs, query, where } from "firebase/firestore";
 import { db } from "@/lib/firebase/config";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 export default function ChallengePage() {
   const { user, loading: authLoading } = useAuth();
   const { t } = useLanguage();
-  const { activeAccount, loading: accountLoading } = useAccount();
+  const { activeAccount, activeAccountId, accounts, setActiveAccountId, loading: accountLoading } = useAccount();
   const [processing, setProcessing] = useState(false);
   const [statsLoading, setStatsLoading] = useState(false);
   const [stats, setStats] = useState<{
@@ -43,11 +50,29 @@ export default function ChallengePage() {
     }
   };
 
+  const isAccountFunded = (acc: any): boolean => {
+    return Boolean(acc?.isFunded) || String(acc?.accountType || "").toLowerCase() === "funded";
+  };
+
+  const challengeAccounts = (accounts || []).filter((a) => !isAccountFunded(a));
+  const activeIsChallenge = activeAccount ? !isAccountFunded(activeAccount) : false;
+
+  useEffect(() => {
+    if (accountLoading) return;
+    if (!user) return;
+    if (challengeAccounts.length === 0) return;
+
+    const activeIsInList = Boolean(activeAccountId && challengeAccounts.some((a) => a.id === activeAccountId));
+    if (!activeIsInList) {
+      setActiveAccountId(challengeAccounts[0].id);
+    }
+  }, [accountLoading, user, challengeAccounts.length, activeAccountId]);
+
   useEffect(() => {
     let cancelled = false;
 
     async function loadStats() {
-      if (!user || !activeAccount) {
+      if (!user || !activeAccount || isAccountFunded(activeAccount)) {
         setStats(null);
         setStatsLoading(false);
         return;
@@ -149,7 +174,7 @@ export default function ChallengePage() {
     );
   }
 
-  if (!user || !activeAccount) {
+  if (!user) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <p className="text-muted-foreground">{t("common.noData")}</p>
@@ -157,7 +182,41 @@ export default function ChallengePage() {
     );
   }
 
-  const isFunded = Boolean((activeAccount as any)?.isFunded) || String((activeAccount as any)?.accountType || '').toLowerCase() === 'funded';
+  if (challengeAccounts.length === 0) {
+    return (
+      <div className="flex flex-col gap-6 p-4 sm:p-6 lg:p-8">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">{t("challenge.title")}</h1>
+          <p className="text-muted-foreground">{t("challenge.subtitle")}</p>
+        </div>
+        <Card>
+          <CardContent className="p-6">
+            <p className="text-muted-foreground">
+              Aucun compte challenge disponible.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (!activeAccount || !activeIsChallenge) {
+    return (
+      <div className="flex flex-col gap-6 p-4 sm:p-6 lg:p-8">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">{t("challenge.title")}</h1>
+          <p className="text-muted-foreground">{t("challenge.subtitle")}</p>
+        </div>
+        <Card>
+          <CardContent className="p-6">
+            <p className="text-muted-foreground">Chargement du compte challenge...</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  const isFunded = false;
 
   const initialBalance = activeAccount.initialBalance || activeAccount.accountBalance;
   const currentBalance = activeAccount.accountBalance;
@@ -248,6 +307,26 @@ export default function ChallengePage() {
         <p className="text-muted-foreground">
           {t("challenge.subtitle")}
         </p>
+      </div>
+
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="text-sm text-muted-foreground">
+          Compte challenge
+        </div>
+        <div className="w-full sm:w-[320px]">
+          <Select value={activeAccountId || undefined} onValueChange={setActiveAccountId}>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Sélectionner un compte challenge" />
+            </SelectTrigger>
+            <SelectContent>
+              {challengeAccounts.map((acc) => (
+                <SelectItem key={acc.id} value={acc.id}>
+                  {acc.accountName}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       {/* Overview Card */}
