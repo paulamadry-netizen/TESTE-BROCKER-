@@ -482,6 +482,8 @@ export default function PayoutPage() {
   // Si compte financé + KYC vérifié = Formulaire payout
   const isEligible = Boolean(eligibilityInfo?.eligible);
   const maxPayout = Number(eligibilityInfo?.maxPayout || 0);
+  const amountNum = Number(payoutAmount || 0);
+  const estimatedReceived = Number.isFinite(amountNum) ? amountNum * 0.8 : 0;
 
   return (
     <div className="flex flex-col gap-6 p-4 sm:p-6 lg:p-8">
@@ -553,6 +555,15 @@ export default function PayoutPage() {
             </div>
           ) : (
             <>
+              <div className="rounded-lg border border-border bg-muted p-3">
+                <p className="text-sm text-foreground">
+                  Attention: vérifiez soigneusement votre <strong>RIB / IBAN</strong>. En cas d'erreur, nous ne pourrons pas récupérer les fonds.
+                </p>
+                <p className="text-sm text-foreground mt-2">
+                  Règle de partage: vous recevrez <strong>80%</strong> du montant demandé (20% de split).
+                </p>
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="text-sm font-medium">Prénom</label>
@@ -599,6 +610,9 @@ export default function PayoutPage() {
                 />
                 <p className="text-xs text-muted-foreground mt-1">
                   Maximum disponible: {formatCurrency(Number.isFinite(maxPayout) ? maxPayout : 0)}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Montant estimé reçu (80%): {formatCurrency(Number.isFinite(estimatedReceived) ? estimatedReceived : 0)}
                 </p>
               </div>
 
