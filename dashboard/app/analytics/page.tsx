@@ -2,12 +2,14 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
+import { useAccount } from '@/context/AccountContext';
 import { db } from '@/lib/firebase/config';
-import { collection, query, where, orderBy, getDocs, updateDoc, doc } from 'firebase/firestore';
+import { collection, query, where, getDocs, updateDoc, doc } from 'firebase/firestore';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CalendarDays, ChevronLeft, ChevronRight, FileText, Save } from "lucide-react";
+import { AccountSelector } from "@/components/dashboard/AccountSelector";
 
 interface Trade {
   id: string;
@@ -24,6 +26,7 @@ interface Trade {
 
 export default function AnalyticsPage() {
   const { user } = useAuth();
+  const { activeAccount, loading: accountLoading } = useAccount();
   const [trades, setTrades] = useState<Trade[]>([]);
   const [selectedTrade, setSelectedTrade] = useState<Trade | null>(null);
   const [note, setNote] = useState('');
@@ -39,9 +42,9 @@ export default function AnalyticsPage() {
   const savedAnchorRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || !activeAccount || accountLoading) return;
     loadTrades();
-  }, [user]);
+  }, [user, activeAccount, accountLoading]);
 
   const toDate = (v: any): Date | null => {
     if (!v) return null;
@@ -58,21 +61,23 @@ export default function AnalyticsPage() {
   };
 
   const loadTrades = async () => {
-    if (!user) return;
+    if (!user || !activeAccount) return;
 
     try {
-      const q = query(
-        collection(db, 'trades'),
-        where('userId', '==', user.uid),
-        where('status', '==', 'closed'),
-        orderBy('closedAt', 'desc')
-      );
-
+      // Query by userId only (avoid composite index), then filter by account + closed status in JS
+      const q = query(collection(db, 'trades'), where('userId', '==', user.uid));
       const snapshot = await getDocs(q);
-      const tradesData = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      } as Trade));
+
+      const tradesData = snapshot.docs
+        .map((d) => ({ id: d.id, ...(d.data() as any) } as Trade & { accountId?: string; status?: string }))
+        .filter((t) => String((t as any).accountId || '') === activeAccount.id)
+        .filter((t) => String((t as any).status || '').toLowerCase() === 'closed');
+
+      tradesData.sort((a, b) => {
+        const ad = toDate((a as any).closedAt || (a as any).openedAt)?.getTime() || 0;
+        const bd = toDate((b as any).closedAt || (b as any).openedAt)?.getTime() || 0;
+        return bd - ad;
+      });
 
       setTrades(tradesData);
     } catch (error) {
@@ -166,7 +171,7 @@ export default function AnalyticsPage() {
     });
   }, [monthCursor, tradesByDay]);
 
-  if (loading) {
+  if (loading || accountLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-muted-foreground">Chargement...</div>
@@ -182,9 +187,12 @@ export default function AnalyticsPage() {
             <h1 className="text-3xl font-bold tracking-tight">Analytique</h1>
             <p className="text-muted-foreground">Calendrier + journal de trading + analyses</p>
           </div>
-          <div className="flex items-center gap-2 text-muted-foreground">
+          <div className="flex items-center gap-4">
+            <AccountSelector />
+            <div className="flex items-center gap-2 text-muted-foreground">
             <CalendarDays className="h-5 w-5" />
             <span className="text-sm">{monthLabel}</span>
+            </div>
           </div>
         </div>
 
