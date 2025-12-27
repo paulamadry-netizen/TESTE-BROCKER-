@@ -13,6 +13,7 @@
   import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
   import { getAuth, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
   import { getFirestore, collection, addDoc, updateDoc, doc, getDoc, getDocs, query, where, orderBy } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+  import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-functions.js';
 
   const firebaseConfig = {
     apiKey: "AIzaSyBCAeaaJMMw3_Egf-6-4i63IhAUy4EyzBc",
@@ -28,13 +29,27 @@
   const auth = getAuth(app);
   const db = getFirestore(app);
 
+  const functions = getFunctions(app, 'us-central1');
+  const executeTradeFn = httpsCallable(functions, 'executeTrade');
+  const closeTradeFn = httpsCallable(functions, 'closeTrade');
+  const updateTradeTargetsFn = httpsCallable(functions, 'updateTradeTargets');
+  const placeOrderFn = httpsCallable(functions, 'placeOrder');
+  const cancelOrderFn = httpsCallable(functions, 'cancelOrder');
+
   // Make available globally
   window.firebaseAuth = auth;
   window.firebaseDb = db;
   window.firebaseUser = null;
   window.userData = null;
+  window.activeAccountId = null;
+  window.activeAccountData = null;
   window.firestoreDoc = doc;
   window.firestoreUpdateDoc = updateDoc;
+  window.__executeTradeFn = executeTradeFn;
+  window.__closeTradeFn = closeTradeFn;
+  window.__updateTradeTargetsFn = updateTradeTargetsFn;
+  window.__placeOrderFn = placeOrderFn;
+  window.__cancelOrderFn = cancelOrderFn;
 
   // Load user data from Firestore
   window.loadUserData = async (userId) => {
@@ -46,14 +61,49 @@
         window.userData = userDocSnap.data();
         console.log('✅ User data loaded:', window.userData);
 
+        // Resolve active account (priority: Firestore user.activeAccountId, fallback: localStorage)
+        let resolvedActiveAccountId = window.userData && window.userData.activeAccountId ? window.userData.activeAccountId : null;
+        if (!resolvedActiveAccountId) {
+          try {
+            const brokerUserStr = localStorage.getItem('brokerUser');
+            const brokerUser = brokerUserStr ? JSON.parse(brokerUserStr) : null;
+            resolvedActiveAccountId = brokerUser && brokerUser.activeAccountId ? brokerUser.activeAccountId : null;
+          } catch (e) {
+          }
+        }
+
+        window.activeAccountId = resolvedActiveAccountId;
+
+        // Load active account doc (balance/status are account-scoped)
+        window.activeAccountData = null;
+        if (window.activeAccountId) {
+          const accountRef = doc(db, 'users', userId, 'accounts', window.activeAccountId);
+          const accountSnap = await getDoc(accountRef);
+          if (accountSnap.exists()) {
+            window.activeAccountData = { id: accountSnap.id, ...accountSnap.data() };
+          }
+        }
+
+        const resolvedAccountStatus = (window.activeAccountData && window.activeAccountData.accountStatus)
+          ? window.activeAccountData.accountStatus
+          : window.userData.accountStatus;
+
+        const resolvedBalance = (window.activeAccountData && typeof window.activeAccountData.accountBalance === 'number')
+          ? window.activeAccountData.accountBalance
+          : window.userData.accountBalance;
+
         // Check account status
         if (window.checkAccountStatus) {
-          window.checkAccountStatus(window.userData.accountStatus);
+          window.checkAccountStatus(resolvedAccountStatus);
         }
 
         // Update broker balance with real account balance
-        if (window.updateBrokerBalance) {
-          window.updateBrokerBalance(window.userData.accountBalance);
+        if (typeof resolvedBalance === 'number') {
+          if (window.updateBrokerBalance) {
+            window.updateBrokerBalance(resolvedBalance);
+          } else {
+            window.__pendingBrokerBalance = resolvedBalance;
+          }
         }
 
         // Update user email in header
@@ -80,18 +130,9 @@
     }
 
     try {
-      const userDocRef = doc(db, 'users', window.firebaseUser.uid);
-      await updateDoc(userDocRef, {
-        accountBalance: newBalance,
-        updatedAt: new Date().toISOString()
-      });
-      console.log('✅ Balance updated in Firestore:', newBalance);
-
-      // Update local userData
-      if (window.userData) {
-        window.userData.accountBalance = newBalance;
-      }
-
+      // Désactivé: on ne met plus à jour la balance depuis le client.
+      // La balance est gérée côté serveur via Cloud Functions.
+      await window.loadUserData(window.firebaseUser.uid);
       return true;
     } catch (error) {
       console.error('❌ Error updating balance:', error);
@@ -157,16 +198,31 @@
     }
 
     try {
-      const tradesRef = collection(db, 'trades');
-      const dataToSave = {
-        ...tradeData,
+      if (!window.__executeTradeFn) {
+        console.error('❌ executeTradeFn missing');
+        return null;
+      }
+
+      const payload = {
         userId: window.firebaseUser.uid,
-        createdAt: new Date().toISOString()
+        accountId: window.activeAccountId || undefined,
+        symbol: tradeData.symbol,
+        symbolApi: tradeData.symbolApi,
+        side: tradeData.side,
+        lots: tradeData.lots,
+        tp: tradeData.takeProfit ?? tradeData.tp ?? null,
+        sl: tradeData.stopLoss ?? tradeData.sl ?? null,
+        price: tradeData.entryPrice,
       };
-      console.log('🔵 Saving to Firestore:', dataToSave);
-      const docRef = await addDoc(tradesRef, dataToSave);
-      console.log('✅ Trade saved to Firestore:', docRef.id);
-      return docRef.id;
+
+      const res = await window.__executeTradeFn(payload);
+      const data = res && res.data ? res.data : null;
+      const tradeId = data && data.tradeId ? data.tradeId : null;
+
+      await window.loadUserData(window.firebaseUser.uid);
+
+      console.log('✅ Trade created via function:', tradeId);
+      return tradeId;
     } catch (error) {
       console.error('❌ Error saving trade:', error);
       console.error('❌ Error details:', error.code, error.message);
@@ -181,12 +237,35 @@
     }
 
     try {
-      const tradeRef = doc(db, 'trades', tradeId);
-      await updateDoc(tradeRef, {
-        ...updateData,
-        updatedAt: new Date().toISOString()
+      const status = updateData && typeof updateData.status === 'string' ? updateData.status : '';
+      const isClosing = status === 'closed' || updateData.closePrice !== undefined || updateData.closedAt !== undefined;
+
+      if (isClosing) {
+        if (!window.__closeTradeFn) {
+          console.error('❌ closeTradeFn missing');
+          return false;
+        }
+        await window.__closeTradeFn({ tradeId, closePrice: updateData.closePrice });
+        await window.loadUserData(window.firebaseUser.uid);
+        console.log('✅ Trade closed via function:', tradeId);
+        return true;
+      }
+
+      if (!window.__updateTradeTargetsFn) {
+        console.error('❌ updateTradeTargetsFn missing');
+        return false;
+      }
+
+      const tp = updateData && (updateData.takeProfit ?? updateData.tp);
+      const sl = updateData && (updateData.stopLoss ?? updateData.sl);
+
+      await window.__updateTradeTargetsFn({
+        tradeId,
+        takeProfit: tp === undefined ? null : tp,
+        stopLoss: sl === undefined ? null : sl,
       });
-      console.log('✅ Trade updated in Firestore:', tradeId);
+
+      console.log('✅ Trade targets updated via function:', tradeId);
       return true;
     } catch (error) {
       console.error('❌ Error updating trade:', error);
@@ -201,15 +280,28 @@
       return null;
     }
     try {
-      const ordersRef = collection(db, 'orders');
-      const docRef = await addDoc(ordersRef, {
-        ...orderData,
-        userId: window.firebaseUser.uid,
-        status: 'pending',
-        createdAt: new Date().toISOString()
-      });
-      console.log('✅ Order saved to Firestore:', docRef.id);
-      return docRef.id;
+      if (!window.__placeOrderFn) {
+        console.error('❌ placeOrderFn missing');
+        return null;
+      }
+
+      const payload = {
+        accountId: window.activeAccountId || undefined,
+        symbol: orderData.symbol || orderData.symbolApi,
+        symbolApi: orderData.symbolApi,
+        side: orderData.side,
+        orderType: orderData.orderType || 'limit',
+        price: orderData.price,
+        lots: orderData.lots,
+        takeProfit: orderData.takeProfit ?? orderData.tp ?? null,
+        stopLoss: orderData.stopLoss ?? orderData.sl ?? null,
+      };
+
+      const res = await window.__placeOrderFn(payload);
+      const data = res && res.data ? res.data : null;
+
+      console.log('✅ Order placed via function:', data && data.orderId ? data.orderId : data);
+      return data && data.orderId ? data.orderId : null;
     } catch (error) {
       console.error('❌ Error saving order:', error);
       return null;
@@ -219,9 +311,12 @@
   window.deleteOrder = async (orderId) => {
     if (!window.firebaseUser || !orderId) return false;
     try {
-      const orderRef = doc(db, 'orders', orderId);
-      await updateDoc(orderRef, { status: 'cancelled', updatedAt: new Date().toISOString() });
-      console.log('✅ Order cancelled in Firestore:', orderId);
+      if (!window.__cancelOrderFn) {
+        console.error('❌ cancelOrderFn missing');
+        return false;
+      }
+      await window.__cancelOrderFn({ orderId });
+      console.log('✅ Order cancelled via function:', orderId);
       return true;
     } catch (error) {
       console.error('❌ Error cancelling order:', error);

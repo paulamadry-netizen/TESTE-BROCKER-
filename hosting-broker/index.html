@@ -33,6 +33,8 @@
   const executeTradeFn = httpsCallable(functions, 'executeTrade');
   const closeTradeFn = httpsCallable(functions, 'closeTrade');
   const updateTradeTargetsFn = httpsCallable(functions, 'updateTradeTargets');
+  const placeOrderFn = httpsCallable(functions, 'placeOrder');
+  const cancelOrderFn = httpsCallable(functions, 'cancelOrder');
 
   // Make available globally
   window.firebaseAuth = auth;
@@ -46,6 +48,8 @@
   window.__executeTradeFn = executeTradeFn;
   window.__closeTradeFn = closeTradeFn;
   window.__updateTradeTargetsFn = updateTradeTargetsFn;
+  window.__placeOrderFn = placeOrderFn;
+  window.__cancelOrderFn = cancelOrderFn;
 
   // Load user data from Firestore
   window.loadUserData = async (userId) => {
@@ -273,16 +277,28 @@
       return null;
     }
     try {
-      const ordersRef = collection(db, 'orders');
-      const docRef = await addDoc(ordersRef, {
-        ...orderData,
-        userId: window.firebaseUser.uid,
-        accountId: window.activeAccountId || null,
-        status: 'pending',
-        createdAt: new Date().toISOString()
-      });
-      console.log('✅ Order saved to Firestore:', docRef.id);
-      return docRef.id;
+      if (!window.__placeOrderFn) {
+        console.error('❌ placeOrderFn missing');
+        return null;
+      }
+
+      const payload = {
+        accountId: window.activeAccountId || undefined,
+        symbol: orderData.symbol || orderData.symbolApi,
+        symbolApi: orderData.symbolApi,
+        side: orderData.side,
+        orderType: orderData.orderType || 'limit',
+        price: orderData.price,
+        lots: orderData.lots,
+        takeProfit: orderData.takeProfit ?? orderData.tp ?? null,
+        stopLoss: orderData.stopLoss ?? orderData.sl ?? null,
+      };
+
+      const res = await window.__placeOrderFn(payload);
+      const data = res && res.data ? res.data : null;
+
+      console.log('✅ Order placed via function:', data && data.orderId ? data.orderId : data);
+      return data && data.orderId ? data.orderId : null;
     } catch (error) {
       console.error('❌ Error saving order:', error);
       return null;
@@ -292,9 +308,13 @@
   window.deleteOrder = async (orderId) => {
     if (!window.firebaseUser || !orderId) return false;
     try {
-      const orderRef = doc(db, 'orders', orderId);
-      await updateDoc(orderRef, { status: 'cancelled', updatedAt: new Date().toISOString() });
-      console.log('✅ Order cancelled in Firestore:', orderId);
+      if (!window.__cancelOrderFn) {
+        console.error('❌ cancelOrderFn missing');
+        return false;
+      }
+
+      await window.__cancelOrderFn({ orderId });
+      console.log('✅ Order cancelled via function:', orderId);
       return true;
     } catch (error) {
       console.error('❌ Error cancelling order:', error);

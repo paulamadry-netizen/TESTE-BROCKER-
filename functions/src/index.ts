@@ -1884,6 +1884,8 @@ export {
   executeTrade,
   closeTrade,
   updateTradeTargets,
+  placeOrder,
+  cancelOrder,
   updateTradingDays,
   calculateDrawdowns,
   closeTradesBeforeWeekend,
@@ -1905,8 +1907,104 @@ const PRICE_ENGINE_URL = 'https://ig-price-engine-44407447466.europe-west1.run.a
 interface PriceData {
   bid: number;
   offer: number;
-  timestamp?: number;
-  marketStatus?: string;
+  timestamp?: number; 
+  marketStatus?: string; 
+}
+
+function toJsDate(value: any): Date | null {
+  try {
+    if (!value) return null;
+    if (typeof value?.toDate === 'function') return value.toDate();
+    if (typeof value === 'number') return new Date(value);
+    if (typeof value === 'string') return new Date(value);
+    if (typeof value === 'object' && typeof value.seconds === 'number') return new Date(value.seconds * 1000);
+    const d = new Date(value);
+    return isNaN(d.getTime()) ? null : d;
+  } catch {
+    return null;
+  }
+}
+
+async function getAccountTradeStats(userId: string, accountId: string) {
+  const tradesSnapshot = await admin.firestore().collection('trades')
+    .where('userId', '==', userId)
+    .get();
+
+  const closedTrades: any[] = [];
+  const allTrades: any[] = [];
+  tradesSnapshot.forEach((docSnap) => {
+    const t = docSnap.data();
+    if (!t) return;
+    const tradeAccountId = typeof t.accountId === 'string' ? t.accountId : (typeof t.activeAccountId === 'string' ? t.activeAccountId : '');
+    if (tradeAccountId !== accountId) return;
+    allTrades.push({ id: docSnap.id, ...t });
+    if (t.status === 'closed') closedTrades.push({ id: docSnap.id, ...t });
+  });
+
+  return { allTrades, closedTrades };
+}
+
+async function validateAccountTotalDrawdown(
+  userId: string,
+  accountId: string,
+  initialBalance: number,
+  currentBalance: number,
+  maxTotalDrawdownPercent: number
+) {
+  const stats = await getAccountTradeStats(userId, accountId);
+  if (!stats.closedTrades.length) return { allowed: true as const };
+
+  let calculatedBalance = initialBalance;
+  let peakBalance = initialBalance;
+  stats.closedTrades
+    .sort((a, b) => {
+      const da = toJsDate((a as any).closedAt)?.getTime() ?? 0;
+      const dbv = toJsDate((b as any).closedAt)?.getTime() ?? 0;
+      return da - dbv;
+    })
+    .forEach((trade) => {
+      const pnl = Number((trade as any).pnl) || 0;
+      calculatedBalance += pnl;
+      if (calculatedBalance > peakBalance) peakBalance = calculatedBalance;
+    });
+
+  const safeCurrent = Math.max(Number.isFinite(currentBalance) ? currentBalance : calculatedBalance, 0.01);
+  const drawdown = peakBalance - safeCurrent;
+  const drawdownPercent = peakBalance > 0 ? (drawdown / peakBalance) * 100 : 0;
+  if (drawdownPercent > maxTotalDrawdownPercent) {
+    return { allowed: false as const, reason: `Drawdown total ${drawdownPercent.toFixed(2)}% (max ${maxTotalDrawdownPercent}%)` };
+  }
+  return { allowed: true as const };
+}
+
+async function validateAccountDailyDrawdown(
+  userId: string,
+  accountId: string,
+  initialBalance: number,
+  maxDailyDrawdownPercent: number | null
+) {
+  if (maxDailyDrawdownPercent === null) return { allowed: true as const };
+
+  const stats = await getAccountTradeStats(userId, accountId);
+  const todayStart = new Date();
+  todayStart.setUTCHours(0, 0, 0, 0);
+
+  let todayPnl = 0;
+  stats.closedTrades.forEach((trade) => {
+    const closedAt = (trade as any).closedAt;
+    if (!closedAt) return;
+    const d = toJsDate(closedAt);
+    if (!d) return;
+    if (d < todayStart) return;
+    todayPnl += Number((trade as any).pnl) || 0;
+  });
+
+  if (todayPnl >= 0) return { allowed: true as const };
+  const dailyLossPercent = initialBalance > 0 ? (Math.abs(todayPnl) / initialBalance) * 100 : 0;
+  if (dailyLossPercent > maxDailyDrawdownPercent) {
+    return { allowed: false as const, reason: `Drawdown journalier ${dailyLossPercent.toFixed(2)}% (max ${maxDailyDrawdownPercent}%)` };
+  }
+  return { allowed: true as const };
 }
 
 interface PricesResponse {
@@ -2162,6 +2260,10 @@ export const checkPendingOrders = onSchedule('every 1 minutes', async () => {
         if (shouldExecute) {
           console.log(`🎯 Ordre ${orderType} exécuté: ${side} ${symbol} @ ${price}`);
 
+          if (!userId) {
+            continue;
+          }
+
           const orderAccountId = typeof (order as any)?.accountId === 'string' ? String((order as any).accountId) : '';
           const userRef = admin.firestore().collection('users').doc(userId);
           const userSnap = await userRef.get();
@@ -2170,10 +2272,106 @@ export const checkPendingOrders = onSchedule('every 1 minutes', async () => {
             : '';
           const resolvedAccountId = orderAccountId || fallbackAccountId;
 
+          if (!resolvedAccountId) {
+            await admin.firestore().collection('orders').doc(id).update({
+              status: 'rejected',
+              rejectReason: 'Aucun compte actif',
+              updatedAt: new Date().toISOString(),
+            });
+            continue;
+          }
+
+          const accountRef = admin.firestore().collection('users').doc(userId).collection('accounts').doc(resolvedAccountId);
+          const accountSnap = await accountRef.get();
+          if (!accountSnap.exists) {
+            await admin.firestore().collection('orders').doc(id).update({
+              status: 'rejected',
+              rejectReason: 'Compte introuvable',
+              updatedAt: new Date().toISOString(),
+            });
+            continue;
+          }
+
+          const accountData = accountSnap.data() as any;
+          if (String(accountData?.accountStatus || '') !== 'active') {
+            await admin.firestore().collection('orders').doc(id).update({
+              status: 'rejected',
+              rejectReason: `Compte ${String(accountData?.accountStatus || '')}. Trading désactivé.`,
+              updatedAt: new Date().toISOString(),
+            });
+            continue;
+          }
+
+          const initialBalance = Number(accountData?.initialBalance ?? accountData?.accountBalance ?? 0);
+          const currentBalance = Number(accountData?.accountBalance ?? 0);
+          const maxTotalDrawdownPercent = Number(accountData?.maxTotalDrawdownPercent);
+          const resolvedMaxTotal = Number.isFinite(maxTotalDrawdownPercent) && maxTotalDrawdownPercent > 0 ? maxTotalDrawdownPercent : 8;
+          const rawMaxDaily = accountData?.maxDailyDrawdownPercent;
+          const maxDailyDrawdownPercent = rawMaxDaily === null
+            ? null
+            : Number.isFinite(Number(rawMaxDaily)) && Number(rawMaxDaily) > 0
+              ? Number(rawMaxDaily)
+              : 3;
+
+          const totalDd = await validateAccountTotalDrawdown(userId, resolvedAccountId, initialBalance, currentBalance, resolvedMaxTotal);
+          if (!totalDd.allowed) {
+            await admin.firestore().collection('orders').doc(id).update({
+              status: 'rejected',
+              rejectReason: totalDd.reason || 'Drawdown total',
+              updatedAt: new Date().toISOString(),
+            });
+            continue;
+          }
+
+          const dailyDd = await validateAccountDailyDrawdown(userId, resolvedAccountId, initialBalance, maxDailyDrawdownPercent);
+          if (!dailyDd.allowed) {
+            await admin.firestore().collection('orders').doc(id).update({
+              status: 'rejected',
+              rejectReason: dailyDd.reason || 'Drawdown journalier',
+              updatedAt: new Date().toISOString(),
+            });
+            continue;
+          }
+
           const marginRaw = (order as any)?.margin;
           const marginUsed = Number.isFinite(Number(marginRaw))
             ? Number(marginRaw)
             : calculateMarginLocal(String(symbol), Number(lots) || 0, Number(price) || 0);
+
+          const openTradesSnap = await admin.firestore().collection('trades')
+            .where('userId', '==', userId)
+            .where('status', '==', 'open')
+            .get();
+          let usedMargin = 0;
+          openTradesSnap.forEach((docSnap) => {
+            const t = docSnap.data() as any;
+            const tid = typeof t?.accountId === 'string' ? t.accountId : (typeof t?.activeAccountId === 'string' ? t.activeAccountId : '');
+            if (tid !== resolvedAccountId) return;
+            const m = Number(t?.marginUsed);
+            if (Number.isFinite(m) && m > 0) {
+              usedMargin += m;
+              return;
+            }
+            const tp = Number(t?.entryPrice);
+            const tl = Number(t?.lots);
+            if (Number.isFinite(tp) && Number.isFinite(tl)) {
+              usedMargin += calculateMarginLocal(String(t?.symbolApi || t?.symbol || symbol), tl, tp);
+            }
+          });
+
+          const storedAvailable = Number(accountData?.availableBalance);
+          const availableBalance = Number.isFinite(storedAvailable)
+            ? storedAvailable
+            : (Number.isFinite(currentBalance) ? (currentBalance - usedMargin) : 0);
+
+          if (Number.isFinite(availableBalance) && marginUsed > availableBalance) {
+            await admin.firestore().collection('orders').doc(id).update({
+              status: 'rejected',
+              rejectReason: 'Marge insuffisante',
+              updatedAt: new Date().toISOString(),
+            });
+            continue;
+          }
 
           const tradeDocRef = admin.firestore().collection('trades').doc();
           await admin.firestore().runTransaction(async (tx) => {
@@ -2204,7 +2402,6 @@ export const checkPendingOrders = onSchedule('every 1 minutes', async () => {
             });
 
             if (resolvedAccountId && marginUsed) {
-              const accountRef = admin.firestore().collection('users').doc(userId).collection('accounts').doc(resolvedAccountId);
               tx.update(accountRef, {
                 availableBalance: admin.firestore.FieldValue.increment(-marginUsed),
                 lastTradeAt: new Date().toISOString(),

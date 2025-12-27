@@ -398,6 +398,18 @@ interface TradeData {
   price?: number;
 }
 
+interface OrderData {
+  accountId?: string;
+  symbol: string;
+  symbolApi: string;
+  side: 'BUY' | 'SELL';
+  orderType: 'limit' | 'stop';
+  price: number;
+  lots: number;
+  takeProfit?: number | null;
+  stopLoss?: number | null;
+}
+
 interface ValidationResult {
   allowed: boolean;
   reason?: string;
@@ -1012,6 +1024,168 @@ export const updateTradeTargets = onCall(async (request) => {
     sl,
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
   });
+
+  return { success: true };
+});
+
+export const placeOrder = onCall({ secrets: [finnhubApiKey] }, async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Non authentifié');
+  }
+
+  const userId = request.auth.uid;
+  const data = (request.data || {}) as any as OrderData;
+
+  const symbol = String((data as any).symbol || '').trim();
+  const symbolApi = String((data as any).symbolApi || '').trim();
+  const side = String((data as any).side || '').toUpperCase();
+  const orderType = String((data as any).orderType || '').toLowerCase();
+  const lots = Number((data as any).lots);
+  const price = Number((data as any).price);
+  const tpRaw = (data as any).takeProfit ?? (data as any).tp;
+  const slRaw = (data as any).stopLoss ?? (data as any).sl;
+  const takeProfit = tpRaw === null || tpRaw === undefined ? null : Number(tpRaw);
+  const stopLoss = slRaw === null || slRaw === undefined ? null : Number(slRaw);
+
+  if (!symbolApi) {
+    throw new HttpsError('invalid-argument', 'symbolApi invalide');
+  }
+  if (side !== 'BUY' && side !== 'SELL') {
+    throw new HttpsError('invalid-argument', 'side invalide');
+  }
+  if (orderType !== 'limit' && orderType !== 'stop') {
+    throw new HttpsError('invalid-argument', 'orderType invalide');
+  }
+  if (!Number.isFinite(lots) || lots <= 0) {
+    throw new HttpsError('invalid-argument', 'lots invalide');
+  }
+  if (!Number.isFinite(price) || price <= 0) {
+    throw new HttpsError('invalid-argument', 'price invalide');
+  }
+  if (takeProfit !== null && !Number.isFinite(takeProfit)) {
+    throw new HttpsError('invalid-argument', 'takeProfit invalide');
+  }
+  if (stopLoss !== null && !Number.isFinite(stopLoss)) {
+    throw new HttpsError('invalid-argument', 'stopLoss invalide');
+  }
+
+  const userDoc = await db.collection('users').doc(userId).get();
+  if (!userDoc.exists) {
+    throw new HttpsError('not-found', 'Utilisateur introuvable');
+  }
+  const userData = userDoc.data() as any;
+
+  const requestedAccountIdRaw = (data as any)?.accountId ? String((data as any).accountId) : '';
+  const resolvedAccountId = requestedAccountIdRaw.trim() || (typeof userData?.activeAccountId === 'string' ? userData.activeAccountId : '');
+  if (!resolvedAccountId) {
+    throw new HttpsError('failed-precondition', 'Aucun compte actif');
+  }
+
+  const accountRef = db.collection('users').doc(userId).collection('accounts').doc(resolvedAccountId);
+  const accountSnap = await accountRef.get();
+  if (!accountSnap.exists) {
+    throw new HttpsError('not-found', 'Compte introuvable');
+  }
+  const accountData = accountSnap.data() as any;
+
+  if (accountData?.accountStatus !== 'active') {
+    throw new HttpsError('failed-precondition', `Compte ${accountData?.accountStatus}. Trading désactivé.`);
+  }
+
+  const pendingCountSnap = await db.collection('orders')
+    .where('userId', '==', userId)
+    .where('status', '==', 'pending')
+    .get();
+  const pendingForAccount = pendingCountSnap.docs.filter((d) => {
+    const o = d.data() as any;
+    const oid = typeof o?.accountId === 'string' ? o.accountId : '';
+    return oid === resolvedAccountId;
+  }).length;
+  if (pendingForAccount >= 20) {
+    throw new HttpsError('failed-precondition', 'Trop d\'ordres en attente (max 20)');
+  }
+
+  const marginUsed = calculateMargin(symbolApi, lots, price);
+
+  const storedAvailable = Number(accountData?.availableBalance);
+  const availableBalance = Number.isFinite(storedAvailable)
+    ? storedAvailable
+    : Number(accountData?.accountBalance ?? accountData?.initialBalance ?? 0);
+
+  if (Number.isFinite(availableBalance) && marginUsed > availableBalance) {
+    throw new HttpsError('failed-precondition', `Marge insuffisante. Requis: ${marginUsed.toFixed(2)} USD, Disponible: ${availableBalance.toFixed(2)} USD`);
+  }
+
+  const orderRef = db.collection('orders').doc();
+  await orderRef.set({
+    userId,
+    accountId: resolvedAccountId,
+    symbol: symbol || symbolApi,
+    symbolApi,
+    side,
+    orderType,
+    price,
+    lots,
+    takeProfit,
+    stopLoss,
+    tp: takeProfit,
+    sl: stopLoss,
+    margin: marginUsed,
+    status: 'pending',
+    validatedByServer: true,
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+
+  await auditLog('order_placed', userId, {
+    orderId: orderRef.id,
+    symbolApi,
+    side,
+    orderType,
+    price,
+    lots,
+    margin: marginUsed,
+  });
+
+  return {
+    success: true,
+    orderId: orderRef.id,
+    margin: marginUsed,
+  };
+});
+
+export const cancelOrder = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Non authentifié');
+  }
+
+  const userId = request.auth.uid;
+  const orderId = request?.data?.orderId ? String(request.data.orderId).trim() : '';
+  if (!orderId) {
+    throw new HttpsError('invalid-argument', 'orderId invalide');
+  }
+
+  const orderRef = db.collection('orders').doc(orderId);
+  const orderSnap = await orderRef.get();
+  if (!orderSnap.exists) {
+    throw new HttpsError('not-found', 'Ordre introuvable');
+  }
+
+  const order = orderSnap.data() as any;
+  if (order?.userId !== userId) {
+    throw new HttpsError('permission-denied', 'Accès interdit');
+  }
+  if (order?.status !== 'pending') {
+    throw new HttpsError('failed-precondition', 'Ordre déjà traité');
+  }
+
+  await orderRef.update({
+    status: 'cancelled',
+    cancelledAt: admin.firestore.FieldValue.serverTimestamp(),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+
+  await auditLog('order_cancelled', userId, { orderId });
 
   return { success: true };
 });
