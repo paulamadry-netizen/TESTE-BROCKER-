@@ -1171,6 +1171,89 @@ export const recalculateAllTradingDays = onCall(async (request) => {
   };
 });
 
+export const backfillAllTradingDaysOnce = onSchedule('every 5 minutes', async () => {
+  const jobRef = db.collection('system_jobs').doc('backfillAllTradingDaysOnce');
+  const jobSnap = await jobRef.get();
+  const jobData = jobSnap.exists ? (jobSnap.data() as any) : {};
+  if (jobData && jobData.status === 'done') {
+    return;
+  }
+
+  await jobRef.set({
+    status: 'running',
+    startedAt: admin.firestore.FieldValue.serverTimestamp(),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  }, { merge: true });
+
+  try {
+    const tradesSnap = await db.collection('trades').get();
+
+    const daysByAccount = new Map<string, Set<string>>();
+    const accountMeta = new Map<string, { uid: string; accountId: string }>();
+
+    tradesSnap.forEach((docSnap) => {
+      const t = docSnap.data() as any;
+      const uid = typeof t?.userId === 'string' ? t.userId : '';
+      if (!uid) return;
+
+      const accId = typeof t?.accountId === 'string'
+        ? t.accountId
+        : (typeof t?.activeAccountId === 'string' ? t.activeAccountId : '');
+      if (!accId) return;
+
+      const dateRaw = t.openedAt || t.closedAt || t.createdAt;
+      const d = toJsDate(dateRaw);
+      if (!d) return;
+
+      const day = d.toISOString().slice(0, 10);
+      const key = `${uid}::${accId}`;
+      if (!daysByAccount.has(key)) {
+        daysByAccount.set(key, new Set<string>());
+        accountMeta.set(key, { uid, accountId: accId });
+      }
+      daysByAccount.get(key)!.add(day);
+    });
+
+    const updates: Array<{ uid: string; accountId: string; tradingDays: number }> = [];
+    for (const [key, set] of daysByAccount.entries()) {
+      const meta = accountMeta.get(key);
+      if (!meta) continue;
+      updates.push({ uid: meta.uid, accountId: meta.accountId, tradingDays: set.size });
+    }
+
+    let committed = 0;
+    for (let i = 0; i < updates.length; i += 450) {
+      const slice = updates.slice(i, i + 450);
+      const batch = db.batch();
+      slice.forEach((u) => {
+        const ref = db.collection('users').doc(u.uid).collection('accounts').doc(u.accountId);
+        batch.set(ref, {
+          tradingDays: u.tradingDays,
+          tradingDaysRecalculatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true });
+      });
+      await batch.commit();
+      committed += slice.length;
+    }
+
+    await jobRef.set({
+      status: 'done',
+      finishedAt: admin.firestore.FieldValue.serverTimestamp(),
+      totalTradesScanned: tradesSnap.size,
+      accountsUpdated: committed,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+  } catch (e: any) {
+    await jobRef.set({
+      status: 'error',
+      error: e?.message || String(e),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+    throw e;
+  }
+});
+
 export const placeOrder = onCall({ secrets: [finnhubApiKey] }, async (request) => {
   if (!request.auth) {
     throw new HttpsError('unauthenticated', 'Non authentifié');

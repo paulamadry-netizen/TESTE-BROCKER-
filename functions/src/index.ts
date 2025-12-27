@@ -1888,6 +1888,7 @@ export {
   cancelOrder,
   recalculateTradingDays,
   recalculateAllTradingDays,
+  backfillAllTradingDaysOnce,
   updateTradingDays,
   calculateDrawdowns,
   closeTradesBeforeWeekend,
