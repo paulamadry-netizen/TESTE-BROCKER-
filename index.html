@@ -1952,8 +1952,8 @@ const onOverlayClick=(e)=>{
 
   if(!drawMode) return;
   if(drawMode==='fib_ext'){
-    if(drawStep===0){drawAnchor1={time,price};drawStep=1;return;}
-    if(drawStep===1){drawAnchor2={time,price};drawStep=2;return;}
+    if(drawStep===0){drawAnchor1={time,price};drawStep=1;updateChartOverlay();return;}
+    if(drawStep===1){drawAnchor2={time,price};drawStep=2;updateChartOverlay();return;}
     const a=drawAnchor1;
     const b=drawAnchor2;
     const c={time,price};
@@ -1965,7 +1965,7 @@ const onOverlayClick=(e)=>{
     return;
   }
 
-  if(drawStep===0){drawAnchor1={time,price};drawStep=1;return;}
+  if(drawStep===0){drawAnchor1={time,price};drawStep=1;updateChartOverlay();return;}
   const a=drawAnchor1;
   const b={time,price};
   const id=`d_${Date.now()}_${Math.random().toString(36).slice(2,6)}`;
