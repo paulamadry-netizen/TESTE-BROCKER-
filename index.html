@@ -419,7 +419,7 @@ html,body{height:100%;background:linear-gradient(135deg,var(--bg-primary) 0%,var
 .chart-overlay.draw-mode{pointer-events:auto;cursor:crosshair}
 .sltp-handles-container{position:absolute;top:0;left:0;right:60px;bottom:30px;pointer-events:none;z-index:20}
 .sltp-handles-container.interaction-mode{pointer-events:auto}
-.chart-overlay svg{pointer-events:none}
+.chart-overlay svg{pointer-events:auto}
 .chart-overlay svg line[data-id]{pointer-events:stroke;cursor:pointer}
 .chart-overlay svg text{pointer-events:none}
 .chart-overlay .price-line{pointer-events:none}
@@ -514,6 +514,21 @@ html,body{height:100%;background:linear-gradient(135deg,var(--bg-primary) 0%,var
 .modal-info-label{font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px}
 .modal-info-value{font-size:15px;font-weight:700;margin-top:4px}
 .modal-actions{display:flex;gap:12px;justify-content:flex-end;margin-top:8px}
+.ind-modal-content{width:720px;max-width:95vw}
+.ind-modal-grid{display:grid;grid-template-columns:1fr;gap:10px}
+@media (min-width: 900px){.ind-modal-grid{grid-template-columns:1fr 1fr}}
+.ind-card{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;border-radius:12px;border:1px solid var(--border);background:var(--bg-tertiary);transition:var(--transition)}
+.ind-card:hover{background:var(--surface-elevated);border-color:var(--border-light)}
+.ind-card-left{display:flex;flex-direction:column;gap:4px;min-width:0}
+.ind-card-title{font-weight:800;font-size:13px}
+.ind-card-sub{font-size:11px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:320px}
+.ind-card-actions{display:flex;align-items:center;gap:8px}
+.ind-toggle{width:18px;height:18px;accent-color:var(--accent)}
+.ind-settings-btn{width:34px;height:34px;border-radius:10px;border:1px solid var(--border);background:transparent;color:var(--text-secondary);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:var(--transition)}
+.ind-settings-btn:hover{background:var(--surface-elevated);border-color:var(--border-light);color:var(--text-primary)}
+.ind-form{display:flex;flex-direction:column;gap:12px}
+.ind-form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.ind-help{font-size:12px;color:var(--text-muted);line-height:1.6}
 .toast{position:fixed;bottom:24px;right:24px;background:var(--surface-elevated);color:var(--text-primary);padding:16px 20px;border-radius:var(--radius-md);font-weight:600;font-size:14px;opacity:0;transform:translateY(20px);transition:var(--transition);pointer-events:none;z-index:2000;border:1px solid var(--border);box-shadow:var(--shadow-lg);min-width:300px}
 .toast.visible{opacity:1;transform:translateY(0);pointer-events:auto}
 .toast.error{border-color:var(--danger);background:var(--danger-bg)}
@@ -672,6 +687,33 @@ html,body{height:100%;background:linear-gradient(135deg,var(--bg-primary) 0%,var
 </div>
 </div>
 </div>
+
+<div class="modal" id="indicatorsModal" style="display:none">
+  <div class="modal-content ind-modal-content">
+    <div class="modal-header"><i class="fas fa-wave-square"></i>Indicateurs</div>
+    <div class="modal-body">
+      <div class="ind-help">Active/désactive les indicateurs et ouvre les paramètres pour modifier les valeurs (ex: période, multiplicateur). Les changements s'appliquent au graphique en temps réel.</div>
+      <div class="ind-modal-grid" id="indicatorsModalList"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="indicatorsModalClose"><i class="fas fa-times"></i>Fermer</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="indicatorSettingsModal" style="display:none">
+  <div class="modal-content">
+    <div class="modal-header"><i class="fas fa-sliders-h"></i><span id="indicatorSettingsTitle">Paramètres indicateur</span></div>
+    <div class="modal-body">
+      <div class="ind-help" id="indicatorSettingsDesc"></div>
+      <div class="ind-form" id="indicatorSettingsForm"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="indicatorSettingsCancel"><i class="fas fa-times"></i>Annuler</button>
+      <button class="btn btn-add-order" id="indicatorSettingsApply"><i class="fas fa-check"></i>Appliquer</button>
+    </div>
+  </div>
+</div>
 <div id="toast" class="toast"></div>
 <div id="debugPanel" class="debug-panel"></div>
 <script>
@@ -777,6 +819,7 @@ const TF_TO_MAX={'1':500,'5':500,'15':500,'60':500,'240':500,'1D':365};
 let chartPriceLines=[],dragState=null,chartContainer=null;
 let indicatorsVisible=false,indicatorSeries={},indicatorState={};
 let drawMode=null,drawStep=0,drawAnchor1=null,drawAnchor2=null,activeDrawingId=null,drawings=[];
+let drawHoverAnchor=null;
 let slTpMode=null;
 let dragModeEnabled=true; // true = can drag chart, false = can interact with SL/TP/Fibo
 const INDICATORS=[
@@ -808,6 +851,22 @@ const getIndicatorParams=(key)=>{
   const st=(indicatorState[key]&&indicatorState[key].params)?indicatorState[key].params:{};
   return {...base,...st};
 };
+
+const IND_HELP={
+  sma:'Moyenne mobile simple. Paramètre: période.',
+  ema:'Moyenne mobile exponentielle. Paramètre: période.',
+  bb:'Bandes de Bollinger. Paramètres: période + multiplicateur.',
+  rsi:'RSI (0-100). Paramètre: période.',
+  atr:'ATR (volatilité). Paramètre: période.',
+  macd:'MACD. Paramètres: fast / slow / signal.',
+  stoch:'Stochastique. Paramètres: K / D.',
+  roc:'ROC (Rate of Change). Paramètre: période.',
+  cci:'CCI. Paramètre: période.',
+  willr:'Williams %R. Paramètre: période.'
+};
+
+const openModalEl=(el)=>{if(!el) return;el.style.display='flex'};
+const closeModalEl=(el)=>{if(!el) return;el.style.display='none'};
 
 const computeSMA=(data,period)=>{
   const out=[];let sum=0;
@@ -976,41 +1035,110 @@ const computeBB=(data,period,mult=2)=>{
 
 const ensureIndicatorsUI=()=>{
   const btn=$('indicatorsBtn');
-  const menu=$('indicatorsMenu');
-  if(!btn||!menu) return;
-  if(menu.dataset.ready==='1') return;
-  menu.dataset.ready='1';
-  menu.innerHTML=INDICATORS.map(i=>{
-    const label=i.type==='sma'||i.type==='ema'?`${i.label} ${i.params.period}`:i.label;
-    const params=i.params||{};
-    const fields=Object.keys(params).map(k=>`<input type="number" class="ind-param" data-ind="${i.key}" data-param="${k}" value="${params[k]}" style="width:58px"/>`).join('');
-    return `<div class="ind-item" data-row="${i.key}"><label style="display:flex;align-items:center;gap:8px;flex:1"><input type="checkbox" data-ind="${i.key}"/>${label}</label><div style="display:flex;gap:6px">${fields}</div></div>`;
-  }).join('');
+  if(!btn) return;
+
+  const modal=$('indicatorsModal');
+  const list=$('indicatorsModalList');
+  const closeBtn=$('indicatorsModalClose');
+  const settingsModal=$('indicatorSettingsModal');
+  const settingsTitle=$('indicatorSettingsTitle');
+  const settingsDesc=$('indicatorSettingsDesc');
+  const settingsForm=$('indicatorSettingsForm');
+  const settingsCancel=$('indicatorSettingsCancel');
+  const settingsApply=$('indicatorSettingsApply');
+
+  if(!modal||!list||!closeBtn||!settingsModal||!settingsTitle||!settingsDesc||!settingsForm||!settingsCancel||!settingsApply) return;
+  if(modal.dataset.ready==='1') return;
+  modal.dataset.ready='1';
+
+  let currentSettingsKey=null;
+
+  const renderIndicatorsModal=()=>{
+    list.innerHTML=INDICATORS.map((i)=>{
+      const cfgLabel=i.type==='sma'||i.type==='ema'?`${i.label} ${i.params.period}`:i.label;
+      const enabled=!!(indicatorState[i.key]&&indicatorState[i.key].enabled);
+      const p=getIndicatorParams(i.key);
+      const pStr=Object.keys(p||{}).map(k=>`${k}:${p[k]}`).join(' · ');
+      const sub=pStr?`${pStr}`:'Paramètres par défaut';
+      return `
+        <div class="ind-card" data-ind="${i.key}">
+          <div class="ind-card-left">
+            <div class="ind-card-title">${cfgLabel}</div>
+            <div class="ind-card-sub">${sub}</div>
+          </div>
+          <div class="ind-card-actions">
+            <input class="ind-toggle" type="checkbox" data-action="toggle" data-ind="${i.key}" ${enabled?'checked':''}/>
+            <button class="ind-settings-btn" type="button" data-action="settings" data-ind="${i.key}" title="Paramètres">
+              <i class="fas fa-sliders-h"></i>
+            </button>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    list.querySelectorAll('input[data-action="toggle"]').forEach((cb)=>cb.addEventListener('change',()=>{
+      const key=cb.dataset.ind;
+      indicatorState[key]=indicatorState[key]||{enabled:false,params:{}};
+      indicatorState[key].enabled=cb.checked;
+      if(cb.checked) enableIndicator(key); else disableIndicator(key);
+      renderIndicatorsModal();
+    }));
+
+    list.querySelectorAll('button[data-action="settings"]').forEach((btn)=>btn.addEventListener('click',()=>{
+      const key=btn.dataset.ind;
+      const cfg=getIndicatorCfg(key);
+      if(!cfg) return;
+      currentSettingsKey=key;
+      const label=cfg.type==='sma'||cfg.type==='ema'?`${cfg.label} ${cfg.params.period}`:cfg.label;
+      settingsTitle.textContent=`Paramètres — ${label}`;
+      settingsDesc.textContent=IND_HELP[cfg.type] || 'Paramètres de l\'indicateur.';
+
+      const params=getIndicatorParams(key);
+      const fields=Object.keys(params||{}).map((pKey)=>{
+        return `
+          <div class="form-group">
+            <label class="form-label">${pKey}</label>
+            <input class="form-input" type="number" step="1" data-param="${pKey}" value="${params[pKey]}" />
+          </div>
+        `;
+      }).join('');
+
+      settingsForm.innerHTML=`<div class="ind-form-row">${fields}</div>`;
+      openModalEl(settingsModal);
+    }));
+  };
+
   btn.addEventListener('click',()=>{
-    indicatorsVisible=!indicatorsVisible;
-    menu.style.display=indicatorsVisible?'block':'none';
+    indicatorsVisible=true;
+    renderIndicatorsModal();
+    openModalEl(modal);
   });
-  document.addEventListener('click',(e)=>{
-    if(!indicatorsVisible) return;
-    if(e.target===btn||menu.contains(e.target)) return;
-    indicatorsVisible=false;
-    menu.style.display='none';
-  });
-  menu.querySelectorAll('input[type="checkbox"]').forEach(cb=>cb.addEventListener('change',()=>{
-    const key=cb.dataset.ind;
-    indicatorState[key]=indicatorState[key]||{enabled:false,params:{}};
-    indicatorState[key].enabled=cb.checked;
-    if(cb.checked) enableIndicator(key); else disableIndicator(key);
-  }));
-  menu.querySelectorAll('input.ind-param').forEach(inp=>inp.addEventListener('change',()=>{
-    const key=inp.dataset.ind;
-    const param=inp.dataset.param;
-    const v=parseFloat(inp.value);
+
+  closeBtn.addEventListener('click',()=>{indicatorsVisible=false;closeModalEl(modal)});
+  modal.addEventListener('click',(e)=>{if(e.target===modal){indicatorsVisible=false;closeModalEl(modal)}});
+
+  settingsCancel.addEventListener('click',()=>{currentSettingsKey=null;closeModalEl(settingsModal)});
+  settingsModal.addEventListener('click',(e)=>{if(e.target===settingsModal){currentSettingsKey=null;closeModalEl(settingsModal)}});
+
+  settingsApply.addEventListener('click',()=>{
+    const key=currentSettingsKey;
+    if(!key) return;
     indicatorState[key]=indicatorState[key]||{enabled:false,params:{}};
     indicatorState[key].params=indicatorState[key].params||{};
-    if(Number.isFinite(v)) indicatorState[key].params[param]=v;
+
+    settingsForm.querySelectorAll('input[data-param]').forEach((inp)=>{
+      const pKey=inp.dataset.param;
+      const v=parseFloat(inp.value);
+      if(pKey && Number.isFinite(v)) indicatorState[key].params[pKey]=v;
+    });
+
+    if(indicatorState[key].enabled){
+      enableIndicator(key);
+    }
     recalcIndicators();
-  }));
+    closeModalEl(settingsModal);
+    renderIndicatorsModal();
+  });
 };
 
 const syncIndicatorMenuState=()=>{
@@ -1313,6 +1441,7 @@ const updateChartOverlay=()=>{
   // Drawings layer
   if(svg){
     const w=overlay.clientWidth||1;
+    const h=overlay.clientHeight||1;
     const mkLine=(x1,y1,x2,y2,stroke,width,dash)=>{
       const l=document.createElementNS('http://www.w3.org/2000/svg','line');
       l.setAttribute('x1',x1);l.setAttribute('y1',y1);l.setAttribute('x2',x2);l.setAttribute('y2',y2);
@@ -1354,6 +1483,78 @@ const updateChartOverlay=()=>{
       });
       return g;
     };
+
+    const mkCircle=(x,y,color)=>{
+      const c=document.createElementNS('http://www.w3.org/2000/svg','circle');
+      c.setAttribute('cx',x);
+      c.setAttribute('cy',y);
+      c.setAttribute('r','5');
+      c.setAttribute('fill',color);
+      c.setAttribute('stroke','rgba(255,255,255,0.85)');
+      c.setAttribute('stroke-width','1');
+      c.style.pointerEvents='none';
+      return c;
+    };
+
+    const drawFibPreview=()=>{
+      if(!(drawMode==='fib_retr'||drawMode==='fib_ext')) return;
+      if(!drawAnchor1) return;
+      const a=drawAnchor1;
+      const b=drawAnchor2;
+      const hover=drawHoverAnchor;
+      const ax=timeToX(a.time); const ay=priceToY(a.price);
+      if(ax===null||ay===null) return;
+      svg.appendChild(mkCircle(ax,ay,'rgba(0,217,184,0.95)'));
+      svg.appendChild(mkText(Math.min(w-6,ax+60),Math.max(14,ay-10),'A','rgba(0,217,184,0.95)'));
+
+      if(drawMode==='fib_retr'){
+        const target=(drawStep===1 && hover)?hover: (drawStep===0?null:null);
+        if(b){
+          const bx=timeToX(b.time); const by=priceToY(b.price);
+          if(bx!==null&&by!==null){
+            svg.appendChild(mkCircle(bx,by,'rgba(59,130,246,0.95)'));
+            svg.appendChild(mkText(Math.min(w-6,bx+60),Math.max(14,by-10),'B','rgba(59,130,246,0.95)'));
+          }
+        } else if(target){
+          const bx=timeToX(target.time); const by=priceToY(target.price);
+          if(bx!==null&&by!==null){
+            const l=mkLine(ax,ay,bx,by,'rgba(255,255,255,0.35)',1,'6 6');
+            l.style.pointerEvents='none';
+            svg.appendChild(l);
+            svg.appendChild(mkCircle(bx,by,'rgba(59,130,246,0.85)'));
+          }
+        }
+        return;
+      }
+
+      if(b){
+        const bx=timeToX(b.time); const by=priceToY(b.price);
+        if(bx!==null&&by!==null){
+          svg.appendChild(mkCircle(bx,by,'rgba(59,130,246,0.95)'));
+          svg.appendChild(mkText(Math.min(w-6,bx+60),Math.max(14,by-10),'B','rgba(59,130,246,0.95)'));
+          const l1=mkLine(ax,ay,bx,by,'rgba(255,255,255,0.35)',1,'6 6');
+          l1.style.pointerEvents='none';
+          svg.appendChild(l1);
+        }
+      }
+
+      if(drawStep===2 && hover){
+        const cx=timeToX(hover.time); const cy=priceToY(hover.price);
+        if(cx!==null&&cy!==null){
+          if(b){
+            const bx=timeToX(b.time); const by=priceToY(b.price);
+            if(bx!==null&&by!==null){
+              const l2=mkLine(bx,by,cx,cy,'rgba(255,255,255,0.35)',1,'6 6');
+              l2.style.pointerEvents='none';
+              svg.appendChild(l2);
+            }
+          }
+          svg.appendChild(mkCircle(cx,cy,'rgba(244,63,94,0.85)'));
+        }
+      }
+    };
+
+    drawFibPreview();
 
     const drawFibRetr=(d)=>{
       const top=Math.min(d.a.price,d.b.price),bot=Math.max(d.a.price,d.b.price);
@@ -1672,7 +1873,7 @@ const getPrimaryPositionForSymbol=()=>{
 };
 
 const clearModes=()=>{
-  drawMode=null;drawStep=0;drawAnchor1=null;drawAnchor2=null;slTpMode=null;
+  drawMode=null;drawStep=0;drawAnchor1=null;drawAnchor2=null;drawHoverAnchor=null;slTpMode=null;
   document.querySelectorAll('.icon-btn').forEach(b=>{
     if(b.id!=='dragModeBtn') b.classList.remove('active');
   });
@@ -2067,6 +2268,8 @@ $('fibExtBtn').addEventListener('click',()=>setMode(drawMode==='fib_ext'?null:'f
 $('deleteDrawBtn').addEventListener('click',deleteActiveDrawing);
 // Clicks on drawings are handled by SVG line listeners (stopPropagation). Other clicks fall through to overlay.
 $('chartOverlay').addEventListener('click',onOverlayClick);
+ $('chartOverlay').addEventListener('mousemove',onOverlayMouseMove);
+ $('chartOverlay').addEventListener('mouseleave',()=>{drawHoverAnchor=null;updateChartOverlay();});
 document.addEventListener('keydown',(e)=>{if(e.key==='Escape')clearModes();if(e.key==='Delete'||e.key==='Backspace')deleteActiveDrawing();});
 
 window.closePosition=closePosition;window.removeOrder=removeOrder;
