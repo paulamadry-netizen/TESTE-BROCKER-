@@ -11,6 +11,17 @@ export default function AccountsPage() {
   const { user, loading: authLoading } = useAuth();
   const { accounts, activeAccount, loading: accountLoading } = useAccount();
 
+  const getAccountKindLabel = (acc: any): string => {
+    const isFunded = Boolean(acc?.isFunded) || String(acc?.accountType || '').toLowerCase() === 'funded';
+    return isFunded ? 'FUNDED' : 'CHALLENGE';
+  };
+
+  const getAccountPlanLabel = (acc: any): string => {
+    const plan = typeof acc?.planType === 'string' ? acc.planType.trim() : '';
+    const challengeType = typeof acc?.challengeType === 'string' ? acc.challengeType.trim() : '';
+    return (plan || challengeType || '').toUpperCase();
+  };
+
   if (authLoading || accountLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -53,7 +64,10 @@ export default function AccountsPage() {
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Account Type</p>
-              <p className="text-2xl font-bold">{(activeAccount.challengeType || activeAccount.planType || "challenge").toUpperCase()}</p>
+              <p className="text-2xl font-bold">{getAccountKindLabel(activeAccount)}</p>
+              {getAccountPlanLabel(activeAccount) && (
+                <p className="text-sm text-muted-foreground mt-1">{getAccountPlanLabel(activeAccount)}</p>
+              )}
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Email</p>
@@ -86,8 +100,12 @@ export default function AccountsPage() {
                 <span className="font-semibold">{formatCurrency(acc.accountBalance)}</span>
               </div>
               <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">Type</span>
+                <span className="font-semibold">{getAccountKindLabel(acc)}</span>
+              </div>
+              <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">Plan</span>
-                <span className="font-semibold">{(acc.planType || "").toUpperCase()}</span>
+                <span className="font-semibold">{getAccountPlanLabel(acc)}</span>
               </div>
             </CardContent>
           </Card>
