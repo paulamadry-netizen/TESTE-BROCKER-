@@ -419,6 +419,7 @@ html,body{height:100%;background:linear-gradient(135deg,var(--bg-primary) 0%,var
 .chart-overlay.draw-mode{pointer-events:auto;cursor:crosshair}
 .sltp-handles-container{position:absolute;top:0;left:0;right:60px;bottom:30px;pointer-events:none;z-index:20}
 .sltp-handles-container.interaction-mode{pointer-events:auto}
+.sltp-handles-container.draw-pass-through{pointer-events:none}
 .chart-overlay svg{pointer-events:auto}
 .chart-overlay svg line[data-id]{pointer-events:stroke;cursor:pointer}
 .chart-overlay svg text{pointer-events:none}
@@ -1902,6 +1903,8 @@ const clearModes=()=>{
     if(b.id!=='dragModeBtn') b.classList.remove('active');
   });
   const overlay=$('chartOverlay');if(overlay)overlay.classList.remove('draw-mode');
+  const handlesContainer=$('sltpHandlesContainer');
+  if(handlesContainer) handlesContainer.classList.remove('draw-pass-through');
 };
 
 const toggleDragMode=()=>{
@@ -1942,6 +1945,8 @@ const setMode=(mode)=>{
     const map={fib_retr:'fibRetrBtn',fib_ext:'fibExtBtn'};
     const b=$(map[mode]);if(b)b.classList.add('active');
     if(overlay)overlay.classList.add('draw-mode');
+    const handlesContainer=$('sltpHandlesContainer');
+    if(handlesContainer) handlesContainer.classList.add('draw-pass-through');
     showToast(mode==='fib_ext'?'Clique 3 points (A,B,C)':'Clique 2 points sur le graphique','info');
     return;
   }
