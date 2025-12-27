@@ -548,7 +548,8 @@ html[data-style="rose"]{--accent:#f43f5e;--accent-hover:#fb7185;--accent-dark:#e
 .price-line.tp-line:hover,.price-line.sl-line:hover{z-index:20}
 .price-line.tp-line:hover .price-line-label,.price-line.sl-line:hover .price-line-label{transform:translateY(-50%) scale(1.02);box-shadow:0 4px 16px rgba(0,0,0,0.5)}
 .price-line.dragging{z-index:30}
-.sltp-handle{position:absolute;right:5px;padding:6px 14px;border-radius:4px;font-size:11px;font-weight:600;cursor:grab;pointer-events:auto;opacity:0.85;transition:all 0.2s ease;z-index:25;user-select:none;transform:translateY(-50%);backdrop-filter:blur(4px);letter-spacing:0.3px;border:1px solid rgba(255,255,255,0.15)}
+.sltp-handle{position:absolute;right:5px;padding:6px 14px;border-radius:4px;font-size:11px;font-weight:600;cursor:grab;pointer-events:auto;opacity:0.85;transition:all 0.2s ease;z-index:25;user-select:none;transform:translateY(-50%);backdrop-filter:blur(4px);letter-spacing:0.3px;border:1px solid rgba(255,255,255,0.15);touch-action:none;-webkit-user-select:none;user-select:none}
+.price-line-label{touch-action:none;-webkit-user-select:none;user-select:none}
 .sltp-handle:hover{opacity:1;transform:translateY(-50%) scale(1.05);box-shadow:0 4px 16px rgba(0,0,0,0.4)}
 .sltp-handle.dragging{opacity:1;transform:translateY(-50%) scale(1.08);z-index:30;cursor:grabbing;box-shadow:0 6px 24px rgba(0,0,0,0.5)}
 .tp-handle{background:rgba(22,163,74,0.9);color:#fff}
@@ -1982,8 +1983,9 @@ const createSlTpHandle=(container,y,entryPrice,posId,type,side)=>{
   handle.dataset.side=side;
   handle.innerText=type.toUpperCase();
   handle.title=`Glisser pour placer ${type.toUpperCase()}`;
-  
-  handle.addEventListener('mousedown',startHandleDrag);
+
+  // Pointer Events support (mobile + desktop)
+  handle.addEventListener('pointerdown',startHandleDrag);
   container.appendChild(handle);
 };
 
@@ -1994,11 +1996,14 @@ const startHandleDrag=(e)=>{
   const posId=handle.dataset.id;
   const type=handle.dataset.type;
   
-  dragState={handle,posId,type,startY:e.clientY,isHandle:true};
+  dragState={handle,posId,type,startY:e.clientY,isHandle:true,pointerId:e.pointerId};
   handle.classList.add('dragging');
-  
-  document.addEventListener('mousemove',onHandleDrag);
-  document.addEventListener('mouseup',endHandleDrag);
+
+  try{handle.setPointerCapture(e.pointerId)}catch(err){}
+
+  document.addEventListener('pointermove',onHandleDrag,{passive:false});
+  document.addEventListener('pointerup',endHandleDrag,{passive:false});
+  document.addEventListener('pointercancel',endHandleDrag,{passive:false});
 };
 
 const onHandleDrag=(e)=>{
@@ -2044,8 +2049,9 @@ const endHandleDrag=(e)=>{
   
   dragState.handle.classList.remove('dragging');
   dragState=null;
-  document.removeEventListener('mousemove',onHandleDrag);
-  document.removeEventListener('mouseup',endHandleDrag);
+  document.removeEventListener('pointermove',onHandleDrag);
+  document.removeEventListener('pointerup',endHandleDrag);
+  document.removeEventListener('pointercancel',endHandleDrag);
   updateChartOverlay();
 };
 
@@ -2079,7 +2085,7 @@ const createPriceLine=(container,y,price,className,label,id,type)=>{
   
   // Make TP/SL labels draggable and add delete button
   if(type==='tp'||type==='sl'){
-    labelEl.addEventListener('mousedown',startDrag);
+    labelEl.addEventListener('pointerdown',startDrag);
     labelEl.dataset.lineEl='parent';
     // Add delete button for TP/SL
     const deleteBtn=document.createElement('span');
@@ -2133,11 +2139,14 @@ const startDrag=(e)=>{
   const id=line.dataset.id;
   const type=line.dataset.type;
   
-  dragState={line,id,type,startY:e.clientY,startPrice:parseFloat(line.dataset.price)};
+  dragState={line,id,type,startY:e.clientY,startPrice:parseFloat(line.dataset.price),pointerId:e.pointerId};
   line.classList.add('dragging');
-  
-  document.addEventListener('mousemove',onDrag);
-  document.addEventListener('mouseup',endDrag);
+
+  try{target.setPointerCapture(e.pointerId)}catch(err){}
+
+  document.addEventListener('pointermove',onDrag,{passive:false});
+  document.addEventListener('pointerup',endDrag,{passive:false});
+  document.addEventListener('pointercancel',endDrag,{passive:false});
 };
 
 const onDrag=(e)=>{
@@ -2180,8 +2189,9 @@ const endDrag=(e)=>{
   }
   
   dragState=null;
-  document.removeEventListener('mousemove',onDrag);
-  document.removeEventListener('mouseup',endDrag);
+  document.removeEventListener('pointermove',onDrag);
+  document.removeEventListener('pointerup',endDrag);
+  document.removeEventListener('pointercancel',endDrag);
   updateChartOverlay();
 };
 
