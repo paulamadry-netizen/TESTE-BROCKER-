@@ -432,15 +432,37 @@ export const createCheckoutFromPaymentLink = onCall(
       apiVersion: '2023-10-16',
     });
 
-    // Retrieve the payment link id from its url
-    const paymentLinks = await stripe.paymentLinks.list({
-      limit: 100,
-      active: true,
-    });
+    const normalizeStripeUrl = (url: string): string => {
+      try {
+        return url.trim().replace(/\/+$/, '');
+      } catch {
+        return (url || '').trim();
+      }
+    };
 
-    const paymentLink = paymentLinks.data.find((pl) => pl.url === paymentLinkUrl);
+    // Retrieve the payment link id from its url
+    const normalizedTargetUrl = normalizeStripeUrl(paymentLinkUrl);
+    let paymentLink: Stripe.PaymentLink | undefined;
+    let startingAfter: string | undefined;
+    for (let page = 0; page < 20; page++) {
+      const paymentLinks = await stripe.paymentLinks.list({
+        limit: 100,
+        active: true,
+        ...(startingAfter ? { starting_after: startingAfter } : {}),
+      } as any);
+
+      paymentLink = paymentLinks.data.find((pl) => normalizeStripeUrl(pl.url) === normalizedTargetUrl);
+      if (paymentLink) break;
+
+      if (!paymentLinks.has_more || paymentLinks.data.length === 0) break;
+      startingAfter = paymentLinks.data[paymentLinks.data.length - 1].id;
+    }
+
     if (!paymentLink) {
-      throw new HttpsError('not-found', 'Payment link not found in Stripe');
+      throw new HttpsError(
+        'not-found',
+        'Payment link not found in Stripe. Vérifie que le lien est ACTIF et que la clé Stripe (TEST/LIVE) correspond au Payment Link utilisé.'
+      );
     }
 
     const paymentLinkLineItems = await stripe.paymentLinks.listLineItems(paymentLink.id, {

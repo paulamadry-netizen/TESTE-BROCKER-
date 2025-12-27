@@ -2296,7 +2296,10 @@
         if (!redirectUrl) throw new Error('Missing checkout url');
         window.location.href = redirectUrl;
       } catch (e) {
-        showToast('Erreur lors de la création du paiement. Veuillez réessayer.', 'error');
+        const code = (e && e.code) ? String(e.code) : '';
+        const msg = (e && e.message) ? String(e.message) : '';
+        const friendly = msg || 'Erreur lors de la création du paiement. Veuillez réessayer.';
+        showToast(code ? `${friendly} (${code})` : friendly, 'error');
       }
     }
 
