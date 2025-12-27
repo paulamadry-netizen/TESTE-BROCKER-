@@ -2781,26 +2781,50 @@ export const approvePayout = onCall(async (request) => {
 
     } else {
       // REJETER LE PAYOUT
+      const reasonText = (typeof rejectionReason === 'string' ? rejectionReason : '').trim() || 'Non spécifié';
       await db.runTransaction(async (transaction) => {
         transaction.update(payoutDoc.ref, {
           status: 'rejected',
           rejectedAt: admin.firestore.FieldValue.serverTimestamp(),
           rejectedBy: request.auth!.uid,
-          rejectionReason: rejectionReason || 'Non spécifié',
+          rejectionReason: reasonText,
         });
 
         // Si le montant avait été réservé à la demande, on rembourse.
         if (payoutReserved && Number.isFinite(payoutAmount) && payoutAmount > 0) {
           const userRef = db.collection('users').doc(payout.userId);
           const userSnap = await transaction.get(userRef);
+
           const payoutAccountId = typeof payout.accountId === 'string' ? payout.accountId : '';
           const fallbackAccountId = userSnap.exists && typeof (userSnap.data() as any)?.activeAccountId === 'string'
             ? String((userSnap.data() as any).activeAccountId)
             : '';
-          const accountId = (payoutAccountId || fallbackAccountId).trim();
+
+          let accountId = (payoutAccountId || fallbackAccountId).trim();
+
+          // Fallback pour anciens payouts sans accountId
           if (!accountId) {
-            throw new HttpsError('failed-precondition', 'Aucun accountId associé au payout');
+            const accountsSnap = await transaction.get(
+              userRef
+                .collection('accounts')
+                .where('accountStatus', '==', 'active')
+                .limit(25)
+            );
+            let found: string | null = null;
+            accountsSnap.forEach((docSnap) => {
+              if (found) return;
+              const d = docSnap.data() as any;
+              const t = typeof d?.accountType === 'string' ? d.accountType.toLowerCase() : '';
+              const funded = Boolean(d?.isFunded) || t === 'funded';
+              if (funded) found = docSnap.id;
+            });
+            accountId = (found || '').trim();
           }
+
+          if (!accountId) {
+            throw new HttpsError('failed-precondition', 'Aucun compte financé trouvé pour rembourser ce payout');
+          }
+
           const accountRef = userRef.collection('accounts').doc(accountId);
           transaction.update(accountRef, {
             accountBalance: admin.firestore.FieldValue.increment(payoutAmount),
@@ -2816,6 +2840,76 @@ export const approvePayout = onCall(async (request) => {
         rejectedBy: request.auth.uid,
         reason: rejectionReason
       });
+
+      try {
+        const userSnap = await db.collection('users').doc(payout.userId).get();
+        const toEmail = (typeof userSnap.data()?.email === 'string' ? userSnap.data()!.email : '').trim().toLowerCase();
+        if (toEmail) {
+          const from = 'AMA FIRM <ama.firm.fr@gmail.com>';
+          const supportInbox = 'ama.firm.fr@gmail.com';
+          const safe = (v: string) =>
+            v
+              .replace(/&/g, '&amp;')
+              .replace(/</g, '&lt;')
+              .replace(/>/g, '&gt;')
+              .replace(/"/g, '&quot;')
+              .replace(/'/g, '&#39;');
+
+          const amount = Number(payout.amount || 0);
+          const accountId = typeof payout.accountId === 'string' ? payout.accountId : '';
+          const reason = (typeof rejectionReason === 'string' ? rejectionReason : '').trim() || 'Non spécifié';
+          const refundedText = payoutReserved ? 'Le montant a été recrédité sur votre solde.' : 'Le montant n\'a pas été débité.';
+
+          const subjectUser = 'Votre demande de payout a été rejetée';
+          const textUser =
+            `Votre demande de payout a été rejetée.\n\n` +
+            `Montant: ${Number.isFinite(amount) ? amount.toFixed(2) : '0.00'} USD\n` +
+            `Compte: ${accountId || '—'}\n\n` +
+            `Raison: ${reason}\n\n` +
+            `${refundedText}\n\n` +
+            `Support: ${supportInbox}`;
+
+          const htmlUser = `<!doctype html>
+<html>
+<body style="font-family:ui-sans-serif,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,'Helvetica Neue',sans-serif;background:#f3f4f6;padding:24px;">
+  <div style="max-width:640px;margin:0 auto;background:#ffffff;border:1px solid #e5e7eb;border-radius:14px;overflow:hidden;">
+    <div style="padding:18px 20px;border-bottom:1px solid #e5e7eb;">
+      <div style="font-weight:800;color:#0f172a;">AMA FIRM — Payout</div>
+      <div style="color:#64748b;font-size:12px;margin-top:4px;">Demande rejetée</div>
+    </div>
+    <div style="padding:18px 20px;color:#0f172a;font-size:13px;line-height:1.7;">
+      <p style="margin:0 0 10px;">Votre demande de payout a été <strong>rejetée</strong>.</p>
+      <div style="margin:12px 0;padding:12px;border-radius:12px;background:#f8fafc;border:1px solid #e5e7eb;">
+        <div><strong>Montant:</strong> ${safe(Number.isFinite(amount) ? amount.toFixed(2) : '0.00')} USD</div>
+        <div><strong>Compte:</strong> ${safe(accountId || '—')}</div>
+        <div style="margin-top:8px;"><strong>Raison:</strong> ${safe(reason)}</div>
+      </div>
+      <p style="margin:10px 0 0;color:#334155;">${safe(refundedText)}</p>
+      <p style="margin:10px 0 0;color:#334155;">Support: ${safe(supportInbox)}</p>
+    </div>
+  </div>
+</body>
+</html>`;
+
+          await db.collection('mail').add({
+            to: [toEmail],
+            message: {
+              from,
+              replyTo: supportInbox,
+              subject: subjectUser,
+              text: textUser,
+              html: htmlUser,
+              headers: {
+                'X-AMA-Email': 'payout_rejected_user',
+                'X-AMA-UserId': payout.userId,
+                'X-AMA-AccountId': accountId,
+                'X-AMA-PayoutId': payoutId,
+              },
+            },
+          });
+        }
+      } catch (e) {
+      }
 
       console.log(`❌ Payout rejeté: ${payoutId}`);
 
