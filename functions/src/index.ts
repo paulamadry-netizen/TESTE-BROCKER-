@@ -440,8 +440,18 @@ export const createCheckoutFromPaymentLink = onCall(
       }
     };
 
+    const canonicalizeStripeUrl = (url: string): string => {
+      try {
+        const noHash = String(url || '').split('#')[0];
+        const noQuery = noHash.split('?')[0];
+        return normalizeStripeUrl(noQuery);
+      } catch {
+        return normalizeStripeUrl(url);
+      }
+    };
+
     // Retrieve the payment link id from its url
-    const normalizedTargetUrl = normalizeStripeUrl(paymentLinkUrl);
+    const normalizedTargetUrl = canonicalizeStripeUrl(paymentLinkUrl);
     let paymentLink: Stripe.PaymentLink | undefined;
     let startingAfter: string | undefined;
     for (let page = 0; page < 20; page++) {
@@ -451,7 +461,7 @@ export const createCheckoutFromPaymentLink = onCall(
         ...(startingAfter ? { starting_after: startingAfter } : {}),
       } as any);
 
-      paymentLink = paymentLinks.data.find((pl) => normalizeStripeUrl(pl.url) === normalizedTargetUrl);
+      paymentLink = paymentLinks.data.find((pl) => canonicalizeStripeUrl(pl.url) === normalizedTargetUrl);
       if (paymentLink) break;
 
       if (!paymentLinks.has_more || paymentLinks.data.length === 0) break;
@@ -486,7 +496,39 @@ export const createCheckoutFromPaymentLink = onCall(
       throw new HttpsError('failed-precondition', 'Payment link has no line items');
     }
 
-    // Calculer le capital du plan à partir du montant (Stripe en centimes)
+    // Déterminer le plan acheté
+    // 1) metadata Stripe sur le PaymentLink (si configuré)
+    // 2) mapping URL -> plan (fiable)
+    // 3) fallback via montant estimé (moins fiable si taxes/devise/prix custom)
+
+    const paymentLinkMetadata = (paymentLink as any)?.metadata || {};
+    const mdPlanCode = typeof paymentLinkMetadata?.planCode === 'string' ? String(paymentLinkMetadata.planCode).trim() : '';
+    let purchasedPlan: PurchasedPlan | null = mdPlanCode ? (PLAN_CATALOG.find((p) => p.code === mdPlanCode) || null) : null;
+
+    if (!purchasedPlan) {
+      const PAYMENT_LINK_PLAN_BY_URL: Record<string, string> = {
+        // Challenge
+        'https://buy.stripe.com/test_eVq00jfY0evn51obaT1ZS01': 'CHALLENGE_25K',
+        'https://buy.stripe.com/test_3cIaEX9zCaf7gK6baT1ZS00': 'CHALLENGE_50K',
+        'https://buy.stripe.com/test_3cI3cv27adrj51o2En1ZS02': 'CHALLENGE_100K',
+
+        // Instant funded
+        'https://buy.stripe.com/test_fZueVd136drj2Tgen51ZS04': 'INSTANT_2500',
+        'https://buy.stripe.com/test_00wfZhcLOcnf0L87YH1ZS05': 'INSTANT_5000',
+        'https://buy.stripe.com/test_6oU5kD27a0ExdxU4Mv1ZS06': 'INSTANT_10000',
+        'https://buy.stripe.com/test_eVqbJ1bHK2MF1Pcgvd1ZS07': 'INSTANT_20000',
+        'https://buy.stripe.com/test_4gM4gz4fi4UNfG20wf1ZS08': 'INSTANT_40000',
+        'https://buy.stripe.com/test_bJefZhbHKcnfalI92L1ZS09': 'INSTANT_80000',
+        'https://buy.stripe.com/test_7sYfZh5jm72V2Tgfr91ZS0a': 'INSTANT_120000',
+      };
+
+      const mappedCode = PAYMENT_LINK_PLAN_BY_URL[normalizedTargetUrl];
+      if (mappedCode) {
+        purchasedPlan = PLAN_CATALOG.find((p) => p.code === mappedCode) || null;
+      }
+    }
+
+    // Fallback: Calculer le plan à partir du montant (Stripe en centimes)
     const estimatedAmountCents = paymentLinkLineItems.data
       .map((li) => {
         const price = li ? (li as any).price : null;
@@ -497,9 +539,13 @@ export const createCheckoutFromPaymentLink = onCall(
       })
       .reduce((sum, v) => sum + v, 0);
     const estimatedAmountEuros = estimatedAmountCents / 100;
-    const purchasedPlan = determinePurchasedPlan(estimatedAmountEuros);
+
     if (!purchasedPlan) {
-      throw new HttpsError('invalid-argument', 'Unknown plan');
+      purchasedPlan = determinePurchasedPlan(estimatedAmountEuros);
+    }
+
+    if (!purchasedPlan) {
+      throw new HttpsError('invalid-argument', `Unknown plan (amount=${estimatedAmountEuros}, url=${normalizedTargetUrl})`);
     }
     const estimatedTradingCapital = purchasedPlan.tradingCapital;
 
