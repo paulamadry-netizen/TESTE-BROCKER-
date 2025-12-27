@@ -1025,7 +1025,7 @@
       <div class="user-menu hidden" id="userMenu">
         <span class="user-email" id="userEmail"></span>
         <div class="user-avatar" id="userAvatar"></div>
-        <a href="https://teste-brocker-dash.onrender.com" target="_blank" rel="noopener noreferrer" class="nav-btn nav-btn-primary" style="text-decoration:none;display:inline-flex;align-items:center;gap:0.5rem;">
+        <a href="https://ama-board.web.app" target="_blank" rel="noopener noreferrer" class="nav-btn nav-btn-primary" style="text-decoration:none;display:inline-flex;align-items:center;gap:0.5rem;">
           <i class="fas fa-chart-line"></i> Dashboard
         </a>
         <button class="nav-btn nav-btn-outline" onclick="logout()">Déconnexion</button>
@@ -1130,7 +1130,7 @@
         </a>
       </div>
       <div class="hero-buttons hidden" id="heroButtonsLoggedIn">
-        <a href="https://teste-brocker-dash.onrender.com" class="btn-primary" style="text-decoration:none;">
+        <a href="https://ama-board.web.app" class="btn-primary" style="text-decoration:none;">
           <i class="fas fa-chart-line"></i>
           Accéder au Dashboard
         </a>
@@ -1351,7 +1351,7 @@
           <li><a href="#features">Avantages</a></li>
           <li><a href="#pricing">Tarifs</a></li>
           <li><a href="#testimonials">Avis</a></li>
-          <li><a href="https://teste-brocker.web.app">Plateforme</a></li>
+          <li><a href="https://ama-brocker.web.app">Plateforme</a></li>
         </ul>
       </div>
       <div class="footer-links">
@@ -1514,7 +1514,7 @@
         if (!userCredential.user.emailVerified) {
           try {
             await sendEmailVerification(userCredential.user, {
-              url: 'https://teste-brocker.web.app/landing.html',
+              url: 'https://ama-brocker.web.app/landing.html',
               handleCodeInApp: false
             });
           } catch (emailError) {
@@ -1575,7 +1575,7 @@
         // Send verification email
         try {
           await sendEmailVerification(user, {
-            url: 'https://teste-brocker.web.app/landing.html',
+            url: 'https://ama-brocker.web.app/landing.html',
             handleCodeInApp: false
           });
           console.log('Verification email sent');

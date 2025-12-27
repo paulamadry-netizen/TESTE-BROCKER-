@@ -1174,7 +1174,7 @@ async function sendWelcomeEmail(
   const safeEmail = escapeHtml(email);
   const safeBrokerIdentifier = escapeHtml(brokerIdentifier);
   const safePassword = escapeHtml(password);
-  const brokerLoginUrl = 'https://teste-brocker.web.app/login.html';
+  const brokerLoginUrl = 'https://ama-brocker.web.app/login.html';
   const vitrineUrl = 'https://amafirm.web.app/';
   const supportEmail = 'support@amafirm.com';
   const from = 'AMA FIRM <ama.firm.fr@gmail.com>';

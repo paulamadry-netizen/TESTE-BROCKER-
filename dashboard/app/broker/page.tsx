@@ -5,7 +5,7 @@ import { useEffect } from "react";
 export default function BrokerRedirect() {
   useEffect(() => {
     // Redirect to Firebase Hosting broker with cache-busting param
-    window.location.href = `https://teste-brocker.web.app/?v=${Date.now()}`;
+    window.location.href = `https://ama-brocker.web.app/?v=${Date.now()}`;
   }, []);
 
   return (

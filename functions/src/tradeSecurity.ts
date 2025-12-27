@@ -1372,7 +1372,7 @@ export const upgradeChallenge = onCall(async (request) => {
     const toEmail = (typeof userData?.email === 'string' ? userData.email : (typeof request.auth.token.email === 'string' ? request.auth.token.email : '')).trim().toLowerCase();
     if (toEmail) {
       const from = 'AMA FIRM <ama.firm.fr@gmail.com>';
-      const brokerLoginUrl = 'https://teste-brocker.web.app/login.html';
+      const brokerLoginUrl = 'https://ama-brocker.web.app/login.html';
       const emailContent = buildFundedCreatedEmail({
         accountName,
         brokerIdentifier,
@@ -1521,7 +1521,7 @@ export const forceUpgradeChallenge = onCall(async (request) => {
     const toEmail = (typeof userData?.email === 'string' ? userData.email : '').trim().toLowerCase();
     if (toEmail) {
       const from = 'AMA FIRM <ama.firm.fr@gmail.com>';
-      const brokerLoginUrl = 'https://teste-brocker.web.app/login.html';
+      const brokerLoginUrl = 'https://ama-brocker.web.app/login.html';
       const emailContent = buildFundedCreatedEmail({
         accountName,
         brokerIdentifier,
