@@ -1887,6 +1887,7 @@ export {
   placeOrder,
   cancelOrder,
   recalculateTradingDays,
+  recalculateAllTradingDays,
   updateTradingDays,
   calculateDrawdowns,
   closeTradesBeforeWeekend,
