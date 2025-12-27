@@ -2783,14 +2783,10 @@ export const approvePayout = onCall(async (request) => {
       // REJETER LE PAYOUT
       const reasonText = (typeof rejectionReason === 'string' ? rejectionReason : '').trim() || 'Non spécifié';
       await db.runTransaction(async (transaction) => {
-        transaction.update(payoutDoc.ref, {
-          status: 'rejected',
-          rejectedAt: admin.firestore.FieldValue.serverTimestamp(),
-          rejectedBy: request.auth!.uid,
-          rejectionReason: reasonText,
-        });
+        // Firestore transactions: all reads must happen before any writes.
+        // On prépare d'abord les refs à mettre à jour (refund) en faisant toutes les lectures nécessaires.
+        let refundAccountRef: FirebaseFirestore.DocumentReference | null = null;
 
-        // Si le montant avait été réservé à la demande, on rembourse.
         if (payoutReserved && Number.isFinite(payoutAmount) && payoutAmount > 0) {
           const userRef = db.collection('users').doc(payout.userId);
           const userSnap = await transaction.get(userRef);
@@ -2825,8 +2821,19 @@ export const approvePayout = onCall(async (request) => {
             throw new HttpsError('failed-precondition', 'Aucun compte financé trouvé pour rembourser ce payout');
           }
 
-          const accountRef = userRef.collection('accounts').doc(accountId);
-          transaction.update(accountRef, {
+          refundAccountRef = userRef.collection('accounts').doc(accountId);
+        }
+
+        // Ecritures (après toutes les lectures)
+        transaction.update(payoutDoc.ref, {
+          status: 'rejected',
+          rejectedAt: admin.firestore.FieldValue.serverTimestamp(),
+          rejectedBy: request.auth!.uid,
+          rejectionReason: reasonText,
+        });
+
+        if (refundAccountRef) {
+          transaction.update(refundAccountRef, {
             accountBalance: admin.firestore.FieldValue.increment(payoutAmount),
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
           });
