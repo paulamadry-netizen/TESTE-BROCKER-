@@ -16,6 +16,17 @@ export function AccountSelector() {
   const { accounts, activeAccountId, setActiveAccountId, loading } = useAccount();
   const { t } = useLanguage();
 
+  const getAccountKindLabel = (acc: any): string => {
+    const isFunded = Boolean(acc?.isFunded) || String(acc?.accountType || '').toLowerCase() === 'funded';
+    return isFunded ? 'FUNDED' : 'CHALLENGE';
+  };
+
+  const getAccountPlanLabel = (acc: any): string => {
+    const plan = typeof acc?.planType === 'string' ? acc.planType.trim() : '';
+    const challengeType = typeof acc?.challengeType === 'string' ? acc.challengeType.trim() : '';
+    return plan || challengeType || '';
+  };
+
   if (loading || accounts.length === 0) {
     return null;
   }
@@ -27,8 +38,13 @@ export function AccountSelector() {
         <Wallet className="h-4 w-4 text-muted-foreground" />
         <span className="text-sm font-medium">{accounts[0].accountName}</span>
         <Badge variant={accounts[0].accountStatus === 'active' ? 'default' : 'secondary'} className="ml-auto">
-          {accounts[0].planType}
+          {getAccountKindLabel(accounts[0])}
         </Badge>
+        {getAccountPlanLabel(accounts[0]) && (
+          <Badge variant="secondary" className="text-xs">
+            {getAccountPlanLabel(accounts[0])}
+          </Badge>
+        )}
       </div>
     );
   }
@@ -50,8 +66,13 @@ export function AccountSelector() {
                     variant={account.accountStatus === 'active' ? 'default' : 'secondary'}
                     className="text-xs"
                   >
-                    {account.planType}
+                    {getAccountKindLabel(account)}
                   </Badge>
+                  {getAccountPlanLabel(account) && (
+                    <Badge variant="secondary" className="text-xs">
+                      {getAccountPlanLabel(account)}
+                    </Badge>
+                  )}
                   <span className="text-xs text-muted-foreground">
                     ${account.accountBalance.toLocaleString()}
                   </span>
