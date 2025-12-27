@@ -2041,8 +2041,10 @@
     const auth = getAuth(app);
     const db = getFirestore(app);
     const functions = getFunctions(app, 'us-central1');
+    const TERMS_VERSION = '2025-12-27-v1';
     const createCheckoutFromPaymentLink = httpsCallable(functions, 'createCheckoutFromPaymentLink');
     const contactPublic = httpsCallable(functions, 'contactPublic');
+    const recordTermsAcceptance = httpsCallable(functions, 'recordTermsAcceptance');
     const googleProvider = new GoogleAuthProvider();
 
     // Current user
@@ -2358,6 +2360,14 @@
             emailVerified: false
           });
           console.log('Firestore document created');
+
+          try {
+            const termsAccepted = Boolean(document.getElementById('registerTerms')?.checked);
+            if (termsAccepted) {
+              await recordTermsAcceptance({ termsVersion: TERMS_VERSION, source: 'landing_email_register' });
+            }
+          } catch (e) {
+          }
         } catch (firestoreError) {
           console.warn('Firestore error (non-blocking):', firestoreError);
         }
@@ -2411,6 +2421,14 @@
             maxDrawdown: 8,
             tradingDays: 0
           });
+
+          try {
+            const termsAccepted = Boolean(document.getElementById('registerTerms')?.checked);
+            if (termsAccepted) {
+              await recordTermsAcceptance({ termsVersion: TERMS_VERSION, source: 'landing_google_register' });
+            }
+          } catch (e) {
+          }
         }
         
         closeModal();

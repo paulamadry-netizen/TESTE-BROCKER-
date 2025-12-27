@@ -2142,6 +2142,7 @@
     const functions = getFunctions(app, 'us-central1');
     const createCheckoutFromPaymentLink = httpsCallable(functions, 'createCheckoutFromPaymentLink');
     const contactPublic = httpsCallable(functions, 'contactPublic');
+    const recordTermsAcceptance = httpsCallable(functions, 'recordTermsAcceptance');
     const googleProvider = new GoogleAuthProvider();
 
     // Current user
@@ -2686,12 +2687,6 @@
           await setDoc(doc(db, 'users', user.uid), {
             email: email,
             displayName: name,
-            dateOfBirth: profile.dob,
-            city: profile.city,
-            country: profile.country,
-            address: profile.address,
-            termsAcceptedAt: serverTimestamp(),
-            termsVersion: TERMS_VERSION,
             createdAt: serverTimestamp(),
             accountStatus: 'pending',
             accountBalance: 0,
@@ -2699,9 +2694,19 @@
             profitTarget: 10,
             maxDrawdown: 8,
             tradingDays: 0,
-            emailVerified: false
+            emailVerified: false,
+            dateOfBirth: profile.dob,
+            city: profile.city,
+            country: profile.country,
+            address: profile.address,
+            termsAcceptedAt: serverTimestamp(),
+            termsVersion: TERMS_VERSION,
           });
-          console.log('Firestore document created');
+
+          try {
+            await recordTermsAcceptance({ termsVersion: TERMS_VERSION, source: 'vitrine_email_register' });
+          } catch (e) {
+          }
         } catch (firestoreError) {
           console.warn('Firestore error (non-blocking):', firestoreError);
         }
@@ -2804,6 +2809,10 @@
               termsAcceptedAt: serverTimestamp(),
               termsVersion: pendingProfileDataForGoogle.termsVersion,
             });
+            try {
+              await recordTermsAcceptance({ termsVersion: pendingProfileDataForGoogle.termsVersion, source: 'vitrine_google_register' });
+            } catch (e) {
+            }
           } else {
             await setDoc(doc(db, 'users', user.uid), baseDoc);
           }
@@ -2816,6 +2825,10 @@
             termsAcceptedAt: serverTimestamp(),
             termsVersion: pendingProfileDataForGoogle.termsVersion,
           }, { merge: true });
+          try {
+            await recordTermsAcceptance({ termsVersion: pendingProfileDataForGoogle.termsVersion, source: 'vitrine_google_register' });
+          } catch (e) {
+          }
         }
 
         pendingProfileDataForGoogle = null;

@@ -1686,6 +1686,60 @@ export const contactPublic = onCall(
   }
 );
 
+export const recordTermsAcceptance = onCall(
+  {
+    cors: true,
+  },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError('unauthenticated', 'Authentication required');
+    }
+
+    const data = request.data as { termsVersion?: string; source?: string };
+    const termsVersion = String(data?.termsVersion || '').trim();
+    const source = String(data?.source || '').trim();
+
+    if (!termsVersion || termsVersion.length > 64) {
+      throw new HttpsError('invalid-argument', 'Invalid termsVersion');
+    }
+
+    const rawReq = (request as any).rawRequest as any;
+    const headers = (rawReq && rawReq.headers) ? rawReq.headers : {};
+    const xfwd = String(headers['x-forwarded-for'] || '').trim();
+    const ip = (xfwd ? xfwd.split(',')[0].trim() : '') || String(rawReq?.ip || '').trim() || null;
+    const userAgent = String(headers['user-agent'] || '').trim() || null;
+
+    const uid = request.auth.uid;
+    const authEmail = typeof request.auth.token.email === 'string' ? request.auth.token.email : null;
+
+    const docRef = admin
+      .firestore()
+      .collection('users')
+      .doc(uid)
+      .collection('terms_acceptances')
+      .doc();
+
+    await docRef.set({
+      termsVersion,
+      acceptedAt: admin.firestore.FieldValue.serverTimestamp(),
+      ip,
+      userAgent,
+      source: source || null,
+      authEmail,
+    });
+
+    await admin.firestore().collection('users').doc(uid).set(
+      {
+        termsAcceptedAt: admin.firestore.FieldValue.serverTimestamp(),
+        termsVersion,
+      },
+      { merge: true }
+    );
+
+    return { success: true };
+  }
+);
+
 export const contactPublicHttp = onRequest(
   {
     cors: true,
