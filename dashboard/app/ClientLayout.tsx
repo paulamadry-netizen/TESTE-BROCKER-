@@ -2,18 +2,47 @@
 
 import { usePathname } from "next/navigation";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Sidebar } from "@/components/dashboard/Sidebar";
 import { AuthProvider } from "@/context/AuthContext";
 import { LanguageProvider } from "@/context/LanguageContext";
 import { AccountProvider } from "@/context/AccountContext";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
-import { Menu, X } from "lucide-react";
+import { Menu, Palette, X } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 export function ClientLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isLoginPage = pathname === "/login";
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [style, setStyle] = useState<string>("default");
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("ama_dashboard_style");
+      const next = stored && typeof stored === "string" ? stored : "default";
+      setStyle(next);
+      document.documentElement.dataset.style = next;
+    } catch {
+      setStyle("default");
+      document.documentElement.dataset.style = "default";
+    }
+  }, []);
+
+  const applyStyle = (next: string) => {
+    setStyle(next);
+    try {
+      localStorage.setItem("ama_dashboard_style", next);
+    } catch {
+    }
+    document.documentElement.dataset.style = next;
+  };
 
   return (
     <AuthProvider>
@@ -70,12 +99,29 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
                       >
                         <Menu className="h-5 w-5" />
                       </button>
-                      <Link
-                        href="/contact"
-                        className="inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none ring-offset-background border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-4"
-                      >
-                        Contact
-                      </Link>
+                      <div className="flex items-center gap-2">
+                        <div className="hidden sm:flex items-center gap-2">
+                          <Palette className="h-4 w-4 text-muted-foreground" />
+                          <Select value={style} onValueChange={applyStyle}>
+                            <SelectTrigger className="h-9 w-[170px]">
+                              <SelectValue placeholder="Style" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="default">Default</SelectItem>
+                              <SelectItem value="emerald">Emerald</SelectItem>
+                              <SelectItem value="violet">Violet</SelectItem>
+                              <SelectItem value="amber">Amber</SelectItem>
+                              <SelectItem value="rose">Rose</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <Link
+                          href="/contact"
+                          className="inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none ring-offset-background border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-4"
+                        >
+                          Contact
+                        </Link>
+                      </div>
                     </div>
                   </div>
                   {children}
