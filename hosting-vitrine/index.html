@@ -1723,12 +1723,12 @@
       </div>
       <div class="stats-bar">
         <div class="stat-item">
-          <div class="stat-value">500+</div>
-          <div class="stat-label">Traders Actifs</div>
+          <div class="stat-value">Nouveau</div>
+          <div class="stat-label">En lancement</div>
         </div>
         <div class="stat-item">
-          <div class="stat-value">2M$</div>
-          <div class="stat-label">Capital Distribué</div>
+          <div class="stat-value">Ambitieux</div>
+          <div class="stat-label">Vision long terme</div>
         </div>
         <div class="stat-item">
           <div class="stat-value">80%</div>
@@ -2322,7 +2322,7 @@
       };
 
       const keys = Object.keys(FUNDED_PLANS).map((k) => Number(k)).sort((a, b) => a - b);
-      let selectedKey = keys[0];
+      let selectedKey = keys.includes(20000) ? 20000 : keys[0];
 
       const renderCapitalCards = () => {
         capitalGrid.innerHTML = '';
@@ -2333,13 +2333,6 @@
           btn.className = 'funded-capital-card';
           btn.setAttribute('data-capital', String(k));
           btn.setAttribute('aria-pressed', String(k === selectedKey));
-
-          if (k === 20000) {
-            const badge = document.createElement('span');
-            badge.className = 'funded-capital-badge';
-            badge.textContent = 'POPULAIRE';
-            btn.appendChild(badge);
-          }
 
           const amount = document.createElement('div');
           amount.className = 'funded-capital-amount';
