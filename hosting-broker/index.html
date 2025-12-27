@@ -35,6 +35,9 @@
   const updateTradeTargetsFn = httpsCallable(functions, 'updateTradeTargets');
   const placeOrderFn = httpsCallable(functions, 'placeOrder');
   const cancelOrderFn = httpsCallable(functions, 'cancelOrder');
+  const checkPayoutEligibilityFn = httpsCallable(functions, 'checkPayoutEligibility');
+  const requestPayoutFn = httpsCallable(functions, 'requestPayout');
+  const adminForcePayoutEligibleFn = httpsCallable(functions, 'adminForcePayoutEligible');
 
   // Make available globally
   window.firebaseAuth = auth;
@@ -50,6 +53,9 @@
   window.__updateTradeTargetsFn = updateTradeTargetsFn;
   window.__placeOrderFn = placeOrderFn;
   window.__cancelOrderFn = cancelOrderFn;
+  window.__checkPayoutEligibilityFn = checkPayoutEligibilityFn;
+  window.__requestPayoutFn = requestPayoutFn;
+  window.__adminForcePayoutEligibleFn = adminForcePayoutEligibleFn;
 
   // Load user data from Firestore
   window.loadUserData = async (userId) => {
@@ -838,6 +844,7 @@ html[data-style="rose"]{--accent:#f43f5e;--accent-hover:#fb7185;--accent-dark:#e
 <div class="tabs">
 <button class="tab active" id="tabPositions"><i class="fas fa-briefcase"></i> Positions</button>
 <button class="tab" id="tabHistory"><i class="fas fa-history"></i> Historique</button>
+<button class="tab" id="tabPayout"><i class="fas fa-hand-holding-usd"></i> Payout</button>
 </div>
 <div style="display:flex;align-items:center;gap:12px">
 <div class="info-text">Simule · Alpaca + Finnhub · Effet 1:20</div>
@@ -847,6 +854,41 @@ html[data-style="rose"]{--accent:#f43f5e;--accent-hover:#fb7185;--accent-dark:#e
 <div class="table-container">
 <div id="positionsPane"><table class="data-table"><thead><tr><th>Symbole</th><th>Type</th><th>Entry</th><th>Actuel</th><th>Lots</th><th>PNL</th><th>Actions</th></tr></thead><tbody id="positionsBody"></tbody></table></div>
 <div id="historyPane" style="display:none"><table class="data-table"><thead><tr><th>Symbole</th><th>Type</th><th>Entry</th><th>Close</th><th>Lots</th><th>PNL</th><th>Date</th></tr></thead><tbody id="historyBody"></tbody></table></div>
+<div id="payoutPane" style="display:none;padding:14px">
+  <div style="display:grid;gap:12px;max-width:560px">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+      <div>
+        <div style="font-weight:800;font-size:14px">Demande de payout</div>
+        <div style="font-size:12px;color:var(--text-muted);line-height:1.4">Traitement sous 24h à 72h. Le montant est limité au profit net.</div>
+      </div>
+      <button class="btn btn-ghost" id="payoutRefreshBtn" type="button"><i class="fas fa-sync-alt"></i>Actualiser</button>
+    </div>
+
+    <div class="status-badge" id="payoutStatusBadge" style="border-color:var(--border);background:var(--bg-tertiary);color:var(--text-secondary);">
+      <div class="status-dot" style="animation:none"></div>
+      <span id="payoutStatusText">Chargement…</span>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="form-group"><label class="form-label"><i class="fas fa-user"></i> Prénom</label><input id="payoutFirstName" class="form-input" placeholder="Prénom"/></div>
+      <div class="form-group"><label class="form-label"><i class="fas fa-user"></i> Nom</label><input id="payoutLastName" class="form-input" placeholder="Nom"/></div>
+    </div>
+
+    <div class="form-group"><label class="form-label"><i class="fas fa-university"></i> RIB / IBAN</label><input id="payoutRib" class="form-input" placeholder="FR76..."/></div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:end">
+      <div class="form-group"><label class="form-label"><i class="fas fa-dollar-sign"></i> Montant (USD)</label><input id="payoutAmount" class="form-input" type="number" min="1" step="0.01" placeholder="Ex: 250"/></div>
+      <div class="form-group"><div class="form-label"><i class="fas fa-coins"></i> Max disponible</div><div style="font-weight:800" id="payoutMax">—</div></div>
+    </div>
+
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <button class="btn btn-add-order" id="payoutSubmitBtn" type="button"><i class="fas fa-paper-plane"></i>Envoyer la demande</button>
+      <button class="btn btn-ghost" id="payoutAdminForceBtn" type="button" style="display:none"><i class="fas fa-shield-alt"></i>Admin: rendre éligible (+10%)</button>
+    </div>
+
+    <div class="ind-help" id="payoutHint" style="margin-top:6px"></div>
+  </div>
+</div>
 </div>
 <div class="resize-handle resize-handle-top"></div>
 </div>
@@ -2720,6 +2762,109 @@ $('buyBtn').addEventListener('click',()=>openPosition(currentSymbol,'BUY',parseF
 $('sellBtn').addEventListener('click',()=>openPosition(currentSymbol,'SELL',parseFloat($('lotInput').value)||1));
 $('tabPositions').addEventListener('click',()=>{$('tabPositions').classList.add('active');$('tabHistory').classList.remove('active');$('positionsPane').style.display='block';$('historyPane').style.display='none';renderPositions()});
 $('tabHistory').addEventListener('click',()=>{$('tabHistory').classList.add('active');$('tabPositions').classList.remove('active');$('positionsPane').style.display='none';$('historyPane').style.display='block';renderHistory()});
+
+// Payout tab
+const setPayoutBadge=(type,text)=>{
+  const badge=$('payoutStatusBadge');
+  const label=$('payoutStatusText');
+  if(!badge||!label) return;
+  const styles={
+    ok:{bg:'var(--success-bg)',border:'var(--success)',color:'var(--success)'},
+    warn:{bg:'var(--warning-bg)',border:'var(--warning)',color:'var(--warning)'},
+    err:{bg:'var(--danger-bg)',border:'var(--danger)',color:'var(--danger)'},
+    idle:{bg:'var(--bg-tertiary)',border:'var(--border)',color:'var(--text-secondary)'}
+  };
+  const s=styles[type]||styles.idle;
+  badge.style.background=s.bg;
+  badge.style.borderColor=s.border;
+  badge.style.color=s.color;
+  label.textContent=text;
+};
+
+const refreshPayoutEligibility=async()=>{
+  try{
+    setPayoutBadge('idle','Vérification…');
+    $('payoutHint').textContent='';
+    const accountId=window.activeAccountId||'';
+    const res=await window.__checkPayoutEligibilityFn({accountId});
+    const data=res&&res.data?res.data:{};
+    const eligible=!!data.eligible;
+    const max=Number(data.maxPayout||0);
+    $('payoutMax').textContent = Number.isFinite(max)? `${max.toFixed(2)} USD` : '—';
+    if(eligible){
+      setPayoutBadge('ok',`Éligible — max ${max.toFixed(2)} USD`);
+    }else{
+      setPayoutBadge('warn',data.reason?String(data.reason):'Non éligible');
+    }
+
+    // Admin force button
+    const isAdmin = (window.userData && window.userData.role === 'admin');
+    const isFunded = (window.activeAccountData && ((window.activeAccountData.isFunded===true) || String(window.activeAccountData.accountType||'').toLowerCase()==='funded'));
+    const btn=$('payoutAdminForceBtn');
+    if(btn) btn.style.display = (isAdmin && isFunded) ? 'inline-flex' : 'none';
+  }catch(e){
+    setPayoutBadge('err','Erreur vérification');
+  }
+};
+
+const openPayoutTab=async()=>{
+  $('tabPayout').classList.add('active');
+  $('tabHistory').classList.remove('active');
+  $('tabPositions').classList.remove('active');
+  $('positionsPane').style.display='none';
+  $('historyPane').style.display='none';
+  $('payoutPane').style.display='block';
+  await refreshPayoutEligibility();
+};
+
+if($('tabPayout')) $('tabPayout').addEventListener('click',()=>openPayoutTab());
+if($('payoutRefreshBtn')) $('payoutRefreshBtn').addEventListener('click',()=>refreshPayoutEligibility());
+
+if($('payoutSubmitBtn')) $('payoutSubmitBtn').addEventListener('click',async()=>{
+  try{
+    const firstName=String($('payoutFirstName').value||'').trim();
+    const lastName=String($('payoutLastName').value||'').trim();
+    const rib=String($('payoutRib').value||'').trim();
+    const amount=Number($('payoutAmount').value||0);
+    const maxText=String($('payoutMax').textContent||'').trim();
+    const max=parseFloat(maxText);
+    if(!firstName||!lastName||!rib){showToast('Champs requis (Nom/Prénom/RIB)','error');return;}
+    if(!Number.isFinite(amount)||amount<=0){showToast('Montant invalide','error');return;}
+    if(Number.isFinite(max) && amount>max){showToast('Montant trop élevé vs profit net','error');return;}
+
+    setPayoutBadge('idle','Envoi…');
+    const accountId=window.activeAccountId||'';
+    const res=await window.__requestPayoutFn({accountId,amount,firstName,lastName,rib});
+    const msg = res && res.data && res.data.message ? String(res.data.message) : 'Demande envoyée.';
+    showToast(msg,'success');
+    $('payoutHint').textContent='Un email de confirmation a été envoyé. Délai estimé: 24h à 72h.';
+    await refreshPayoutEligibility();
+  }catch(e){
+    const msg=(e&&e.message)?String(e.message):'Erreur';
+    showToast(msg,'error');
+    setPayoutBadge('err',msg);
+  }
+});
+
+if($('payoutAdminForceBtn')) $('payoutAdminForceBtn').addEventListener('click',async()=>{
+  try{
+    const isAdmin = (window.userData && window.userData.role === 'admin');
+    if(!isAdmin){showToast('Admin uniquement','error');return;}
+    const userId = window.firebaseUser ? window.firebaseUser.uid : null;
+    const accountId = window.activeAccountId || '';
+    if(!userId||!accountId){showToast('Compte introuvable','error');return;}
+    setPayoutBadge('idle','Admin: application…');
+    const res=await window.__adminForcePayoutEligibleFn({userId,accountId});
+    const bonus = res && res.data && res.data.bonusProfit ? Number(res.data.bonusProfit) : 0;
+    showToast(`Eligibilité activée (+${bonus.toFixed(2)} USD)`,'success');
+    await window.loadUserData(userId);
+    await refreshPayoutEligibility();
+  }catch(e){
+    const msg=(e&&e.message)?String(e.message):'Erreur';
+    showToast(msg,'error');
+    setPayoutBadge('err',msg);
+  }
+});
 $('modalCancel').addEventListener('click',()=>$('positionModal').style.display='none');
 $('modalSave').addEventListener('click',()=>{const pos=positions.find(p=>p.id===activeModalId);if(!pos)return;const tp=$('modalTp').value,sl=$('modalSl').value,sellLots=parseFloat($('modalSellLots').value)||0;pos.tp=tp?Number(tp):null;pos.sl=sl?Number(sl):null;if(sellLots>0)closePosition(pos.id,sellLots);$('positionModal').style.display='none';renderPositions();renderTotals();showToast('Sauvegarde','success')});
 document.querySelectorAll('.timeframe-btn').forEach(btn=>btn.addEventListener('click',()=>switchTimeframe(btn.dataset.tf)));

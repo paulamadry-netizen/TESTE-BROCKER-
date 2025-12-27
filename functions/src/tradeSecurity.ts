@@ -849,6 +849,65 @@ export const executeTrade = onCall({ secrets: [finnhubApiKey] }, async (request)
 });
 
 // ==========================================
+// ADMIN: FORCE PAYOUT ELIGIBLE (FUNDED ONLY)
+// ==========================================
+
+export const adminForcePayoutEligible = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Non authentifié');
+  }
+
+  const callerId = request.auth.uid;
+  const callerDoc = await db.collection('users').doc(callerId).get();
+  if (!callerDoc.exists || callerDoc.data()?.role !== 'admin') {
+    throw new HttpsError('permission-denied', 'Accès réservé aux administrateurs');
+  }
+
+  const targetUserIdRaw = request.data && request.data.userId ? String(request.data.userId) : '';
+  const targetAccountIdRaw = request.data && request.data.accountId ? String(request.data.accountId) : '';
+  const targetUserId = targetUserIdRaw.trim();
+  const targetAccountId = targetAccountIdRaw.trim();
+
+  if (!targetUserId || !targetAccountId) {
+    throw new HttpsError('invalid-argument', 'userId/accountId requis');
+  }
+
+  const accountRef = db.collection('users').doc(targetUserId).collection('accounts').doc(targetAccountId);
+  const accountSnap = await accountRef.get();
+  if (!accountSnap.exists) throw new HttpsError('not-found', 'Compte introuvable');
+  const acc = accountSnap.data() as any;
+
+  const accType = typeof acc?.accountType === 'string' ? acc.accountType.toLowerCase() : '';
+  const funded = Boolean(acc?.isFunded) || accType === 'funded';
+  if (!funded) {
+    throw new HttpsError('failed-precondition', 'Seulement pour les comptes financés');
+  }
+
+  const initialBalance = Number(acc?.initialFundedBalance ?? acc?.initialBalance ?? 0);
+  if (!Number.isFinite(initialBalance) || initialBalance <= 0) {
+    throw new HttpsError('failed-precondition', 'Initial balance invalide');
+  }
+
+  const bonusProfit = initialBalance * 0.10;
+
+  await accountRef.set({
+    payoutEligibleOverride: true,
+    payoutEligibleOverrideAt: admin.firestore.FieldValue.serverTimestamp(),
+    payoutEligibleOverrideBy: callerId,
+    accountBalance: admin.firestore.FieldValue.increment(bonusProfit),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  }, { merge: true });
+
+  await auditLog('payout_force_eligible', targetUserId, {
+    accountId: targetAccountId,
+    bonusProfit,
+    forcedBy: callerId,
+  });
+
+  return { success: true, bonusProfit };
+});
+
+// ==========================================
 // FONCTION: FERMER UN TRADE
 // ==========================================
 
@@ -2060,6 +2119,158 @@ export const forceUpgradeChallenge = onCall(async (request) => {
 });
 
 // ==========================================
+// FONCTION: CHECK PAYOUT ELIGIBILITY
+// ==========================================
+
+export const checkPayoutEligibility = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Non authentifié');
+  }
+
+  const userId = request.auth.uid;
+  const accountIdRaw = request.data && request.data.accountId ? String(request.data.accountId) : '';
+  const accountId = accountIdRaw.trim();
+
+  const userDoc = await db.collection('users').doc(userId).get();
+  if (!userDoc.exists) throw new HttpsError('not-found', 'Utilisateur introuvable');
+  const userData = userDoc.data() as any;
+
+  const resolvedAccountId = accountId || (typeof userData?.activeAccountId === 'string' ? userData.activeAccountId : '');
+  if (!resolvedAccountId) throw new HttpsError('failed-precondition', 'Aucun compte sélectionné');
+
+  const accountRef = db.collection('users').doc(userId).collection('accounts').doc(resolvedAccountId);
+  const accountSnap = await accountRef.get();
+  if (!accountSnap.exists) throw new HttpsError('not-found', 'Compte introuvable');
+  const acc = accountSnap.data() as any;
+
+  const accStatus = typeof acc?.accountStatus === 'string' ? acc.accountStatus : '';
+  if (accStatus !== 'active') {
+    return {
+      eligible: false,
+      reason: `Compte ${accStatus || 'inactif'}.`,
+      maxPayout: 0,
+      accountId: resolvedAccountId,
+    };
+  }
+
+  const accType = typeof acc?.accountType === 'string' ? acc.accountType.toLowerCase() : '';
+  const funded = Boolean(acc?.isFunded) || accType === 'funded';
+  if (!funded) {
+    return {
+      eligible: false,
+      reason: 'Compte non financé.',
+      maxPayout: 0,
+      accountId: resolvedAccountId,
+    };
+  }
+
+  const currentBalance = Number(acc?.accountBalance ?? 0);
+  const initialBalance = Number(acc?.initialFundedBalance ?? acc?.initialBalance ?? 0);
+  const maxPayout = Math.max(0, currentBalance - initialBalance);
+
+  // Admin override: allow showing eligible even if rules not met, but keep amount bound to profit.
+  const overrideEligible = Boolean(acc?.payoutEligibleOverride);
+  if (overrideEligible) {
+    return {
+      eligible: true,
+      reason: 'Eligibilité admin.',
+      maxPayout,
+      accountId: resolvedAccountId,
+      override: true,
+    };
+  }
+
+  const payoutsReceived = Number(acc?.payoutsReceived ?? 0);
+  const lastPayoutAt = acc?.lastPayoutAt;
+  const fundedAt = acc?.fundedAt;
+
+  const fundedDate = toJsDate(fundedAt) || null;
+  if (!fundedDate) {
+    return {
+      eligible: false,
+      reason: 'Date de funding manquante.',
+      maxPayout,
+      accountId: resolvedAccountId,
+    };
+  }
+
+  if (payoutsReceived === 0) {
+    const daysSinceFunding = Math.floor((Date.now() - fundedDate.getTime()) / (1000 * 60 * 60 * 24));
+    if (daysSinceFunding < 15) {
+      return {
+        eligible: false,
+        reason: `Premier payout après 15 jours (${daysSinceFunding}/15).`,
+        maxPayout,
+        accountId: resolvedAccountId,
+      };
+    }
+
+    const requiredBalance = initialBalance * 1.05;
+    if (currentBalance < requiredBalance) {
+      return {
+        eligible: false,
+        reason: `Solde requis 105% (${requiredBalance.toFixed(2)}).`,
+        maxPayout,
+        accountId: resolvedAccountId,
+      };
+    }
+
+    // $150 profit on 4 different days since funding
+    const tradesSnapshot = await db.collection('trades')
+      .where('userId', '==', userId)
+      .where('status', '==', 'closed')
+      .get();
+
+    const profitByDay = new Map<string, number>();
+    tradesSnapshot.forEach((doc) => {
+      const trade = doc.data() as any;
+      if (!trade || trade.accountId !== resolvedAccountId) return;
+      const closedDate = toJsDate(trade.closedAt);
+      if (!closedDate) return;
+      if (closedDate.getTime() < fundedDate.getTime()) return;
+      const dateKey = closedDate.toISOString().split('T')[0];
+      profitByDay.set(dateKey, (profitByDay.get(dateKey) || 0) + (Number(trade.pnl) || 0));
+    });
+
+    let daysWithTarget = 0;
+    for (const profit of profitByDay.values()) {
+      if (profit >= 150) daysWithTarget++;
+    }
+
+    if (daysWithTarget < 4) {
+      return {
+        eligible: false,
+        reason: `Requis: $150 sur 4 jours (${daysWithTarget}/4).`,
+        maxPayout,
+        accountId: resolvedAccountId,
+      };
+    }
+  }
+
+  if (payoutsReceived > 0 && lastPayoutAt) {
+    const lastPayoutDate = toJsDate(lastPayoutAt);
+    if (lastPayoutDate) {
+      const daysSinceLastPayout = Math.floor((Date.now() - lastPayoutDate.getTime()) / (1000 * 60 * 60 * 24));
+      if (daysSinceLastPayout < 15) {
+        return {
+          eligible: false,
+          reason: `Payouts tous les 15 jours (${daysSinceLastPayout}/15).`,
+          maxPayout,
+          accountId: resolvedAccountId,
+        };
+      }
+    }
+  }
+
+  return {
+    eligible: true,
+    reason: 'Eligible.',
+    maxPayout,
+    accountId: resolvedAccountId,
+  };
+});
+
+// ==========================================
 // FONCTION: DEMANDER UN PAYOUT
 // ==========================================
 
@@ -2072,6 +2283,10 @@ export const requestPayout = onCall(async (request) => {
   const requestedAmount = request.data.amount;
   const accountIdRaw = request.data && request.data.accountId ? String(request.data.accountId) : '';
   const accountId = accountIdRaw.trim();
+
+  const firstName = request.data && request.data.firstName ? String(request.data.firstName).trim() : '';
+  const lastName = request.data && request.data.lastName ? String(request.data.lastName).trim() : '';
+  const rib = request.data && request.data.rib ? String(request.data.rib).trim() : '';
 
   console.log(`💰 Demande de payout: ${userId}, montant: ${requestedAmount}`);
 
@@ -2096,12 +2311,14 @@ export const requestPayout = onCall(async (request) => {
     throw new HttpsError('failed-precondition', 'Vous devez sélectionner un compte financé pour demander un payout');
   }
 
+  const overrideEligible = Boolean(acc?.payoutEligibleOverride);
+
   const payoutsReceived = acc.payoutsReceived || 0;
   const lastPayoutAt = acc.lastPayoutAt;
   const fundedAt = acc.fundedAt;
 
   // 2. RÈGLES POUR LE PREMIER PAYOUT
-  if (payoutsReceived === 0) {
+  if (!overrideEligible && payoutsReceived === 0) {
     console.log('📋 Vérification des règles du premier payout...');
 
     // Règle A: 15 jours depuis le financement
@@ -2166,7 +2383,7 @@ export const requestPayout = onCall(async (request) => {
   }
 
   // 3. RÈGLES POUR LES PAYOUTS SUIVANTS
-  if (payoutsReceived > 0 && lastPayoutAt) {
+  if (!overrideEligible && payoutsReceived > 0 && lastPayoutAt) {
     const lastPayoutDate = lastPayoutAt.toDate ? lastPayoutAt.toDate() : new Date(lastPayoutAt);
     const daysSinceLastPayout = Math.floor((Date.now() - lastPayoutDate.getTime()) / (1000 * 60 * 60 * 24));
 
@@ -2200,6 +2417,16 @@ export const requestPayout = onCall(async (request) => {
   try {
     const payoutRef = db.collection('payouts').doc();
 
+    if (!firstName || firstName.length < 2 || firstName.length > 60) {
+      throw new HttpsError('invalid-argument', 'Prénom invalide');
+    }
+    if (!lastName || lastName.length < 2 || lastName.length > 60) {
+      throw new HttpsError('invalid-argument', 'Nom invalide');
+    }
+    if (!rib || rib.length < 8 || rib.length > 120) {
+      throw new HttpsError('invalid-argument', 'RIB/IBAN invalide');
+    }
+
     await payoutRef.set({
       userId,
       accountId: resolvedAccountId,
@@ -2209,7 +2436,13 @@ export const requestPayout = onCall(async (request) => {
       payoutNumber: payoutsReceived + 1,
       isFirstPayout: payoutsReceived === 0,
       accountBalance: currentBalance,
-      kycVerified: userData.kycVerified || false
+      kycVerified: userData.kycVerified || false,
+      beneficiary: {
+        firstName,
+        lastName,
+      },
+      rib,
+      maxPayoutAtRequest: maxPayout,
     });
 
     // Log d'audit
@@ -2222,16 +2455,139 @@ export const requestPayout = onCall(async (request) => {
 
     console.log(`✅ Demande de payout créée: ${payoutRef.id}`);
 
+    // Emails: user + support inbox
+    const toEmail = (typeof userData?.email === 'string' ? userData.email : '').trim().toLowerCase();
+    const supportInbox = 'ama.firm.fr@gmail.com';
+    const from = 'AMA FIRM <ama.firm.fr@gmail.com>';
+
+    const safe = (v: string) =>
+      v
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+
+    const subjectUser = 'Votre demande de payout est en cours de traitement';
+    const textUser =
+      `Votre demande de payout a été reçue.\n\n` +
+      `Montant: ${Number(requestedAmount).toFixed(2)} USD\n` +
+      `Compte: ${resolvedAccountId}\n\n` +
+      `Statut: en cours de traitement\n` +
+      `Délai estimé: 24h à 72h\n\n` +
+      `Support: ${supportInbox}`;
+
+    const htmlUser = `<!doctype html>
+<html>
+<body style="font-family:ui-sans-serif,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,'Helvetica Neue',sans-serif;background:#f3f4f6;padding:24px;">
+  <div style="max-width:640px;margin:0 auto;background:#ffffff;border:1px solid #e5e7eb;border-radius:14px;overflow:hidden;">
+    <div style="padding:18px 20px;border-bottom:1px solid #e5e7eb;">
+      <div style="font-weight:800;color:#0f172a;">AMA FIRM — Payout</div>
+      <div style="color:#64748b;font-size:12px;margin-top:4px;">Demande enregistrée</div>
+    </div>
+    <div style="padding:18px 20px;color:#0f172a;font-size:13px;line-height:1.7;">
+      <p style="margin:0 0 10px;">Votre demande de payout est <strong>en cours de traitement</strong>.</p>
+      <div style="margin:12px 0;padding:12px;border-radius:12px;background:#f8fafc;border:1px solid #e5e7eb;">
+        <div><strong>Montant:</strong> ${safe(Number(requestedAmount).toFixed(2))} USD</div>
+        <div><strong>Compte:</strong> ${safe(resolvedAccountId)}</div>
+        <div><strong>Délai estimé:</strong> 24h à 72h</div>
+      </div>
+      <p style="margin:10px 0 0;color:#334155;">Si besoin, réponds à cet email.</p>
+    </div>
+  </div>
+</body>
+</html>`;
+
+    const subjectSupport = `Payout demandé — ${Number(requestedAmount).toFixed(2)} USD`;
+    const textSupport =
+      `Nouvelle demande de payout\n\n` +
+      `UserId: ${userId}\n` +
+      `Email: ${toEmail || '—'}\n` +
+      `AccountId: ${resolvedAccountId}\n` +
+      `Montant: ${Number(requestedAmount).toFixed(2)} USD\n` +
+      `Max disponible: ${Number(maxPayout).toFixed(2)} USD\n` +
+      `Nom: ${firstName} ${lastName}\n` +
+      `RIB: ${rib}\n` +
+      `PayoutId: ${payoutRef.id}`;
+
+    const htmlSupport = `<!doctype html>
+<html>
+<body style="font-family:ui-sans-serif,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,'Helvetica Neue',sans-serif;background:#f3f4f6;padding:24px;">
+  <div style="max-width:740px;margin:0 auto;background:#ffffff;border:1px solid #e5e7eb;border-radius:14px;overflow:hidden;">
+    <div style="padding:18px 20px;border-bottom:1px solid #e5e7eb;">
+      <div style="font-weight:800;color:#0f172a;">AMA FIRM — Demande de payout</div>
+      <div style="color:#64748b;font-size:12px;margin-top:4px;">A traiter sous 24h à 72h</div>
+    </div>
+    <div style="padding:18px 20px;color:#0f172a;font-size:13px;line-height:1.7;">
+      <div><strong>PayoutId:</strong> ${safe(payoutRef.id)}</div>
+      <div><strong>UserId:</strong> ${safe(userId)}</div>
+      <div><strong>Email:</strong> ${safe(toEmail || '—')}</div>
+      <div><strong>AccountId:</strong> ${safe(resolvedAccountId)}</div>
+      <div><strong>Montant:</strong> ${safe(Number(requestedAmount).toFixed(2))} USD</div>
+      <div><strong>Max disponible:</strong> ${safe(Number(maxPayout).toFixed(2))} USD</div>
+      <div style="margin-top:10px;"><strong>Nom:</strong> ${safe(firstName)} ${safe(lastName)}</div>
+      <div><strong>RIB:</strong> ${safe(rib)}</div>
+    </div>
+  </div>
+</body>
+</html>`;
+
+    try {
+      // support
+      await db.collection('mail').add({
+        to: [supportInbox],
+        message: {
+          from,
+          replyTo: toEmail || supportInbox,
+          subject: subjectSupport,
+          text: textSupport,
+          html: htmlSupport,
+          headers: {
+            'X-AMA-Email': 'payout_requested_support',
+            'X-AMA-UserId': userId,
+            'X-AMA-AccountId': resolvedAccountId,
+            'X-AMA-PayoutId': payoutRef.id,
+          },
+        },
+      });
+    } catch (e) {
+    }
+
+    if (toEmail) {
+      try {
+        await db.collection('mail').add({
+          to: [toEmail],
+          message: {
+            from,
+            replyTo: supportInbox,
+            subject: subjectUser,
+            text: textUser,
+            html: htmlUser,
+            headers: {
+              'X-AMA-Email': 'payout_requested_user',
+              'X-AMA-UserId': userId,
+              'X-AMA-AccountId': resolvedAccountId,
+              'X-AMA-PayoutId': payoutRef.id,
+            },
+          },
+        });
+      } catch (e) {
+      }
+    }
+
     return {
       success: true,
       payoutId: payoutRef.id,
-      message: `Demande de payout de ${requestedAmount} USD créée avec succès. En attente d'approbation.`,
+      message: `Demande envoyée. Traitement sous 24h à 72h.`,
       estimatedProcessingDays: 3
     };
 
   } catch (error: any) {
+    if (error instanceof HttpsError) {
+      throw error;
+    }
     console.error('❌ Erreur création payout:', error);
-    throw new HttpsError('internal', `Erreur: ${error.message}`);
+    throw new HttpsError('internal', `Erreur: ${error?.message || 'unknown'}`);
   }
 });
 

@@ -1894,8 +1894,10 @@ export {
   closeTradesBeforeWeekend,
   upgradeChallenge,
   forceUpgradeChallenge,
+  checkPayoutEligibility,
   requestPayout,
-  approvePayout
+  approvePayout,
+  adminForcePayoutEligible
 } from './tradeSecurity';
 
 // ==========================================

@@ -94,6 +94,12 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    match /payouts/{payoutId} {
+      allow read: if isAuthenticated() &&
+                     (resource.data.userId == request.auth.uid || isAdmin());
+      allow write: if false;
+    }
+
     // ==========================================
     // PRICE SNAPSHOTS (audit des prix)
     // ==========================================
