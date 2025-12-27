@@ -1886,6 +1886,7 @@ export {
   updateTradeTargets,
   placeOrder,
   cancelOrder,
+  recalculateTradingDays,
   updateTradingDays,
   calculateDrawdowns,
   closeTradesBeforeWeekend,
@@ -2481,8 +2482,8 @@ export const checkPendingOrders = onSchedule('every 1 minutes', async () => {
               sl: stopLoss || null,
               marginUsed: marginUsed || null,
               status: 'open',
-              openedAt: new Date().toISOString(),
-              createdAt: new Date().toISOString(),
+              openedAt: admin.firestore.FieldValue.serverTimestamp(),
+              createdAt: admin.firestore.FieldValue.serverTimestamp(),
             });
 
             tx.update(admin.firestore().collection('orders').doc(id), {

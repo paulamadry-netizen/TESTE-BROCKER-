@@ -1045,6 +1045,63 @@ export const updateTradeTargets = onCall(async (request) => {
   return { success: true };
 });
 
+export const recalculateTradingDays = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Non authentifié');
+  }
+
+  const userId = request.auth.uid;
+  const accountIdRaw = request.data && (request.data as any).accountId ? String((request.data as any).accountId) : '';
+  const accountId = accountIdRaw.trim();
+
+  const accountsRef = db.collection('users').doc(userId).collection('accounts');
+  const accountsSnap = accountId ? null : await accountsRef.get();
+  const targetAccountIds = accountId
+    ? [accountId]
+    : accountsSnap
+      ? accountsSnap.docs.map((d) => d.id)
+      : [];
+
+  if (!targetAccountIds.length) {
+    throw new HttpsError('failed-precondition', 'Aucun compte à recalculer');
+  }
+
+  const tradesSnap = await db.collection('trades')
+    .where('userId', '==', userId)
+    .get();
+
+  const daysByAccount = new Map<string, Set<string>>();
+  targetAccountIds.forEach((id) => daysByAccount.set(id, new Set<string>()));
+
+  tradesSnap.forEach((docSnap) => {
+    const t = docSnap.data() as any;
+    const tradeAccountId = typeof t?.accountId === 'string'
+      ? t.accountId
+      : (typeof t?.activeAccountId === 'string' ? t.activeAccountId : '');
+    if (!tradeAccountId || !daysByAccount.has(tradeAccountId)) return;
+
+    const dateRaw = t.openedAt || t.closedAt || t.createdAt;
+    const d = toJsDate(dateRaw);
+    if (!d) return;
+    daysByAccount.get(tradeAccountId)!.add(d.toISOString().slice(0, 10));
+  });
+
+  const batch = db.batch();
+  for (const [accId, set] of daysByAccount.entries()) {
+    batch.set(accountsRef.doc(accId), {
+      tradingDays: set.size,
+      tradingDaysRecalculatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+  }
+  await batch.commit();
+
+  return {
+    success: true,
+    updatedAccounts: Array.from(daysByAccount.entries()).map(([id, set]) => ({ accountId: id, tradingDays: set.size })),
+  };
+});
+
 export const placeOrder = onCall({ secrets: [finnhubApiKey] }, async (request) => {
   if (!request.auth) {
     throw new HttpsError('unauthenticated', 'Non authentifié');
@@ -1241,35 +1298,47 @@ export const cancelOrder = onCall(async (request) => {
 export const updateTradingDays = onSchedule('0 0 * * *', async (event) => {
   console.log('🗓️ Mise à jour des jours de trading...');
 
-  const yesterday = new Date();
-  yesterday.setDate(yesterday.getDate() - 1);
-  yesterday.setUTCHours(0, 0, 0, 0);
-
-  const yesterdayEnd = new Date(yesterday);
+  const yesterdayStart = new Date();
+  yesterdayStart.setUTCDate(yesterdayStart.getUTCDate() - 1);
+  yesterdayStart.setUTCHours(0, 0, 0, 0);
+  const yesterdayEnd = new Date(yesterdayStart);
   yesterdayEnd.setUTCHours(23, 59, 59, 999);
 
-  // Trouver tous les users qui ont tradé hier
+  const startTs = admin.firestore.Timestamp.fromDate(yesterdayStart);
+  const endTs = admin.firestore.Timestamp.fromDate(yesterdayEnd);
+
+  // Trouver tous les trades ouverts hier (Timestamp)
   const tradesSnapshot = await db.collection('trades')
-    .where('openedAt', '>=', yesterday.toISOString())
-    .where('openedAt', '<=', yesterdayEnd.toISOString())
+    .where('openedAt', '>=', startTs)
+    .where('openedAt', '<=', endTs)
     .get();
 
-  const usersWhoTraded = new Set<string>();
-  tradesSnapshot.forEach((doc) => {
-    usersWhoTraded.add(doc.data().userId);
+  const accountsWhoTraded = new Map<string, Set<string>>();
+  tradesSnapshot.forEach((docSnap) => {
+    const t = docSnap.data() as any;
+    const uid = typeof t?.userId === 'string' ? t.userId : '';
+    const accId = typeof t?.accountId === 'string'
+      ? t.accountId
+      : (typeof t?.activeAccountId === 'string' ? t.activeAccountId : '');
+    if (!uid || !accId) return;
+    if (!accountsWhoTraded.has(uid)) accountsWhoTraded.set(uid, new Set<string>());
+    accountsWhoTraded.get(uid)!.add(accId);
   });
 
-  // Incrémenter tradingDays pour chaque user
   const batch = db.batch();
-  for (const userId of usersWhoTraded) {
-    const userRef = db.collection('users').doc(userId);
-    batch.update(userRef, {
-      tradingDays: admin.firestore.FieldValue.increment(1)
-    });
+  for (const [uid, accIds] of accountsWhoTraded.entries()) {
+    for (const accId of accIds.values()) {
+      const accRef = db.collection('users').doc(uid).collection('accounts').doc(accId);
+      batch.set(accRef, {
+        tradingDays: admin.firestore.FieldValue.increment(1),
+        lastTradeDayCountedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+    }
   }
 
   await batch.commit();
-  console.log(`✅ Mis à jour ${usersWhoTraded.size} utilisateurs`);
+  console.log(`✅ Mis à jour ${accountsWhoTraded.size} utilisateurs (tradingDays par compte)`);
 });
 
 // ==========================================
