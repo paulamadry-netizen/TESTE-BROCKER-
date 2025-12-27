@@ -2400,19 +2400,6 @@ export const requestPayout = onCall(async (request) => {
     throw new HttpsError('invalid-argument', 'Montant invalide');
   }
 
-  const currentBalance = acc.accountBalance;
-  const initialBalance = acc.initialFundedBalance || acc.initialBalance;
-
-  // Maximum = solde actuel - solde initial (pour garder le capital)
-  const maxPayout = currentBalance - initialBalance;
-
-  if (requestedAmount > maxPayout) {
-    throw new HttpsError(
-      'failed-precondition',
-      `Montant trop élevé. Maximum disponible: ${maxPayout.toFixed(2)} USD (profit uniquement)`
-    );
-  }
-
   // 5. CRÉER LA DEMANDE DE PAYOUT
   try {
     const payoutRef = db.collection('payouts').doc();
@@ -2427,28 +2414,70 @@ export const requestPayout = onCall(async (request) => {
       throw new HttpsError('invalid-argument', 'RIB/IBAN invalide');
     }
 
-    await payoutRef.set({
-      userId,
-      accountId: resolvedAccountId,
-      amount: requestedAmount,
-      status: 'pending',
-      requestedAt: admin.firestore.FieldValue.serverTimestamp(),
-      payoutNumber: payoutsReceived + 1,
-      isFirstPayout: payoutsReceived === 0,
-      accountBalance: currentBalance,
-      kycVerified: userData.kycVerified || false,
-      beneficiary: {
-        firstName,
-        lastName,
-      },
-      rib,
-      maxPayoutAtRequest: maxPayout,
+    const amount = Number(requestedAmount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      throw new HttpsError('invalid-argument', 'Montant invalide');
+    }
+
+    const txResult = await db.runTransaction(async (transaction) => {
+      const freshAccountSnap = await transaction.get(accountRef);
+      if (!freshAccountSnap.exists) {
+        throw new HttpsError('not-found', 'Compte introuvable');
+      }
+      const freshAcc = freshAccountSnap.data() as any;
+
+      const currentBalance = Number(freshAcc?.accountBalance ?? 0);
+      const initialBalance = Number(freshAcc?.initialFundedBalance ?? freshAcc?.initialBalance ?? 0);
+      const maxPayout = Math.max(0, currentBalance - initialBalance);
+
+      if (amount > maxPayout) {
+        throw new HttpsError(
+          'failed-precondition',
+          `Montant trop élevé. Maximum disponible: ${maxPayout.toFixed(2)} USD (profit uniquement)`
+        );
+      }
+
+      if (currentBalance - amount < initialBalance) {
+        throw new HttpsError('failed-precondition', 'Montant invalide vs capital');
+      }
+
+      const nextPayoutsReceived = Number(freshAcc?.payoutsReceived ?? payoutsReceived ?? 0);
+
+      transaction.set(payoutRef, {
+        userId,
+        accountId: resolvedAccountId,
+        amount: amount,
+        status: 'pending',
+        requestedAt: admin.firestore.FieldValue.serverTimestamp(),
+        reservedFromBalance: true,
+        reservedAt: admin.firestore.FieldValue.serverTimestamp(),
+        payoutNumber: nextPayoutsReceived + 1,
+        isFirstPayout: nextPayoutsReceived === 0,
+        accountBalance: currentBalance,
+        kycVerified: userData.kycVerified || false,
+        beneficiary: {
+          firstName,
+          lastName,
+        },
+        rib,
+        maxPayoutAtRequest: maxPayout,
+      });
+
+      transaction.update(accountRef, {
+        accountBalance: admin.firestore.FieldValue.increment(-amount),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      return {
+        currentBalance,
+        maxPayout,
+      };
     });
 
     // Log d'audit
     await auditLog('payout_requested', userId, {
       payoutId: payoutRef.id,
-      amount: requestedAmount,
+      amount: amount,
       payoutNumber: payoutsReceived + 1,
       isFirstPayout: payoutsReceived === 0
     });
@@ -2505,7 +2534,7 @@ export const requestPayout = onCall(async (request) => {
       `Email: ${toEmail || '—'}\n` +
       `AccountId: ${resolvedAccountId}\n` +
       `Montant: ${Number(requestedAmount).toFixed(2)} USD\n` +
-      `Max disponible: ${Number(maxPayout).toFixed(2)} USD\n` +
+      `Max disponible: ${Number(txResult.maxPayout).toFixed(2)} USD\n` +
       `Nom: ${firstName} ${lastName}\n` +
       `RIB: ${rib}\n` +
       `PayoutId: ${payoutRef.id}`;
@@ -2524,7 +2553,7 @@ export const requestPayout = onCall(async (request) => {
       <div><strong>Email:</strong> ${safe(toEmail || '—')}</div>
       <div><strong>AccountId:</strong> ${safe(resolvedAccountId)}</div>
       <div><strong>Montant:</strong> ${safe(Number(requestedAmount).toFixed(2))} USD</div>
-      <div><strong>Max disponible:</strong> ${safe(Number(maxPayout).toFixed(2))} USD</div>
+      <div><strong>Max disponible:</strong> ${safe(Number(txResult.maxPayout).toFixed(2))} USD</div>
       <div style="margin-top:10px;"><strong>Nom:</strong> ${safe(firstName)} ${safe(lastName)}</div>
       <div><strong>RIB:</strong> ${safe(rib)}</div>
     </div>
@@ -2617,6 +2646,8 @@ export const approvePayout = onCall(async (request) => {
   }
 
   const payout = payoutDoc.data()!;
+  const payoutAmount = Number(payout.amount || 0);
+  const payoutReserved = Boolean((payout as any).reservedFromBalance);
 
   if (payout.status !== 'pending') {
     throw new HttpsError('failed-precondition', `Ce payout a déjà été traité (status: ${payout.status})`);
@@ -2629,6 +2660,41 @@ export const approvePayout = onCall(async (request) => {
         status: 'approved',
         approvedAt: admin.firestore.FieldValue.serverTimestamp(),
         approvedBy: request.auth!.uid,
+      });
+
+      // Mettre à jour le compte (compteurs) sans re-déduire le solde.
+      await db.runTransaction(async (transaction) => {
+        const userRef = db.collection('users').doc(payout.userId);
+        const userSnap = await transaction.get(userRef);
+
+        const payoutAccountId = typeof payout.accountId === 'string' ? payout.accountId : '';
+        const fallbackAccountId = userSnap.exists && typeof (userSnap.data() as any)?.activeAccountId === 'string'
+          ? String((userSnap.data() as any).activeAccountId)
+          : '';
+        const accountId = (payoutAccountId || fallbackAccountId).trim();
+        if (!accountId) {
+          throw new HttpsError('failed-precondition', 'Aucun accountId associé au payout');
+        }
+
+        const accountRef = userRef.collection('accounts').doc(accountId);
+        const accountSnap = await transaction.get(accountRef);
+        if (!accountSnap.exists) {
+          throw new HttpsError('not-found', 'Compte introuvable');
+        }
+
+        const updates: any = {
+          payoutsReceived: admin.firestore.FieldValue.increment(1),
+          lastPayoutAt: admin.firestore.FieldValue.serverTimestamp(),
+          totalPayoutAmount: admin.firestore.FieldValue.increment(Number.isFinite(payoutAmount) ? payoutAmount : 0),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        };
+
+        // Compat: si ancien payout (avant réservation), on déduit ici.
+        if (!payoutReserved && Number.isFinite(payoutAmount) && payoutAmount > 0) {
+          updates.accountBalance = admin.firestore.FieldValue.increment(-payoutAmount);
+        }
+
+        transaction.update(accountRef, updates);
       });
 
       // Log d'audit
@@ -2715,11 +2781,32 @@ export const approvePayout = onCall(async (request) => {
 
     } else {
       // REJETER LE PAYOUT
-      await payoutDoc.ref.update({
-        status: 'rejected',
-        rejectedAt: admin.firestore.FieldValue.serverTimestamp(),
-        rejectedBy: request.auth.uid,
-        rejectionReason: rejectionReason || 'Non spécifié'
+      await db.runTransaction(async (transaction) => {
+        transaction.update(payoutDoc.ref, {
+          status: 'rejected',
+          rejectedAt: admin.firestore.FieldValue.serverTimestamp(),
+          rejectedBy: request.auth!.uid,
+          rejectionReason: rejectionReason || 'Non spécifié',
+        });
+
+        // Si le montant avait été réservé à la demande, on rembourse.
+        if (payoutReserved && Number.isFinite(payoutAmount) && payoutAmount > 0) {
+          const userRef = db.collection('users').doc(payout.userId);
+          const userSnap = await transaction.get(userRef);
+          const payoutAccountId = typeof payout.accountId === 'string' ? payout.accountId : '';
+          const fallbackAccountId = userSnap.exists && typeof (userSnap.data() as any)?.activeAccountId === 'string'
+            ? String((userSnap.data() as any).activeAccountId)
+            : '';
+          const accountId = (payoutAccountId || fallbackAccountId).trim();
+          if (!accountId) {
+            throw new HttpsError('failed-precondition', 'Aucun accountId associé au payout');
+          }
+          const accountRef = userRef.collection('accounts').doc(accountId);
+          transaction.update(accountRef, {
+            accountBalance: admin.firestore.FieldValue.increment(payoutAmount),
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+        }
       });
 
       // Log d'audit
