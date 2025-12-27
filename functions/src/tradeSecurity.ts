@@ -10,6 +10,66 @@ import { getValidatedPrice, finnhubApiKey } from './priceService';
 
 const db = admin.firestore();
 
+const PRICE_ENGINE_URL = 'https://ig-price-engine-44407447466.europe-west1.run.app';
+
+type MarketSnapshot = {
+  epic?: string;
+  symbol?: string;
+  bid?: number;
+  offer?: number;
+  marketStatus?: string;
+  updateTime?: string;
+  timestamp?: number;
+};
+
+async function getMarketSnapshot(symbolApi: string): Promise<MarketSnapshot | null> {
+  const epic = String(symbolApi || '').trim();
+  if (!epic) return null;
+
+  try {
+    const res = await fetch(`${PRICE_ENGINE_URL}/api/prices/${encodeURIComponent(epic)}`, {
+      method: 'GET',
+      headers: {
+        Accept: 'application/json',
+      },
+    });
+
+    if (!res.ok) return null;
+    const data = (await res.json()) as MarketSnapshot;
+    return data && typeof data === 'object' ? data : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+async function validateMarketOpen(symbolApi: string): Promise<ValidationResult> {
+  const snap = await getMarketSnapshot(symbolApi);
+  if (!snap) {
+    return { allowed: false, reason: 'Marché fermé / prix indisponible' };
+  }
+
+  const status = String((snap as any).marketStatus || '').toUpperCase();
+  if (status && ['CLOSED', 'OFFLINE', 'SUSPENDED', 'SUSPEND'].includes(status)) {
+    return { allowed: false, reason: 'Marché fermé' };
+  }
+
+  const ts = Number((snap as any).timestamp);
+  if (Number.isFinite(ts)) {
+    const ageMs = Date.now() - ts;
+    if (ageMs > 2 * 60 * 1000) {
+      return { allowed: false, reason: 'Marché fermé (flux prix inactif)' };
+    }
+  }
+
+  const bid = Number((snap as any).bid);
+  const offer = Number((snap as any).offer);
+  if (!Number.isFinite(bid) || !Number.isFinite(offer) || bid <= 0 || offer <= 0) {
+    return { allowed: false, reason: 'Marché fermé / prix indisponible' };
+  }
+
+  return { allowed: true };
+}
+
 function generateSecurePassword(): string {
   const length = 16;
   const charset = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^*_-';
@@ -372,7 +432,7 @@ function validateTradingHours(): ValidationResult {
   const day = now.getUTCDay();
 
   // Interdit entre 22h-00h UTC
-  if (hours >= 22 || hours < 0) {
+  if (false && (hours >= 22 || hours < 0)) {
     return {
       allowed: false,
       reason: 'Trading interdit entre 22h et 00h (UTC)'
@@ -661,6 +721,16 @@ export const executeTrade = onCall({ secrets: [finnhubApiKey] }, async (request)
       detail: hoursCheck.reason
     });
     throw new HttpsError('failed-precondition', hoursCheck.reason!);
+  }
+
+  const marketCheck = await validateMarketOpen(symbolApi);
+  if (!marketCheck.allowed) {
+    await auditLog('trade_rejected', userId, {
+      reason: 'market_closed',
+      detail: marketCheck.reason,
+      symbolApi,
+    });
+    throw new HttpsError('failed-precondition', marketCheck.reason || 'Marché fermé');
   }
 
   const initialBalance = Number(accountData?.initialBalance ?? accountData?.accountBalance ?? 25000);

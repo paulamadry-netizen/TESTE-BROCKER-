@@ -1905,6 +1905,8 @@ const PRICE_ENGINE_URL = 'https://ig-price-engine-44407447466.europe-west1.run.a
 interface PriceData {
   bid: number;
   offer: number;
+  timestamp?: number;
+  marketStatus?: string;
 }
 
 interface PricesResponse {
@@ -2128,6 +2130,19 @@ export const checkPendingOrders = onSchedule('every 1 minutes', async () => {
     for (const symbol of Object.keys(ordersBySymbol)) {
       const currentPrice = prices[symbol];
       if (!currentPrice) continue;
+
+      const status = String((currentPrice as any).marketStatus || '').toUpperCase();
+      if (status && ['CLOSED', 'OFFLINE', 'SUSPENDED', 'SUSPEND'].includes(status)) {
+        continue;
+      }
+
+      const ts = Number((currentPrice as any).timestamp);
+      if (Number.isFinite(ts)) {
+        const ageMs = Date.now() - ts;
+        if (ageMs > 2 * 60 * 1000) {
+          continue;
+        }
+      }
       
       const mid = (currentPrice.bid + currentPrice.offer) / 2;
       
