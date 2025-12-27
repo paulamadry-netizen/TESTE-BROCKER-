@@ -34,7 +34,7 @@ export function AccountSelector() {
   // Don't show selector if only one account
   if (accounts.length === 1) {
     return (
-      <div className="flex items-center gap-2 px-3 py-2 bg-muted/50 rounded-lg">
+      <div className="flex items-center gap-2 px-3 py-2 bg-muted rounded-lg">
         <Wallet className="h-4 w-4 text-muted-foreground" />
         <span className="text-sm font-medium">{accounts[0].accountName}</span>
         <Badge variant={accounts[0].accountStatus === 'active' ? 'default' : 'secondary'} className="ml-auto">

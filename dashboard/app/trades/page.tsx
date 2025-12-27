@@ -180,7 +180,7 @@ export default function TradesPage() {
             <div className="rounded-md border">
               <div className="overflow-x-auto">
                 <table className="w-full">
-                  <thead className="border-b bg-muted/50">
+                  <thead className="border-b bg-muted">
                     <tr>
                       <th className="h-12 px-4 text-left align-middle font-medium text-sm">
                         {t("trades.symbol")}
@@ -215,7 +215,7 @@ export default function TradesPage() {
                     {trades.map((trade) => (
                       <tr
                         key={trade.id}
-                        className="border-b last:border-0 hover:bg-muted/50 transition-colors"
+                        className="border-b last:border-0 hover:bg-muted transition-colors"
                       >
                         <td className="p-4 align-middle">
                           <span className="font-semibold">{trade.symbol}</span>

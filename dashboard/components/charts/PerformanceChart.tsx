@@ -29,7 +29,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
     const profit = payload[0].payload.profit;
 
     return (
-      <div className="bg-background/95 backdrop-blur-sm border border-border rounded-lg shadow-xl p-3 min-w-[180px]">
+      <div className="bg-background border border-border rounded-lg shadow-xl p-3 min-w-[180px]">
         <p className="text-xs text-muted-foreground mb-2">{label}</p>
         <div className="space-y-1">
           <div className="flex items-center justify-between gap-4">

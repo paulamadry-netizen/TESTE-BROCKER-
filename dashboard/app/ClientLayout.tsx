@@ -89,7 +89,7 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
                   </div>
                 )}
                 <main className="flex-1 overflow-y-auto">
-                  <div className="sticky top-0 z-10 border-b bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+                  <div className="sticky top-0 z-10 border-b bg-background">
                     <div className="flex items-center justify-between px-4 py-3 sm:px-6">
                       <button
                         type="button"

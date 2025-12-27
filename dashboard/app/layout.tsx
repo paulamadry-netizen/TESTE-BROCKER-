@@ -13,7 +13,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en" className="dark" data-style="default">
       <body className="font-sans antialiased">
         <ClientLayout>{children}</ClientLayout>
       </body>

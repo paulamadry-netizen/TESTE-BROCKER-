@@ -356,7 +356,7 @@ export default function AnalyticsPage() {
                           {pnl >= 0 ? '+' : ''}{pnl.toFixed(2)} USD
                         </div>
                       </div>
-                      <div className="mt-3 whitespace-pre-wrap text-sm text-foreground/90">
+                      <div className="mt-3 whitespace-pre-wrap text-sm text-foreground">
                         {t.note}
                       </div>
                     </div>
