@@ -2166,6 +2166,44 @@ export const checkSlTp = onSchedule('every 1 minutes', async () => {
                 availableBalance: admin.firestore.FieldValue.increment(pnl + marginReleased),
                 updatedAt: new Date().toISOString(),
               });
+
+              try {
+                const accountSnap = await accountRef.get();
+                if (accountSnap.exists) {
+                  const accountData = accountSnap.data() as any;
+                  const initialBalance = Number(accountData?.initialBalance ?? accountData?.accountBalance ?? 0);
+                  const currentBalance = Number(accountData?.accountBalance ?? 0);
+                  const maxTotalDrawdownPercent = Number(accountData?.maxTotalDrawdownPercent);
+                  const resolvedMaxTotal = Number.isFinite(maxTotalDrawdownPercent) && maxTotalDrawdownPercent > 0 ? maxTotalDrawdownPercent : 8;
+                  const rawMaxDaily = accountData?.maxDailyDrawdownPercent;
+                  const maxDailyDrawdownPercent = rawMaxDaily === null
+                    ? null
+                    : Number.isFinite(Number(rawMaxDaily)) && Number(rawMaxDaily) > 0
+                      ? Number(rawMaxDaily)
+                      : 3;
+
+                  const totalRes = await validateAccountTotalDrawdown(userId, resolvedAccountId, initialBalance, currentBalance, resolvedMaxTotal);
+                  if (!totalRes.allowed) {
+                    await accountRef.set({
+                      accountStatus: 'suspended',
+                      suspensionReason: totalRes.reason || 'Violation drawdown total',
+                      suspendedAt: admin.firestore.FieldValue.serverTimestamp(),
+                      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                    }, { merge: true });
+                  }
+
+                  const dailyRes = await validateAccountDailyDrawdown(userId, resolvedAccountId, initialBalance, maxDailyDrawdownPercent);
+                  if (!dailyRes.allowed) {
+                    await accountRef.set({
+                      accountStatus: 'suspended',
+                      suspensionReason: dailyRes.reason || 'Violation drawdown journalier',
+                      suspendedAt: admin.firestore.FieldValue.serverTimestamp(),
+                      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                    }, { merge: true });
+                  }
+                }
+              } catch (e) {
+              }
             }
           }
           

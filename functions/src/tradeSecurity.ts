@@ -960,8 +960,25 @@ export const closeTrade = onCall({ secrets: [finnhubApiKey] }, async (request) =
           ? Number(rawMaxDaily)
           : 3;
 
-      await validateAccountTotalDrawdown(userId, resolvedAccountId, initialBalance, currentBalance, resolvedMaxTotal);
-      await validateAccountDailyDrawdown(userId, resolvedAccountId, initialBalance, maxDailyDrawdownPercent);
+      const totalRes = await validateAccountTotalDrawdown(userId, resolvedAccountId, initialBalance, currentBalance, resolvedMaxTotal);
+      if (!totalRes.allowed) {
+        await db.collection('users').doc(userId).collection('accounts').doc(resolvedAccountId).set({
+          accountStatus: 'suspended',
+          suspensionReason: totalRes.reason || 'Violation drawdown total',
+          suspendedAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true });
+      }
+
+      const dailyRes = await validateAccountDailyDrawdown(userId, resolvedAccountId, initialBalance, maxDailyDrawdownPercent);
+      if (!dailyRes.allowed) {
+        await db.collection('users').doc(userId).collection('accounts').doc(resolvedAccountId).set({
+          accountStatus: 'suspended',
+          suspensionReason: dailyRes.reason || 'Violation drawdown journalier',
+          suspendedAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true });
+      }
     }
 
     console.log(`✅ Trade fermé: ${tradeId}`);
@@ -1354,6 +1371,54 @@ export const closeTradesBeforeWeekend = onSchedule({
           pnl,
           marginReleased
         });
+
+        try {
+          const tradeAccountId = typeof (trade as any)?.accountId === 'string'
+            ? String((trade as any).accountId)
+            : (typeof (trade as any)?.activeAccountId === 'string' ? String((trade as any).activeAccountId) : '');
+          const userRef = db.collection('users').doc(trade.userId);
+          const userSnap = await userRef.get();
+          const fallbackAccountId = userSnap.exists && typeof (userSnap.data() as any)?.activeAccountId === 'string'
+            ? (userSnap.data() as any).activeAccountId
+            : '';
+          const resolvedAccountId = tradeAccountId || fallbackAccountId;
+          if (resolvedAccountId) {
+            const accountDoc = await db.collection('users').doc(trade.userId).collection('accounts').doc(resolvedAccountId).get();
+            const accountData = accountDoc.exists ? (accountDoc.data() as any) : {};
+            const initialBalance = Number(accountData?.initialBalance ?? accountData?.accountBalance ?? 25000);
+            const currentBalance = Number(accountData?.accountBalance ?? 0);
+
+            const maxTotalDrawdownPercent = Number(accountData?.maxTotalDrawdownPercent);
+            const resolvedMaxTotal = Number.isFinite(maxTotalDrawdownPercent) && maxTotalDrawdownPercent > 0 ? maxTotalDrawdownPercent : 8;
+            const rawMaxDaily = accountData?.maxDailyDrawdownPercent;
+            const maxDailyDrawdownPercent = rawMaxDaily === null
+              ? null
+              : Number.isFinite(Number(rawMaxDaily)) && Number(rawMaxDaily) > 0
+                ? Number(rawMaxDaily)
+                : 3;
+
+            const totalRes = await validateAccountTotalDrawdown(trade.userId, resolvedAccountId, initialBalance, currentBalance, resolvedMaxTotal);
+            if (!totalRes.allowed) {
+              await db.collection('users').doc(trade.userId).collection('accounts').doc(resolvedAccountId).set({
+                accountStatus: 'suspended',
+                suspensionReason: totalRes.reason || 'Violation drawdown total',
+                suspendedAt: admin.firestore.FieldValue.serverTimestamp(),
+                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+              }, { merge: true });
+            }
+
+            const dailyRes = await validateAccountDailyDrawdown(trade.userId, resolvedAccountId, initialBalance, maxDailyDrawdownPercent);
+            if (!dailyRes.allowed) {
+              await db.collection('users').doc(trade.userId).collection('accounts').doc(resolvedAccountId).set({
+                accountStatus: 'suspended',
+                suspensionReason: dailyRes.reason || 'Violation drawdown journalier',
+                suspendedAt: admin.firestore.FieldValue.serverTimestamp(),
+                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+              }, { merge: true });
+            }
+          }
+        } catch (e) {
+        }
 
         closedCount++;
         console.log(`✅ Trade ${tradeId} fermé automatiquement`);
