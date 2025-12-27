@@ -34,6 +34,7 @@
     .tag{display:inline-flex;align-items:center;gap:6px;padding:5px 9px;border-radius:999px;border:1px solid var(--border);color:var(--muted);font-size:12px}
     .tag.ok{border-color:rgba(34,197,94,.35);background:rgba(34,197,94,.08);color:#bbf7d0}
     .tag.wait{border-color:rgba(245,158,11,.35);background:rgba(245,158,11,.08);color:#fde68a}
+    .tag.demo{border-color:rgba(99,102,241,.35);background:rgba(99,102,241,.10);color:#c7d2fe}
     .footer{margin-top:26px;padding-top:18px;border-top:1px solid var(--border);color:var(--muted);font-size:13px;display:flex;flex-direction:column;gap:8px}
   </style>
 </head>
@@ -54,14 +55,49 @@
 
     <div class="card">
       <div class="inner">
-        <div class="notice"><strong>À remplir dès que possible :</strong> ajoute 5 à 20 premières preuves (même petites) — c'est le meilleur levier pour convertir en Europe.</div>
+        <div class="warn"><strong>Transparence:</strong> on ne publie ici que des payouts réels. Les exemples ci-dessous sont <strong>des démos</strong> pour montrer le format — ils ne sont pas des preuves.</div>
+        <div class="notice" style="margin-top:12px;"><strong>Action recommandée:</strong> publie 5 à 20 premières preuves (même petites) — c'est le meilleur levier pour convertir en Europe.</div>
       </div>
     </div>
 
     <div class="card">
       <div class="inner">
-        <h2>Historique (anonymisé)</h2>
-        <p>Remplace les lignes ci-dessous par tes vrais payouts. Tu peux garder: date, montant, méthode, statut. Le client peut rester anonyme.</p>
+        <h2>Exemples (DEMO)</h2>
+        <p>Exemples uniquement pour illustrer le format. Ne pas confondre avec des preuves.</p>
+        <table class="table" style="margin-top:12px;">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Montant</th>
+              <th>Méthode</th>
+              <th>Statut</th>
+              <th>Preuve</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>2026-01-05</td>
+              <td>250.00 USD</td>
+              <td>Virement</td>
+              <td><span class="tag demo">DEMO</span></td>
+              <td>Capture floutée + payoutId (ex: <strong>p_…a1b2</strong>)</td>
+            </tr>
+            <tr>
+              <td>2026-01-12</td>
+              <td>500.00 USD</td>
+              <td>Virement</td>
+              <td><span class="tag demo">DEMO</span></td>
+              <td>Capture floutée + payoutId (ex: <strong>p_…c3d4</strong>)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="inner">
+        <h2>Payouts publiés (réels)</h2>
+        <p>Ajoute tes payouts réels ici (anonymisés). Format recommandé: date, montant, méthode, statut, preuve.</p>
         <table class="table" style="margin-top:12px;">
           <thead>
             <tr>
@@ -76,27 +112,25 @@
             <tr>
               <td>—</td>
               <td>—</td>
-              <td>Virement</td>
+              <td>—</td>
               <td><span class="tag wait">À publier</span></td>
-              <td>Capture floutée + ID payout</td>
-            </tr>
-            <tr>
-              <td>—</td>
-              <td>—</td>
-              <td>Virement</td>
-              <td><span class="tag wait">À publier</span></td>
-              <td>Capture floutée + ID payout</td>
-            </tr>
-            <tr>
-              <td>—</td>
-              <td>—</td>
-              <td>Virement</td>
-              <td><span class="tag wait">À publier</span></td>
-              <td>Capture floutée + ID payout</td>
+              <td>Capture floutée + payoutId (tronqué)</td>
             </tr>
           </tbody>
         </table>
         <div class="warn" style="margin-top:12px;">Conseil: floute nom/adresse/RIB. Garde la date, le montant et un identifiant (ex: payoutId tronqué).</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="inner">
+        <h2>Publier une preuve en 30 secondes</h2>
+        <ul>
+          <li>1) Ouvre la demande payout dans ton admin.</li>
+          <li>2) Fais une capture du statut (approved/paid) + montant + date.</li>
+          <li>3) Floute tout le sensible (nom, adresse, IBAN).</li>
+          <li>4) Ajoute la ligne dans le tableau “Payouts publiés (réels)”.</li>
+        </ul>
       </div>
     </div>
 
