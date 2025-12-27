@@ -2294,10 +2294,23 @@ export const checkPendingOrders = onSchedule('every 1 minutes', async () => {
 
           const accountData = accountSnap.data() as any;
           if (String(accountData?.accountStatus || '') !== 'active') {
-            await admin.firestore().collection('orders').doc(id).update({
-              status: 'rejected',
-              rejectReason: `Compte ${String(accountData?.accountStatus || '')}. Trading désactivé.`,
-              updatedAt: new Date().toISOString(),
+            const reserved = Boolean((order as any)?.reservedMargin);
+            const margin = Number((order as any)?.margin);
+            const marginToRelease = reserved && Number.isFinite(margin) && margin > 0 ? margin : 0;
+
+            await admin.firestore().runTransaction(async (tx) => {
+              tx.update(admin.firestore().collection('orders').doc(id), {
+                status: 'rejected',
+                rejectReason: `Compte ${String(accountData?.accountStatus || '')}. Trading désactivé.`,
+                reservedMargin: false,
+                updatedAt: new Date().toISOString(),
+              });
+              if (marginToRelease > 0) {
+                tx.update(accountRef, {
+                  availableBalance: admin.firestore.FieldValue.increment(marginToRelease),
+                  updatedAt: new Date().toISOString(),
+                });
+              }
             });
             continue;
           }
@@ -2315,20 +2328,46 @@ export const checkPendingOrders = onSchedule('every 1 minutes', async () => {
 
           const totalDd = await validateAccountTotalDrawdown(userId, resolvedAccountId, initialBalance, currentBalance, resolvedMaxTotal);
           if (!totalDd.allowed) {
-            await admin.firestore().collection('orders').doc(id).update({
-              status: 'rejected',
-              rejectReason: totalDd.reason || 'Drawdown total',
-              updatedAt: new Date().toISOString(),
+            const reserved = Boolean((order as any)?.reservedMargin);
+            const margin = Number((order as any)?.margin);
+            const marginToRelease = reserved && Number.isFinite(margin) && margin > 0 ? margin : 0;
+
+            await admin.firestore().runTransaction(async (tx) => {
+              tx.update(admin.firestore().collection('orders').doc(id), {
+                status: 'rejected',
+                rejectReason: totalDd.reason || 'Drawdown total',
+                reservedMargin: false,
+                updatedAt: new Date().toISOString(),
+              });
+              if (marginToRelease > 0) {
+                tx.update(accountRef, {
+                  availableBalance: admin.firestore.FieldValue.increment(marginToRelease),
+                  updatedAt: new Date().toISOString(),
+                });
+              }
             });
             continue;
           }
 
           const dailyDd = await validateAccountDailyDrawdown(userId, resolvedAccountId, initialBalance, maxDailyDrawdownPercent);
           if (!dailyDd.allowed) {
-            await admin.firestore().collection('orders').doc(id).update({
-              status: 'rejected',
-              rejectReason: dailyDd.reason || 'Drawdown journalier',
-              updatedAt: new Date().toISOString(),
+            const reserved = Boolean((order as any)?.reservedMargin);
+            const margin = Number((order as any)?.margin);
+            const marginToRelease = reserved && Number.isFinite(margin) && margin > 0 ? margin : 0;
+
+            await admin.firestore().runTransaction(async (tx) => {
+              tx.update(admin.firestore().collection('orders').doc(id), {
+                status: 'rejected',
+                rejectReason: dailyDd.reason || 'Drawdown journalier',
+                reservedMargin: false,
+                updatedAt: new Date().toISOString(),
+              });
+              if (marginToRelease > 0) {
+                tx.update(accountRef, {
+                  availableBalance: admin.firestore.FieldValue.increment(marginToRelease),
+                  updatedAt: new Date().toISOString(),
+                });
+              }
             });
             continue;
           }
@@ -2365,15 +2404,29 @@ export const checkPendingOrders = onSchedule('every 1 minutes', async () => {
             : (Number.isFinite(currentBalance) ? (currentBalance - usedMargin) : 0);
 
           if (Number.isFinite(availableBalance) && marginUsed > availableBalance) {
-            await admin.firestore().collection('orders').doc(id).update({
-              status: 'rejected',
-              rejectReason: 'Marge insuffisante',
-              updatedAt: new Date().toISOString(),
+            const reserved = Boolean((order as any)?.reservedMargin);
+            const margin = Number((order as any)?.margin);
+            const marginToRelease = reserved && Number.isFinite(margin) && margin > 0 ? margin : 0;
+
+            await admin.firestore().runTransaction(async (tx) => {
+              tx.update(admin.firestore().collection('orders').doc(id), {
+                status: 'rejected',
+                rejectReason: 'Marge insuffisante',
+                reservedMargin: false,
+                updatedAt: new Date().toISOString(),
+              });
+              if (marginToRelease > 0) {
+                tx.update(accountRef, {
+                  availableBalance: admin.firestore.FieldValue.increment(marginToRelease),
+                  updatedAt: new Date().toISOString(),
+                });
+              }
             });
             continue;
           }
 
           const tradeDocRef = admin.firestore().collection('trades').doc();
+          const reserved = Boolean((order as any)?.reservedMargin);
           await admin.firestore().runTransaction(async (tx) => {
             tx.set(tradeDocRef, {
               userId: userId,
@@ -2398,12 +2451,14 @@ export const checkPendingOrders = onSchedule('every 1 minutes', async () => {
               status: 'executed',
               executedAt: new Date().toISOString(),
               tradeId: tradeDocRef.id,
+              reservedMargin: false,
               updatedAt: new Date().toISOString(),
             });
 
-            if (resolvedAccountId && marginUsed) {
+            if (resolvedAccountId) {
+              const debit = reserved ? 0 : (marginUsed || 0);
               tx.update(accountRef, {
-                availableBalance: admin.firestore.FieldValue.increment(-marginUsed),
+                availableBalance: admin.firestore.FieldValue.increment(-debit),
                 lastTradeAt: new Date().toISOString(),
                 updatedAt: new Date().toISOString(),
               });

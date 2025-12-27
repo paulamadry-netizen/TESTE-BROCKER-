@@ -1107,34 +1107,46 @@ export const placeOrder = onCall({ secrets: [finnhubApiKey] }, async (request) =
 
   const marginUsed = calculateMargin(symbolApi, lots, price);
 
-  const storedAvailable = Number(accountData?.availableBalance);
-  const availableBalance = Number.isFinite(storedAvailable)
-    ? storedAvailable
-    : Number(accountData?.accountBalance ?? accountData?.initialBalance ?? 0);
-
-  if (Number.isFinite(availableBalance) && marginUsed > availableBalance) {
-    throw new HttpsError('failed-precondition', `Marge insuffisante. Requis: ${marginUsed.toFixed(2)} USD, Disponible: ${availableBalance.toFixed(2)} USD`);
+  const marginCheck = await validateMargin(userId, resolvedAccountId, accountData, symbolApi, lots, price);
+  if (!marginCheck.allowed) {
+    await auditLog('order_rejected', userId, {
+      reason: 'insufficient_margin',
+      detail: marginCheck.reason,
+      symbolApi,
+      side,
+      orderType,
+      price,
+      lots,
+    });
+    throw new HttpsError('failed-precondition', marginCheck.reason || 'Marge insuffisante');
   }
 
   const orderRef = db.collection('orders').doc();
-  await orderRef.set({
-    userId,
-    accountId: resolvedAccountId,
-    symbol: symbol || symbolApi,
-    symbolApi,
-    side,
-    orderType,
-    price,
-    lots,
-    takeProfit,
-    stopLoss,
-    tp: takeProfit,
-    sl: stopLoss,
-    margin: marginUsed,
-    status: 'pending',
-    validatedByServer: true,
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  await db.runTransaction(async (tx) => {
+    tx.set(orderRef, {
+      userId,
+      accountId: resolvedAccountId,
+      symbol: symbol || symbolApi,
+      symbolApi,
+      side,
+      orderType,
+      price,
+      lots,
+      takeProfit,
+      stopLoss,
+      tp: takeProfit,
+      sl: stopLoss,
+      margin: marginUsed,
+      reservedMargin: true,
+      status: 'pending',
+      validatedByServer: true,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    tx.update(accountRef, {
+      availableBalance: admin.firestore.FieldValue.increment(-marginUsed),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
   });
 
   await auditLog('order_placed', userId, {
@@ -1179,10 +1191,25 @@ export const cancelOrder = onCall(async (request) => {
     throw new HttpsError('failed-precondition', 'Ordre déjà traité');
   }
 
-  await orderRef.update({
-    status: 'cancelled',
-    cancelledAt: admin.firestore.FieldValue.serverTimestamp(),
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  const orderAccountId = typeof order?.accountId === 'string' ? String(order.accountId) : '';
+  const reserved = Boolean(order?.reservedMargin);
+  const margin = Number(order?.margin);
+  const marginToRelease = reserved && Number.isFinite(margin) && margin > 0 ? margin : 0;
+
+  await db.runTransaction(async (tx) => {
+    tx.update(orderRef, {
+      status: 'cancelled',
+      cancelledAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    if (marginToRelease > 0 && orderAccountId) {
+      const accountRef = db.collection('users').doc(userId).collection('accounts').doc(orderAccountId);
+      tx.update(accountRef, {
+        availableBalance: admin.firestore.FieldValue.increment(marginToRelease),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    }
   });
 
   await auditLog('order_cancelled', userId, { orderId });
