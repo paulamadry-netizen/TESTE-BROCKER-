@@ -769,12 +769,21 @@
 
     .plan-features li {
       display: flex;
-      align-items: center;
+      align-items: flex-start;
       gap: 0.75rem;
       padding: 0.75rem 0;
       border-bottom: 1px solid var(--border);
       font-size: 0.95rem;
       color: var(--text-secondary);
+    }
+
+    .plan-feature-text{
+      flex: 1;
+      min-width: 0;
+      display: block;
+      line-height: 1.35;
+      word-break: break-word;
+      overflow-wrap: anywhere;
     }
 
     .plan-features li:last-child {
@@ -784,6 +793,8 @@
     .plan-features li i {
       color: var(--primary);
       font-size: 0.875rem;
+      flex: 0 0 auto;
+      margin-top: 0.15rem;
     }
 
     .plan-features li strong {
@@ -1805,14 +1816,14 @@
           <div class="plan-capital">25 000 $</div>
           <div class="plan-price">200 € <span>une fois</span></div>
           <ul class="plan-features">
-            <li><i class="fas fa-check"></i> Payouts tous les <strong>15 jours</strong></li>
-            <li><i class="fas fa-check"></i> Objectif Profit: <strong>10% (2 500 $)</strong></li>
-            <li><i class="fas fa-check"></i> Max perte journalière: <strong>3% (750 $)</strong></li>
-            <li><i class="fas fa-check"></i> Max perte totale: <strong>8% (2 000 $)</strong></li>
-            <li><i class="fas fa-check"></i> Partage profit: <strong>80%</strong> → <strong>90%</strong> après 6 mois + 10% en payouts</li>
-            <li><i class="fas fa-check"></i> Mise à l'échelle: <strong>+25%</strong> tous les <strong>6 mois</strong> si <strong>10%</strong> du solde est retiré en payouts</li>
-            <li><i class="fas fa-check"></i> Jours minimum: <strong>3</strong></li>
-            <li><i class="fas fa-check"></i> Positions de nuit: <strong>Oui</strong></li>
+            <li><i class="fas fa-check"></i><span class="plan-feature-text">Payouts tous les <strong>15 jours</strong></span></li>
+            <li><i class="fas fa-check"></i><span class="plan-feature-text">Objectif Profit: <strong>10% (2 500 $)</strong></span></li>
+            <li><i class="fas fa-check"></i><span class="plan-feature-text">Max perte journalière: <strong>3% (750 $)</strong></span></li>
+            <li><i class="fas fa-check"></i><span class="plan-feature-text">Max perte totale: <strong>8% (2 000 $)</strong></span></li>
+            <li><i class="fas fa-check"></i><span class="plan-feature-text">Partage profit: <strong>80%</strong> → <strong>90%</strong> après 6 mois + 10% en payouts</span></li>
+            <li><i class="fas fa-check"></i><span class="plan-feature-text">Mise à l'échelle: <strong>+25%</strong> tous les <strong>6 mois</strong> si <strong>10%</strong> du solde est retiré en payouts</span></li>
+            <li><i class="fas fa-check"></i><span class="plan-feature-text">Jours minimum: <strong>3</strong></span></li>
+            <li><i class="fas fa-check"></i><span class="plan-feature-text">Positions de nuit: <strong>Oui</strong></span></li>
           </ul>
           <button class="plan-cta" onclick="selectPlan('bronze', 'https://buy.stripe.com/test_eVq00jfY0evn51obaT1ZS01')">Commencer</button>
         </div>
@@ -1823,14 +1834,14 @@
           <div class="plan-capital">50 000 $</div>
           <div class="plan-price">285 € <span>une fois</span></div>
           <ul class="plan-features">
-            <li><i class="fas fa-check"></i> Payouts tous les <strong>15 jours</strong></li>
-            <li><i class="fas fa-check"></i> Objectif Profit: <strong>10% (5 000 $)</strong></li>
-            <li><i class="fas fa-check"></i> Max perte journalière: <strong>3% (1 500 $)</strong></li>
-            <li><i class="fas fa-check"></i> Max perte totale: <strong>8% (4 000 $)</strong></li>
-            <li><i class="fas fa-check"></i> Partage profit: <strong>80%</strong> → <strong>90%</strong> après 6 mois + 10% en payouts</li>
-            <li><i class="fas fa-check"></i> Mise à l'échelle: <strong>+25%</strong> tous les <strong>6 mois</strong> si <strong>10%</strong> du solde est retiré en payouts</li>
-            <li><i class="fas fa-check"></i> Jours minimum: <strong>3</strong></li>
-            <li><i class="fas fa-check"></i> Positions de nuit: <strong>Oui</strong></li>
+            <li><i class="fas fa-check"></i><span class="plan-feature-text">Payouts tous les <strong>15 jours</strong></span></li>
+            <li><i class="fas fa-check"></i><span class="plan-feature-text">Objectif Profit: <strong>10% (5 000 $)</strong></span></li>
+            <li><i class="fas fa-check"></i><span class="plan-feature-text">Max perte journalière: <strong>3% (1 500 $)</strong></span></li>
+            <li><i class="fas fa-check"></i><span class="plan-feature-text">Max perte totale: <strong>8% (4 000 $)</strong></span></li>
+            <li><i class="fas fa-check"></i><span class="plan-feature-text">Partage profit: <strong>80%</strong> → <strong>90%</strong> après 6 mois + 10% en payouts</span></li>
+            <li><i class="fas fa-check"></i><span class="plan-feature-text">Mise à l'échelle: <strong>+25%</strong> tous les <strong>6 mois</strong> si <strong>10%</strong> du solde est retiré en payouts</span></li>
+            <li><i class="fas fa-check"></i><span class="plan-feature-text">Jours minimum: <strong>3</strong></span></li>
+            <li><i class="fas fa-check"></i><span class="plan-feature-text">Positions de nuit: <strong>Oui</strong></span></li>
           </ul>
           <button class="plan-cta" onclick="selectPlan('argent', 'https://buy.stripe.com/test_3cIaEX9zCaf7gK6baT1ZS00')">Commencer</button>
         </div>
@@ -1841,14 +1852,14 @@
           <div class="plan-capital">100 000 $</div>
           <div class="plan-price">550 € <span>une fois</span></div>
           <ul class="plan-features">
-            <li><i class="fas fa-check"></i> Payouts tous les <strong>15 jours</strong></li>
-            <li><i class="fas fa-check"></i> Objectif Profit: <strong>10% (10 000 $)</strong></li>
-            <li><i class="fas fa-check"></i> Max perte journalière: <strong>3% (3 000 $)</strong></li>
-            <li><i class="fas fa-check"></i> Max perte totale: <strong>8% (8 000 $)</strong></li>
-            <li><i class="fas fa-check"></i> Partage profit: <strong>80%</strong> → <strong>90%</strong> après 6 mois + 10% en payouts</li>
-            <li><i class="fas fa-check"></i> Mise à l'échelle: <strong>+25%</strong> tous les <strong>6 mois</strong> si <strong>10%</strong> du solde est retiré en payouts</li>
-            <li><i class="fas fa-check"></i> Jours minimum: <strong>3</strong></li>
-            <li><i class="fas fa-check"></i> Positions de nuit: <strong>Oui</strong></li>
+            <li><i class="fas fa-check"></i><span class="plan-feature-text">Payouts tous les <strong>15 jours</strong></span></li>
+            <li><i class="fas fa-check"></i><span class="plan-feature-text">Objectif Profit: <strong>10% (10 000 $)</strong></span></li>
+            <li><i class="fas fa-check"></i><span class="plan-feature-text">Max perte journalière: <strong>3% (3 000 $)</strong></span></li>
+            <li><i class="fas fa-check"></i><span class="plan-feature-text">Max perte totale: <strong>8% (8 000 $)</strong></span></li>
+            <li><i class="fas fa-check"></i><span class="plan-feature-text">Partage profit: <strong>80%</strong> → <strong>90%</strong> après 6 mois + 10% en payouts</span></li>
+            <li><i class="fas fa-check"></i><span class="plan-feature-text">Mise à l'échelle: <strong>+25%</strong> tous les <strong>6 mois</strong> si <strong>10%</strong> du solde est retiré en payouts</span></li>
+            <li><i class="fas fa-check"></i><span class="plan-feature-text">Jours minimum: <strong>3</strong></span></li>
+            <li><i class="fas fa-check"></i><span class="plan-feature-text">Positions de nuit: <strong>Oui</strong></span></li>
           </ul>
           <button class="plan-cta" onclick="selectPlan('or', 'https://buy.stripe.com/test_3cI3cv27adrj51o2En1ZS02')">Commencer</button>
         </div>
@@ -2377,7 +2388,7 @@
         planFeaturesEl.innerHTML = '';
         plan.features.forEach((txt) => {
           const li = document.createElement('li');
-          li.innerHTML = `<i class="fas fa-check"></i> ${txt}`;
+          li.innerHTML = `<i class="fas fa-check"></i><span class="plan-feature-text">${txt}</span>`;
           planFeaturesEl.appendChild(li);
         });
 
