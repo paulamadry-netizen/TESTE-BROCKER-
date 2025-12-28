@@ -539,12 +539,19 @@ export const marketHistoryYahoo = onRequest(
       const candlesRaw: Candle[] = [];
       for (let i = 0; i < ts.length; i++) {
         const time = Number(ts[i]);
-        const o = Number(opens[i]);
-        const h = Number(highs[i]);
-        const l = Number(lows[i]);
-        const c = Number(closes[i]);
+        const oRaw = opens[i];
+        const hRaw = highs[i];
+        const lRaw = lows[i];
+        const cRaw = closes[i];
+        if (oRaw == null || hRaw == null || lRaw == null || cRaw == null) continue;
+
+        const o = Number(oRaw);
+        const h = Number(hRaw);
+        const l = Number(lRaw);
+        const c = Number(cRaw);
         const v = Number(vols[i] ?? 0);
         if (!Number.isFinite(time) || !Number.isFinite(o) || !Number.isFinite(h) || !Number.isFinite(l) || !Number.isFinite(c)) continue;
+        if (h < l) continue;
         candlesRaw.push({ time, open: o, high: h, low: l, close: c, volume: Number.isFinite(v) ? v : 0 });
       }
 

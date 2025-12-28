@@ -500,10 +500,10 @@ html[data-style="rose"]{--accent:#f43f5e;--accent-hover:#fb7185;--accent-dark:#e
 .lot-input{width:70px;padding:6px 8px;border-radius:var(--radius-md);border:1px solid var(--border);background:var(--bg-primary);color:var(--text-primary);font-weight:600;font-size:13px;transition:var(--transition)}
 .lot-input:focus{outline:none;border-color:var(--accent);background:var(--surface-elevated)}
 .lot-info{font-size:10px;color:var(--text-muted);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.timeframe-selector{display:flex;gap:4px;padding:0 8px;border-left:1px solid var(--border);border-right:1px solid var(--border)}
-.timeframe-btn{padding:4px 8px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--bg-primary);color:var(--text-secondary);cursor:pointer;font-weight:600;font-size:11px;transition:var(--transition)}
-.timeframe-btn:hover{background:var(--surface-elevated);border-color:var(--border-light);color:var(--text-primary)}
-.timeframe-btn.active{background:var(--accent);color:#0a0e1a;border-color:var(--accent)}
+.timeframe-selector{display:flex;gap:6px;align-items:center;padding:0 8px;border-left:1px solid var(--border);border-right:1px solid var(--border)}
+.timeframe-select{height:28px;min-width:90px;padding:4px 10px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--bg-primary);color:var(--text-primary);font-weight:700;font-size:11px;cursor:pointer;outline:none;transition:var(--transition)}
+.timeframe-select:hover{background:var(--surface-elevated);border-color:var(--border-light)}
+.timeframe-select:focus{border-color:var(--accent);box-shadow:0 0 0 2px rgba(16,185,129,0.18)}
 .trade-buttons{display:flex;gap:8px;margin-left:auto}
 .btn{padding:8px 16px;border-radius:var(--radius-md);border:none;cursor:pointer;font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:0.5px;transition:var(--transition);display:flex;align-items:center;gap:6px}
 .btn:hover{transform:translateY(-2px);box-shadow:var(--shadow-md)}
@@ -780,12 +780,14 @@ html[data-style="rose"]{--accent:#f43f5e;--accent-hover:#fb7185;--accent-dark:#e
 <button class="icon-btn" id="deleteDrawBtn" title="Supprimer dessin">Del</button>
 </div>
 <div class="timeframe-selector" id="timeframeSelector">
-<button class="timeframe-btn" data-tf="1">1m</button>
-<button class="timeframe-btn" data-tf="5">5m</button>
-<button class="timeframe-btn active" data-tf="15">15m</button>
-<button class="timeframe-btn" data-tf="60">1h</button>
-<button class="timeframe-btn" data-tf="240">4h</button>
-<button class="timeframe-btn" data-tf="1D">1D</button>
+<select class="timeframe-select" id="timeframeSelect" aria-label="Unité de temps">
+<option value="1">1m</option>
+<option value="5">5m</option>
+<option value="15" selected>15m</option>
+<option value="60">1h</option>
+<option value="240">4h</option>
+<option value="1D">1D</option>
+</select>
 </div>
 <div class="trade-buttons">
 <button class="btn btn-buy" id="buyBtn"><i class="fas fa-arrow-trend-up"></i><span>BUY</span></button>
@@ -1684,7 +1686,8 @@ const updateLightweightChart=(price)=>{
 
 const switchTimeframe=(tf)=>{
   currentTimeframe=tf;
-  document.querySelectorAll('.timeframe-btn').forEach(btn=>btn.classList.toggle('active',btn.dataset.tf===tf));
+  const sel=$('timeframeSelect');
+  if(sel && sel.value!==tf) sel.value=tf;
   initLightweightChart();
 };
 
@@ -2744,7 +2747,13 @@ $('tabPositions').addEventListener('click',()=>{$('tabPositions').classList.add(
 $('tabHistory').addEventListener('click',()=>{$('tabHistory').classList.add('active');$('tabPositions').classList.remove('active');$('positionsPane').style.display='none';$('historyPane').style.display='block';renderHistory()});
 $('modalCancel').addEventListener('click',()=>$('positionModal').style.display='none');
 $('modalSave').addEventListener('click',()=>{const pos=positions.find(p=>p.id===activeModalId);if(!pos)return;const tp=$('modalTp').value,sl=$('modalSl').value,sellLots=parseFloat($('modalSellLots').value)||0;pos.tp=tp?Number(tp):null;pos.sl=sl?Number(sl):null;if(sellLots>0)closePosition(pos.id,sellLots);$('positionModal').style.display='none';renderPositions();renderTotals();showToast('Sauvegarde','success')});
-document.querySelectorAll('.timeframe-btn').forEach(btn=>btn.addEventListener('click',()=>switchTimeframe(btn.dataset.tf)));
+try{
+  const sel=$('timeframeSelect');
+  if(sel){
+    sel.value=currentTimeframe;
+    sel.addEventListener('change',()=>switchTimeframe(sel.value));
+  }
+}catch(e){}
 
 // Draw + SL/TP tools
 $('dragModeBtn').addEventListener('click',toggleDragMode);
