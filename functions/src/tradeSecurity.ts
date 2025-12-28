@@ -14,6 +14,10 @@ const db = admin.firestore();
 
 const resendApiKey = defineSecret('RESEND_API_KEY');
 
+const isAdminRole = (role: any): boolean => {
+  return String(role ?? '').trim().toLowerCase() === 'admin';
+};
+
 const getPipStep = (symbolApi: string): number => {
   const s = String(symbolApi || '').toUpperCase();
   if (s.includes('GD.CFD')) return 0.1;
@@ -923,7 +927,7 @@ export const adminForcePayoutEligible = onCall(async (request) => {
 
   const callerId = request.auth.uid;
   const callerDoc = await db.collection('users').doc(callerId).get();
-  if (!callerDoc.exists || callerDoc.data()?.role !== 'admin') {
+  if (!callerDoc.exists || !isAdminRole(callerDoc.data()?.role)) {
     throw new HttpsError('permission-denied', 'Accès réservé aux administrateurs');
   }
 
@@ -978,7 +982,7 @@ export const adminPurgeAccounts = onCall(async (request) => {
 
   const callerId = request.auth.uid;
   const callerDoc = await db.collection('users').doc(callerId).get();
-  if (!callerDoc.exists || callerDoc.data()?.role !== 'admin') {
+  if (!callerDoc.exists || !isAdminRole(callerDoc.data()?.role)) {
     throw new HttpsError('permission-denied', 'Accès réservé aux administrateurs');
   }
 
@@ -1415,7 +1419,7 @@ export const recalculateAllTradingDays = onCall(async (request) => {
 
   const callerId = request.auth.uid;
   const callerDoc = await db.collection('users').doc(callerId).get();
-  if (!callerDoc.exists || callerDoc.data()?.role !== 'admin') {
+  if (!callerDoc.exists || !isAdminRole(callerDoc.data()?.role)) {
     throw new HttpsError('permission-denied', 'Accès réservé aux administrateurs');
   }
 
@@ -2222,7 +2226,7 @@ export const forceUpgradeChallenge = onCall(async (request) => {
   const requestedAccountId = (typeof requestedAccountIdRaw === 'string' && requestedAccountIdRaw.trim()) ? requestedAccountIdRaw.trim() : '';
 
   const callerDoc = await db.collection('users').doc(callerId).get();
-  if (!callerDoc.exists || callerDoc.data()?.role !== 'admin') {
+  if (!callerDoc.exists || !isAdminRole(callerDoc.data()?.role)) {
     throw new HttpsError('permission-denied', 'Accès réservé aux administrateurs');
   }
 
@@ -2807,7 +2811,7 @@ export const approvePayout = onCall(async (request) => {
 
   // Vérifier que l'utilisateur est admin
   const adminDoc = await db.collection('users').doc(request.auth.uid).get();
-  if (!adminDoc.exists || adminDoc.data()?.role !== 'admin') {
+  if (!adminDoc.exists || !isAdminRole(adminDoc.data()?.role)) {
     throw new HttpsError('permission-denied', 'Accès réservé aux administrateurs');
   }
 
