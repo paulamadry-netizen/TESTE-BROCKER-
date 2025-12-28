@@ -3,12 +3,76 @@
  * CRITIQUE: Toutes les validations et exécutions de trades DOIVENT passer par ici
  */
 
-import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
+import { HttpsError, onCall } from 'firebase-functions/v2/https';
+import { defineSecret } from 'firebase-functions/params';
 import * as admin from 'firebase-admin';
-import { getValidatedPrice, finnhubApiKey } from './priceService';
+import Stripe from 'stripe';
+import { finnhubApiKey, getValidatedPrice } from './priceService';
 
 const db = admin.firestore();
+
+const resendApiKey = defineSecret('RESEND_API_KEY');
+
+const getPipStep = (symbolApi: string): number => {
+  const s = String(symbolApi || '').toUpperCase();
+  if (s.includes('GD.CFD')) return 0.1;
+  if (s.includes('SI.CFD')) return 0.01;
+  if (s.includes('COPPER')) return 0.001;
+  if (s.includes('CL.UMA')) return 0.01;
+  if (s.includes('COFFEE')) return 0.05;
+  if (s.includes('ZINC')) return 1;
+  if (s.startsWith('IX.')) return 1;
+  if (s.includes('JPY')) return 0.01;
+  return 0.0001;
+};
+
+const getLotUnits = (symbolApi: string): number => {
+  const s = String(symbolApi || '').toUpperCase();
+  if (s.startsWith('IX.')) return 1;
+  if (s.includes('GD.CFD')) return 100;
+  if (s.includes('SI.CFD')) return 5000;
+  if (s.startsWith('CC.') || s.startsWith('TM.')) return 1000;
+  return 100000;
+};
+
+const parseForexPair = (symbolApi: string): { base: string; quote: string } | null => {
+  const s = String(symbolApi || '').toUpperCase();
+  const m = s.match(/CS\.D\.([A-Z]{3})([A-Z]{3})\./);
+  if (!m) return null;
+  return { base: m[1], quote: m[2] };
+};
+
+const pipValuePerLotUsd = (symbolApi: string, price: number): number => {
+  const s = String(symbolApi || '').toUpperCase();
+  const step = getPipStep(s);
+  const units = getLotUnits(s);
+
+  if (s.startsWith('IX.') || s.startsWith('CC.') || s.startsWith('TM.') || s.includes('GD.CFD') || s.includes('SI.CFD')) {
+    return step * units;
+  }
+
+  const pair = parseForexPair(s);
+  if (!pair) return step * units;
+
+  if (pair.quote === 'USD') return step * units;
+  if (pair.base === 'USD') return units;
+
+  const p = Number(price);
+  if (pair.quote === 'JPY') {
+    return p > 0 ? (step * units) / p : step * units;
+  }
+
+  return p > 0 ? (step * units) / p : step * units;
+};
+
+const calculatePnlUsd = (symbolApi: string, side: string, entryPrice: number, closePrice: number, lots: number): number => {
+  const step = getPipStep(symbolApi);
+  const pipDiff = (Number(closePrice) - Number(entryPrice)) / step;
+  const pipValue = pipValuePerLotUsd(symbolApi, Number(closePrice));
+  const raw = pipDiff * pipValue * Number(lots);
+  return String(side || '').toUpperCase() === 'BUY' ? raw : -raw;
+};
 
 const PRICE_ENGINE_URL = 'https://ig-price-engine-44407447466.europe-west1.run.app';
 
@@ -946,16 +1010,7 @@ export const closeTrade = onCall({ secrets: [finnhubApiKey] }, async (request) =
   const entryPrice = trade.entryPrice;
   const lots = trade.lots;
 
-  // Formule simplifiée (à adapter selon le type d'actif)
-  const pipValue = 10; // USD par pip pour 1 lot standard
-  const pipStep = symbol.includes('JPY') ? 0.01 : 0.0001;
-  const pipDiff = (closePrice - entryPrice) / pipStep;
-  let pnl = pipDiff * pipValue * lots;
-
-  // Inverser si SELL
-  if (trade.side === 'SELL') {
-    pnl = -pnl;
-  }
+  const pnl = calculatePnlUsd(symbol, trade.side, entryPrice, closePrice, lots);
 
   const marginReleased = Number(trade.marginUsed) || calculateMargin(symbol, lots, entryPrice);
 
@@ -1595,15 +1650,7 @@ export const closeTradesBeforeWeekend = onSchedule({
         const entryPrice = trade.entryPrice;
         const lots = trade.lots;
 
-        const pipValue = 10; // USD par pip pour 1 lot standard
-        const pipStep = trade.symbolApi.includes('JPY') ? 0.01 : 0.0001;
-        const pipDiff = (closePrice - entryPrice) / pipStep;
-        let pnl = pipDiff * pipValue * lots;
-
-        // Inverser si SELL
-        if (trade.side === 'SELL') {
-          pnl = -pnl;
-        }
+        const pnl = calculatePnlUsd(trade.symbolApi, trade.side, entryPrice, closePrice, lots);
 
         const marginReleased = Number(trade.marginUsed) || calculateMargin(trade.symbolApi, lots, entryPrice);
 
@@ -1611,15 +1658,6 @@ export const closeTradesBeforeWeekend = onSchedule({
 
         // Transaction atomique pour fermer le trade
         await db.runTransaction(async (transaction) => {
-          // Mettre à jour le trade
-          transaction.update(tradeDoc.ref, {
-            status: 'closed',
-            closePrice,
-            pnl,
-            closedAt: admin.firestore.FieldValue.serverTimestamp(),
-            closedBy: 'weekend_auto_close'
-          });
-
           const userRef = db.collection('users').doc(trade.userId);
           const userSnap = await transaction.get(userRef);
 
@@ -1635,6 +1673,16 @@ export const closeTradesBeforeWeekend = onSchedule({
           }
 
           const accountRef = db.collection('users').doc(trade.userId).collection('accounts').doc(resolvedAccountId);
+
+          // Mettre à jour le trade
+          transaction.update(tradeDoc.ref, {
+            status: 'closed',
+            closePrice,
+            pnl,
+            closedAt: admin.firestore.FieldValue.serverTimestamp(),
+            closedBy: 'weekend_auto_close'
+          });
+
           transaction.update(accountRef, {
             accountBalance: admin.firestore.FieldValue.increment(pnl),
             availableBalance: admin.firestore.FieldValue.increment(pnl + marginReleased),
