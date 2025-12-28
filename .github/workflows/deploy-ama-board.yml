@@ -31,6 +31,15 @@ jobs:
       - name: Install Firebase CLI
         run: npm install -g firebase-tools
 
+      - name: Check Firebase service account secret
+        env:
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_TESTE_BROCKER }}
+        run: |
+          if [ -z "$FIREBASE_SERVICE_ACCOUNT_JSON" ]; then
+            echo "::error::Missing GitHub Secret FIREBASE_SERVICE_ACCOUNT_TESTE_BROCKER (service account JSON). Add it in Repo Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+
       - name: Deploy to Firebase Hosting (ama-board)
         env:
           FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_TESTE_BROCKER }}
