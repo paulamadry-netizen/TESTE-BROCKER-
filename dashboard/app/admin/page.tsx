@@ -64,6 +64,12 @@ export default function AdminPage() {
       try {
         const userSnap = await getDocFromServer(doc(db, "users", user.uid));
         const role = userSnap.exists() ? (userSnap.data() as any)?.role : null;
+        console.log("[admin-check][/admin]", {
+          uid: user.uid,
+          projectId: (db as any)?._databaseId?.projectId,
+          userDocExists: userSnap.exists(),
+          role,
+        });
         const admin = role === "admin";
         setIsAdmin(admin);
 
@@ -92,11 +98,25 @@ export default function AdminPage() {
             setPayouts(rows);
             setLoading(false);
           },
-          () => {
+          (error) => {
+            console.error("[admin-check][/admin][error]", {
+              uid: user.uid,
+              projectId: (db as any)?._databaseId?.projectId,
+              code: (error as any)?.code,
+              message: (error as any)?.message,
+            });
+            setIsAdmin(false);
             setLoading(false);
           }
         );
-      } catch {
+      } catch (error) {
+        console.error("[admin-check][/admin][error]", {
+          uid: user.uid,
+          projectId: (db as any)?._databaseId?.projectId,
+          code: (error as any)?.code,
+          message: (error as any)?.message,
+        });
+        setIsAdmin(false);
         setLoading(false);
       }
     })();

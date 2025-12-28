@@ -109,6 +109,12 @@ export default function PayoutPage() {
         const userDocSnap = await getDocFromServer(userDocRef);
 
         const userDocData = userDocSnap.exists() ? (userDocSnap.data() as any) : {};
+        console.log("[admin-check][/payout]", {
+          uid: user.uid,
+          projectId: (db as any)?._databaseId?.projectId,
+          userDocExists: userDocSnap.exists(),
+          role: userDocData?.role ?? null,
+        });
         const accountType = (String((activeAccount as any)?.accountType || '')).toLowerCase() === 'funded' || Boolean((activeAccount as any)?.isFunded)
           ? 'funded'
           : 'challenge';
@@ -145,7 +151,13 @@ export default function PayoutPage() {
           await refreshEligibility(activeAccount.id);
         }
       } catch (error) {
-        console.error("Error loading user data:", error);
+        console.error("[admin-check][/payout][error]", {
+          uid: user?.uid,
+          projectId: (db as any)?._databaseId?.projectId,
+          code: (error as any)?.code,
+          message: (error as any)?.message,
+        });
+        console.error("Error loading payout data:", error);
       } finally {
         setLoading(false);
       }

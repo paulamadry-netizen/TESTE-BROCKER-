@@ -85,9 +85,21 @@ export function Sidebar() {
       userRef,
       (snap) => {
         const role = snap.exists() ? (snap.data() as any)?.role : null;
+        console.log("[admin-check][sidebar]", {
+          uid: user.uid,
+          projectId: (db as any)?._databaseId?.projectId,
+          userDocExists: snap.exists(),
+          role,
+        });
         setIsAdmin(role === "admin");
       },
-      () => {
+      (err) => {
+        console.error("[admin-check][sidebar][error]", {
+          uid: user.uid,
+          projectId: (db as any)?._databaseId?.projectId,
+          code: (err as any)?.code,
+          message: (err as any)?.message,
+        });
         setIsAdmin(false);
       }
     );
