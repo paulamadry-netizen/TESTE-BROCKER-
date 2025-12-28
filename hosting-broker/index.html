@@ -388,6 +388,18 @@
       const snap = await getDocs(q);
       const open = [];
       const closed = [];
+      const toMs = (value) => {
+        try {
+          if (!value) return null;
+          if (typeof value?.toDate === 'function') return value.toDate().getTime();
+          if (typeof value === 'number') return value;
+          const d = new Date(value);
+          const ms = d.getTime();
+          return Number.isFinite(ms) ? ms : null;
+        } catch (e) {
+          return null;
+        }
+      };
       snap.forEach(d => {
         const t = d.data();
         if (!t) return;
@@ -402,7 +414,11 @@
           type: 'forex'
         };
 
-        if (t.status === 'open') {
+        const hasClosedMarker = (t.closedAt !== undefined && t.closedAt !== null) || (t.closePrice !== undefined && t.closePrice !== null);
+        const status = typeof t.status === 'string' ? t.status.toLowerCase() : '';
+        const isClosed = status === 'closed' || hasClosedMarker;
+
+        if (!isClosed) {
           open.push({
             id: 'pos_' + d.id,
             firestoreId: d.id,
@@ -413,9 +429,9 @@
             current: Number(t.currentPrice || t.entryPrice),
             tp: t.takeProfit !== undefined && t.takeProfit !== null ? Number(t.takeProfit) : null,
             sl: t.stopLoss !== undefined && t.stopLoss !== null ? Number(t.stopLoss) : null,
-            openedAt: t.openedAt ? new Date(t.openedAt).getTime() : Date.now(),
+            openedAt: (toMs(t.openedAt) ?? Date.now()),
           });
-        } else if (t.status === 'closed') {
+        } else {
           closed.push({
             symbol: symObj,
             side: t.side,
@@ -423,7 +439,7 @@
             close: Number(t.closePrice || t.currentPrice || t.entryPrice),
             pnl: Number(t.pnl || 0),
             lots: Number(t.lots),
-            closedAt: t.closedAt ? new Date(t.closedAt).getTime() : Date.now(),
+            closedAt: (toMs(t.closedAt) ?? Date.now()),
           });
         }
       });
