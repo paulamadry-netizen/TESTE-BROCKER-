@@ -51,6 +51,8 @@
     const frameEl = document.getElementById('dashFrame');
 
     let tries = 0;
+    let consecutiveReady = 0;
+    const REQUIRED_CONSECUTIVE_READY = 2;
 
     async function checkReady() {
       tries += 1;
@@ -60,15 +62,23 @@
         const resp = await fetch(READY_ENDPOINT, { cache: 'no-store' });
         const data = await resp.json();
         if (data && data.ready) {
-          if (statusEl) statusEl.textContent = 'Ouverture du dashboard…';
-          if (frameEl) {
-            frameEl.src = RENDER_URL;
-            frameEl.style.display = 'block';
+          consecutiveReady += 1;
+          if (statusEl) statusEl.textContent = `Serveur prêt… (${consecutiveReady}/${REQUIRED_CONSECUTIVE_READY})`;
+          if (consecutiveReady >= REQUIRED_CONSECUTIVE_READY) {
+            if (statusEl) statusEl.textContent = 'Ouverture du dashboard…';
+            if (frameEl) {
+              const sep = RENDER_URL.includes('?') ? '&' : '?';
+              frameEl.src = `${RENDER_URL}${sep}embed=1&t=${Date.now()}`;
+              frameEl.style.display = 'block';
+            }
+            if (loaderEl) loaderEl.style.display = 'none';
+            return;
           }
-          if (loaderEl) loaderEl.style.display = 'none';
-          return;
+        } else {
+          consecutiveReady = 0;
         }
       } catch (e) {
+        consecutiveReady = 0;
         // ignore, retry
       }
 

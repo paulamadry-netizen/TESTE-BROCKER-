@@ -144,6 +144,13 @@
   // Logout function
   window.logoutBroker = async () => {
     try {
+      try {
+        if (window.firebaseAuth) {
+          await signOut(window.firebaseAuth);
+        }
+      } catch (e) {
+        // ignore
+      }
       localStorage.removeItem('brokerUser');
       console.log('✅ Logged out from broker');
       window.location.href = '/login.html';
@@ -152,41 +159,58 @@
     }
   };
 
-  // Check broker session from localStorage
-  const checkBrokerSession = async () => {
+  // Auth gate: ensure Firebase Auth session exists before loading broker data
+  let __brokerInitDone = false;
+  onAuthStateChanged(auth, async (user) => {
+    if (__brokerInitDone) return;
+    __brokerInitDone = true;
+
     const brokerUserStr = localStorage.getItem('brokerUser');
-    
     if (!brokerUserStr) {
       console.log('⚠️ No broker session found');
       window.location.href = '/login.html';
       return;
     }
 
+    let brokerUser = null;
     try {
-      const brokerUser = JSON.parse(brokerUserStr);
-      console.log('🔐 Broker user from localStorage:', brokerUser.uid);
-      
-      // Set as firebaseUser for compatibility
-      window.firebaseUser = { uid: brokerUser.uid, email: brokerUser.email };
-      
-      // Load full user data from Firestore
-      await window.loadUserData(brokerUser.uid);
-      
-      if(window.loadUserTrades){
-        await window.loadUserTrades(brokerUser.uid);
-      }
-      if(window.loadUserOrders){
-        await window.loadUserOrders(brokerUser.uid);
-      }
-    } catch (error) {
-      console.error('❌ Error parsing broker session:', error);
+      brokerUser = JSON.parse(brokerUserStr);
+    } catch (e) {
       localStorage.removeItem('brokerUser');
       window.location.href = '/login.html';
+      return;
     }
-  };
 
-  // Initialize broker session check
-  checkBrokerSession();
+    if (!user || !user.uid) {
+      console.log('⚠️ Firebase session missing');
+      localStorage.removeItem('brokerUser');
+      window.location.href = '/login.html';
+      return;
+    }
+
+    if (brokerUser && brokerUser.uid && brokerUser.uid !== user.uid) {
+      console.log('⚠️ UID mismatch, forcing re-login');
+      localStorage.removeItem('brokerUser');
+      try { await signOut(auth); } catch (e) {}
+      window.location.href = '/login.html';
+      return;
+    }
+
+    window.firebaseUser = { uid: user.uid, email: user.email || (brokerUser && brokerUser.email) || null };
+    console.log('🔐 Broker auth ready:', user.uid);
+
+    try {
+      await window.loadUserData(user.uid);
+      if (window.loadUserTrades) {
+        await window.loadUserTrades(user.uid);
+      }
+      if (window.loadUserOrders) {
+        await window.loadUserOrders(user.uid);
+      }
+    } catch (e) {
+      console.error('❌ Broker init failed:', e);
+    }
+  });
 
   // Firebase sync functions - available globally
   window.saveTrade = async (tradeData) => {
@@ -2596,17 +2620,25 @@ if(lotsToSell!==null && sellLots < pos.size){
   showToast('Clôture partielle non supportée pour le moment','error');
   return;
 }
-const closePrice=priceCache[pos.symbol.api]||pos.current,pnl=computePnl({...pos,size:sellLots,current:closePrice}),released=marginRequirement(pos.symbol.api,sellLots,closePrice);
-availableBalance+=released;
-availableBalance+=pnl;
-simBalance+=pnl;
-history.unshift({symbol:pos.symbol,side:pos.side,entry:pos.entry,close:closePrice,pnl,lots:sellLots,closedAt:Date.now()});
-// Sync to Firebase (via Cloud Function)
-try{
-  if(pos.firestoreId && window.__closeTradeFn){
+const closePrice=priceCache[pos.symbol.api]||pos.current;
+let pnl=computePnl({...pos,size:sellLots,current:closePrice});
+let serverClosed=false;
+
+// Sync to Firebase (via Cloud Function) FIRST (authoritative)
+if(pos.firestoreId){
+  if(!window.__closeTradeFn){
+    console.error('❌ closeTradeFn missing');
+    showToast('Erreur fermeture position (serveur indisponible)','error');
+    return;
+  }
+  try{
     const serverRes = await window.__closeTradeFn({ tradeId: pos.firestoreId, closePrice });
     const data = serverRes && serverRes.data ? serverRes.data : null;
-    debugLog(`Trade closed (server): ${pos.firestoreId} | pnl=${data&&data.pnl}`);
+    if(data && typeof data.pnl==='number' && Number.isFinite(data.pnl)){
+      pnl = data.pnl;
+    }
+    debugLog(`Trade closed (server): ${pos.firestoreId} | pnl=${pnl}`);
+    serverClosed=true;
     await window.loadUserData(window.firebaseUser.uid);
     if(window.activeAccountData && typeof window.activeAccountData.accountBalance==='number'){
       simBalance = window.activeAccountData.accountBalance;
@@ -2614,10 +2646,22 @@ try{
     if(window.activeAccountData && typeof window.activeAccountData.availableBalance==='number'){
       availableBalance = window.activeAccountData.availableBalance;
     }
+  }catch(e){
+    console.error('❌ closeTradeFn error', e);
+    showToast('Erreur fermeture position (serveur)','error');
+    return;
   }
-}catch(e){
-  console.error('❌ closeTradeFn error', e);
 }
+
+// Apply local balance changes only when trade is not server-persisted
+if(!serverClosed){
+  const released=marginRequirement(pos.symbol.api,sellLots,closePrice);
+  availableBalance+=released;
+  availableBalance+=pnl;
+  simBalance+=pnl;
+}
+
+history.unshift({symbol:pos.symbol,side:pos.side,entry:pos.entry,close:closePrice,pnl,lots:sellLots,closedAt:Date.now()});
 if(sellLots<pos.size)pos.size-=sellLots;
 else positions.splice(idx,1);
 renderPositions();renderHistory();renderTotals();

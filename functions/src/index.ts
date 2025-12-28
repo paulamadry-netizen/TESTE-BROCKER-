@@ -599,10 +599,22 @@ function looksLikeRenderWakingUp(html: string): boolean {
   return (
     hay.includes('service waking up') ||
     hay.includes('service is waking up') ||
+    hay.includes('welcome to render') ||
+    hay.includes('incoming http request detected') ||
     hay.includes('allocating compute resources') ||
     hay.includes('preparing instance') ||
+    hay.includes('starting the instance') ||
+    hay.includes('finalizing startup') ||
+    hay.includes('optimizing deployment') ||
+    hay.includes('steady hands') ||
     hay.includes('render.com') && hay.includes('waking')
   );
+}
+
+function looksLikeNextAppHtml(html: string): boolean {
+  const hay = String(html || '').toLowerCase();
+  if (!hay) return false;
+  return hay.includes('id="__next"') || hay.includes('__next_data__');
 }
 
 export const renderDashboardReady = onRequest(
@@ -645,7 +657,9 @@ export const renderDashboardReady = onRequest(
       const body = await resp.text();
 
       const waking = looksLikeRenderWakingUp(body);
-      const ready = status >= 200 && status < 400 && !waking;
+      const isHtml = contentType.includes('text/html');
+      const looksLikeApp = looksLikeNextAppHtml(body);
+      const ready = status >= 200 && status < 400 && isHtml && !waking && looksLikeApp;
 
       res.status(200).json({
         ready,
