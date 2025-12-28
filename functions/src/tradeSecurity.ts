@@ -964,14 +964,6 @@ export const closeTrade = onCall({ secrets: [finnhubApiKey] }, async (request) =
   // Transaction atomique
   try {
     await db.runTransaction(async (transaction) => {
-      // Mettre à jour le trade
-      transaction.update(tradeDoc.ref, {
-        status: 'closed',
-        closePrice,
-        pnl,
-        closedAt: admin.firestore.FieldValue.serverTimestamp()
-      });
-
       // Mettre à jour la balance
       const userRef = db.collection('users').doc(userId);
       const userSnap = await transaction.get(userRef);
@@ -985,6 +977,16 @@ export const closeTrade = onCall({ secrets: [finnhubApiKey] }, async (request) =
       }
 
       const accountRef = db.collection('users').doc(userId).collection('accounts').doc(resolvedAccountId);
+
+      // IMPORTANT: In Firestore transactions, all reads must happen before all writes.
+      // Mettre à jour le trade
+      transaction.update(tradeDoc.ref, {
+        status: 'closed',
+        closePrice,
+        pnl,
+        closedAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+
       transaction.update(accountRef, {
         accountBalance: admin.firestore.FieldValue.increment(pnl),
         availableBalance: admin.firestore.FieldValue.increment(pnl + marginReleased),
