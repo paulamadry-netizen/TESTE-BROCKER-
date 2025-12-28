@@ -64,13 +64,14 @@ export default function AdminPage() {
       try {
         const userSnap = await getDocFromServer(doc(db, "users", user.uid));
         const role = userSnap.exists() ? (userSnap.data() as any)?.role : null;
+        const admin = String(role ?? "").trim().toLowerCase() === "admin";
         console.log("[admin-check][/admin]", {
           uid: user.uid,
           projectId: (db as any)?._databaseId?.projectId,
           userDocExists: userSnap.exists(),
           role,
+          admin,
         });
-        const admin = role === "admin";
         setIsAdmin(admin);
 
         if (!admin) {

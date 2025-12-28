@@ -54,6 +54,8 @@ export default function PayoutPage() {
     }
   };
 
+  const isAdmin = String(userData?.role ?? '').trim().toLowerCase() === 'admin';
+
   const handleForceUpgradeChallenge = async () => {
     setProcessing(true);
     try {
@@ -391,7 +393,7 @@ export default function PayoutPage() {
               </Button>
             )}
 
-            {userData.role === 'admin' && (
+            {isAdmin && (
               <Button
                 onClick={handleForceUpgradeChallenge}
                 disabled={processing || !activeAccount || userData.accountStatus !== 'active'}
@@ -564,7 +566,7 @@ export default function PayoutPage() {
             <span className="text-sm">Max disponible</span>
             <span className="font-bold">{formatCurrency(Number.isFinite(maxPayout) ? maxPayout : 0)}</span>
           </div>
-          {userData.role === 'admin' && userData.accountType === 'funded' && (
+          {isAdmin && userData.accountType === 'funded' && (
             <Button
               onClick={handleAdminForcePayoutEligible}
               disabled={processing || !activeAccount}
