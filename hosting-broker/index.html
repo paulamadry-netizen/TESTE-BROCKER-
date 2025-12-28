@@ -2631,6 +2631,15 @@ if(res&&res.tradeId){
     }
   }
   debugLog(`Trade opened (server): ${res.tradeId}`);
+}else{
+  console.error('❌ Trade open failed or missing tradeId');
+  positions = positions.filter(p => p.id !== pos.id);
+  availableBalance += required;
+  renderPositions();
+  renderTotals();
+  updateChartOverlay();
+  showToast('Erreur: position non enregistrée (serveur)','error');
+  return false;
 }
 }else{console.error('❌ window.saveTrade is not defined!')}
 return true;
