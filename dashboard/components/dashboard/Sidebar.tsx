@@ -20,7 +20,7 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
 import { useLanguage, Language } from "@/context/LanguageContext";
 import { useEffect, useState } from "react";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase/config";
 
 const languages: { code: Language; name: string; flag: string }[] = [
@@ -75,23 +75,24 @@ export function Sidebar() {
   ];
 
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        if (!user) {
-          if (!cancelled) setIsAdmin(false);
-          return;
-        }
-        const snap = await getDoc(doc(db, "users", user.uid));
+    if (!user) {
+      setIsAdmin(false);
+      return;
+    }
+
+    const userRef = doc(db, "users", user.uid);
+    const unsub = onSnapshot(
+      userRef,
+      (snap) => {
         const role = snap.exists() ? (snap.data() as any)?.role : null;
-        if (!cancelled) setIsAdmin(role === "admin");
-      } catch {
-        if (!cancelled) setIsAdmin(false);
+        setIsAdmin(role === "admin");
+      },
+      () => {
+        setIsAdmin(false);
       }
-    })();
-    return () => {
-      cancelled = true;
-    };
+    );
+
+    return () => unsub();
   }, [user]);
 
   const handleLogout = async () => {

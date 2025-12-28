@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { doc, getDoc, collection, query, where, getDocs } from "firebase/firestore";
+import { doc, getDocFromServer, collection, query, where, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase/config";
 import { useAuth } from "@/context/AuthContext";
 import { useAccount } from "@/context/AccountContext";
@@ -106,7 +106,7 @@ export default function PayoutPage() {
 
       try {
         const userDocRef = doc(db, "users", user.uid);
-        const userDocSnap = await getDoc(userDocRef);
+        const userDocSnap = await getDocFromServer(userDocRef);
 
         const userDocData = userDocSnap.exists() ? (userDocSnap.data() as any) : {};
         const accountType = (String((activeAccount as any)?.accountType || '')).toLowerCase() === 'funded' || Boolean((activeAccount as any)?.isFunded)

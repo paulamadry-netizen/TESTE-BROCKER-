@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   collection,
   doc,
-  getDoc,
+  getDocFromServer,
   onSnapshot,
   query,
   where,
@@ -62,7 +62,7 @@ export default function AdminPage() {
 
     (async () => {
       try {
-        const userSnap = await getDoc(doc(db, "users", user.uid));
+        const userSnap = await getDocFromServer(doc(db, "users", user.uid));
         const role = userSnap.exists() ? (userSnap.data() as any)?.role : null;
         const admin = role === "admin";
         setIsAdmin(admin);
