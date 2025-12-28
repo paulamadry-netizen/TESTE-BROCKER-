@@ -1144,6 +1144,18 @@ const normalizeCandles=(candles)=>{
   }
   return dedup;
 };
+
+const alignLastCandleToLive=(epic,candles)=>{
+  try{
+    const p=Number(priceCache[epic]);
+    if(!Number.isFinite(p)||p<=0) return;
+    const last=candles&&candles.length?candles[candles.length-1]:null;
+    if(!last) return;
+    last.close=p;
+    last.high=Math.max(Number(last.high)||p,Number(last.open)||p,p);
+    last.low=Math.min(Number(last.low)||p,Number(last.open)||p,p);
+  }catch(e){}
+};
 const computeEMA=(data,period)=>{
   const out=[];const k=2/(period+1);
   let ema=null;
@@ -1594,6 +1606,7 @@ const initLightweightChart=async()=>{
   // Load historical data
   const histData=await loadHistoricalData(currentSymbol.api,currentTimeframe);
   if(histData&&histData.length>0){
+    alignLastCandleToLive(currentSymbol.api,histData);
     chartHistoryData[currentSymbol.api]=histData;
     lwSeries.setData(histData);
     ensureIndicatorsUI();
@@ -1654,7 +1667,8 @@ const updateLightweightChart=(price)=>{
   if(!lwSeries||!price)return;
   const now=Math.floor(Date.now()/1000);
   const tfMinutes={'1':1,'5':5,'15':15,'60':60,'240':240,'1D':1440}[currentTimeframe]||15;
-  const candleTime=Math.floor(now/(tfMinutes*60))*tfMinutes*60;
+  const tfSeconds=tfMinutes*60;
+  const bucketNow=Math.floor(now/tfSeconds)*tfSeconds;
   const currentData=chartHistoryData[currentSymbol.api]||[];
   const lastCandle=currentData[currentData.length-1];
   const lastClose=lastCandle?Number(lastCandle.close):null;
@@ -1669,8 +1683,13 @@ const updateLightweightChart=(price)=>{
     }
   }
   
-  if(!lastCandle||lastCandle.time<candleTime){
-    const newCandle={time:candleTime,open:newPrice,high:newPrice,low:newPrice,close:newPrice};
+  const lastBucket=lastCandle?Math.floor(Number(lastCandle.time)/tfSeconds)*tfSeconds:null;
+  const candleTime=(lastBucket!==null && bucketNow<=lastBucket)?lastBucket:bucketNow;
+
+  if(!lastCandle||Number(lastCandle.time)<candleTime){
+    const prevClose=lastCandle?Number(lastCandle.close):null;
+    const open=(prevClose&&Number.isFinite(prevClose)&&prevClose>0)?prevClose:newPrice;
+    const newCandle={time:candleTime,open:open,high:Math.max(open,newPrice),low:Math.min(open,newPrice),close:newPrice};
     currentData.push(newCandle);
     chartHistoryData[currentSymbol.api]=currentData;
     lwSeries.update(newCandle);
