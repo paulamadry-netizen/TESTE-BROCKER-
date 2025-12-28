@@ -483,6 +483,16 @@ export default function PayoutPage() {
   const isEligible = Boolean(eligibilityInfo?.eligible);
   const maxPayout = Number(eligibilityInfo?.maxPayout || 0);
   const amountNum = Number(payoutAmount || 0);
+  const initialFundedRaw = (activeAccount as any)?.initialFundedBalance ?? activeAccount?.initialBalance ?? 0;
+  const initialFundedBalance = Number(initialFundedRaw);
+  const currentBalance = Number((activeAccount as any)?.accountBalance ?? 0);
+  const requiredProfitPercent = 3;
+  const requiredBalance = (Number.isFinite(initialFundedBalance) && initialFundedBalance > 0)
+    ? initialFundedBalance * (1 + requiredProfitPercent / 100)
+    : 0;
+  const currentProfitPercent = (Number.isFinite(initialFundedBalance) && initialFundedBalance > 0 && Number.isFinite(currentBalance))
+    ? ((currentBalance - initialFundedBalance) / initialFundedBalance) * 100
+    : 0;
   const profitSharePercentRaw = Number((activeAccount as any)?.profitSharePercent ?? 80);
   const profitSharePercent = Number.isFinite(profitSharePercentRaw) && profitSharePercentRaw > 0 && profitSharePercentRaw <= 100
     ? profitSharePercentRaw
@@ -518,6 +528,18 @@ export default function PayoutPage() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
+          <div className="rounded-lg border border-border bg-muted p-3">
+            <div className="text-sm font-medium">Règles payout</div>
+            <div className="text-sm text-muted-foreground mt-1">
+              Premier payout: après <strong>15 jours</strong> + atteindre <strong>+{requiredProfitPercent}%</strong> (solde requis <strong>{formatCurrency(Number.isFinite(requiredBalance) ? requiredBalance : 0)}</strong>).
+            </div>
+            <div className="text-sm text-muted-foreground mt-1">
+              Payouts suivants: tous les <strong>15 jours</strong>.
+            </div>
+            <div className="text-sm text-muted-foreground mt-2">
+              Progression: <strong>{Number.isFinite(currentProfitPercent) ? currentProfitPercent.toFixed(2) : '0.00'}%</strong> (solde actuel {formatCurrency(Number.isFinite(currentBalance) ? currentBalance : 0)} / initial {formatCurrency(Number.isFinite(initialFundedBalance) ? initialFundedBalance : 0)}).
+            </div>
+          </div>
           <div className="flex items-center justify-between">
             <span className="text-sm">Statut</span>
             <span className={`font-bold ${isEligible ? 'text-green-600' : 'text-orange-600'}`}>{isEligible ? 'Éligible' : 'Non éligible'}</span>
@@ -537,7 +559,7 @@ export default function PayoutPage() {
               variant="secondary"
               className="w-full"
             >
-              Forcer éligibilité (+10%) (admin)
+              Forcer éligibilité (+3%) (admin)
             </Button>
           )}
         </CardContent>

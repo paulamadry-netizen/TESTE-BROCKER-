@@ -952,7 +952,7 @@ export const adminForcePayoutEligible = onCall(async (request) => {
     throw new HttpsError('failed-precondition', 'Initial balance invalide');
   }
 
-  const bonusProfit = initialBalance * 0.10;
+  const bonusProfit = initialBalance * 0.03;
 
   await accountRef.set({
     payoutEligibleOverride: true,
@@ -969,6 +969,196 @@ export const adminForcePayoutEligible = onCall(async (request) => {
   });
 
   return { success: true, bonusProfit };
+});
+
+export const adminPurgeAccounts = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Non authentifié');
+  }
+
+  const callerId = request.auth.uid;
+  const callerDoc = await db.collection('users').doc(callerId).get();
+  if (!callerDoc.exists || callerDoc.data()?.role !== 'admin') {
+    throw new HttpsError('permission-denied', 'Accès réservé aux administrateurs');
+  }
+
+  const data = (request.data || {}) as any;
+  const dryRun = data.dryRun !== false;
+  const confirm = typeof data.confirm === 'string' ? data.confirm : '';
+  if (!dryRun && confirm !== 'DELETE_FUNDED_CHALLENGE_ACCOUNTS') {
+    throw new HttpsError('failed-precondition', 'Confirmation requise');
+  }
+
+  const accountTypes: string[] = Array.isArray(data.accountTypes)
+    ? data.accountTypes.map((v: any) => String(v).toLowerCase()).filter(Boolean)
+    : ['funded', 'challenge'];
+  const includeLegacyIsFunded = data.includeLegacyIsFunded !== false;
+  const deleteTrades = data.deleteTrades !== false;
+  const deleteOrders = data.deleteOrders !== false;
+  const deletePayouts = data.deletePayouts !== false;
+  const cleanupUserActiveAccount = data.cleanupUserActiveAccount !== false;
+
+  const maxAccounts = Number.isFinite(Number(data.maxAccounts)) ? Number(data.maxAccounts) : 5000;
+  const maxDocs = Number.isFinite(Number(data.maxDocs)) ? Number(data.maxDocs) : 50000;
+
+  const accountDocs = new Map<string, admin.firestore.QueryDocumentSnapshot>();
+
+  if (accountTypes.length) {
+    const snap = await db.collectionGroup('accounts').where('accountType', 'in', accountTypes.slice(0, 10)).get();
+    snap.docs.forEach((d) => accountDocs.set(d.ref.path, d));
+  }
+  if (includeLegacyIsFunded) {
+    const snap = await db.collectionGroup('accounts').where('isFunded', '==', true).get();
+    snap.docs.forEach((d) => accountDocs.set(d.ref.path, d));
+  }
+
+  const targets = Array.from(accountDocs.values()).slice(0, maxAccounts).map((docSnap) => {
+    const parentUser = docSnap.ref.parent.parent;
+    const uid = parentUser ? parentUser.id : '';
+    const a = docSnap.data() as any;
+    return {
+      uid,
+      accountId: docSnap.id,
+      accountType: typeof a?.accountType === 'string' ? a.accountType : null,
+      challengeType: typeof a?.challengeType === 'string' ? a.challengeType : null,
+      isFunded: Boolean(a?.isFunded),
+      path: docSnap.ref.path,
+    };
+  }).filter((x) => x.uid);
+
+  const accountIds = targets.map((t) => t.accountId);
+  const uids = Array.from(new Set(targets.map((t) => t.uid)));
+
+  const chunk10 = <T,>(arr: T[]) => {
+    const out: T[][] = [];
+    for (let i = 0; i < arr.length; i += 10) out.push(arr.slice(i, i + 10));
+    return out;
+  };
+
+  const countByIn = async (collection: string, field: string, ids: string[]) => {
+    let count = 0;
+    const sample: string[] = [];
+    for (const chunk of chunk10(ids)) {
+      const snap = await db.collection(collection).where(field, 'in', chunk).get();
+      count += snap.size;
+      snap.docs.slice(0, Math.max(0, 25 - sample.length)).forEach((d) => sample.push(d.id));
+      if (count >= maxDocs) break;
+    }
+    return { count, sample };
+  };
+
+  const trades = deleteTrades ? await countByIn('trades', 'accountId', accountIds) : { count: 0, sample: [] as string[] };
+  const orders = deleteOrders ? await countByIn('orders', 'accountId', accountIds) : { count: 0, sample: [] as string[] };
+  const payouts = deletePayouts ? await countByIn('payouts', 'accountId', accountIds) : { count: 0, sample: [] as string[] };
+
+  if (dryRun) {
+    return {
+      dryRun: true,
+      confirmRequired: 'DELETE_FUNDED_CHALLENGE_ACCOUNTS',
+      totals: {
+        accounts: targets.length,
+        users: uids.length,
+        trades: trades.count,
+        orders: orders.count,
+        payouts: payouts.count,
+      },
+      sample: {
+        accounts: targets.slice(0, 25),
+        tradeIds: trades.sample,
+        orderIds: orders.sample,
+        payoutIds: payouts.sample,
+      },
+      limits: { maxAccounts, maxDocs },
+    };
+  }
+
+  const deleteByIn = async (collection: string, field: string, ids: string[]) => {
+    let deleted = 0;
+    for (const chunk of chunk10(ids)) {
+      const snap = await db.collection(collection).where(field, 'in', chunk).get();
+      if (snap.empty) continue;
+      let batch = db.batch();
+      let ops = 0;
+      for (const doc of snap.docs) {
+        batch.delete(doc.ref);
+        ops++;
+        deleted++;
+        if (ops >= 450) {
+          await batch.commit();
+          batch = db.batch();
+          ops = 0;
+        }
+        if (deleted >= maxDocs) break;
+      }
+      if (ops > 0) await batch.commit();
+      if (deleted >= maxDocs) break;
+    }
+    return deleted;
+  };
+
+  const deletedTrades = deleteTrades ? await deleteByIn('trades', 'accountId', accountIds) : 0;
+  const deletedOrders = deleteOrders ? await deleteByIn('orders', 'accountId', accountIds) : 0;
+  const deletedPayouts = deletePayouts ? await deleteByIn('payouts', 'accountId', accountIds) : 0;
+
+  let deletedAccounts = 0;
+  {
+    let batch = db.batch();
+    let ops = 0;
+    for (const docSnap of Array.from(accountDocs.values()).slice(0, maxAccounts)) {
+      batch.delete(docSnap.ref);
+      ops++;
+      deletedAccounts++;
+      if (ops >= 450) {
+        await batch.commit();
+        batch = db.batch();
+        ops = 0;
+      }
+    }
+    if (ops > 0) await batch.commit();
+  }
+
+  let cleanedUsers = 0;
+  if (cleanupUserActiveAccount && uids.length) {
+    let batch = db.batch();
+    let ops = 0;
+    const accountIdSet = new Set(accountIds);
+    for (const uid of uids) {
+      const userRef = db.collection('users').doc(uid);
+      const userSnap = await userRef.get();
+      const active = userSnap.exists ? String((userSnap.data() as any)?.activeAccountId || '') : '';
+      if (active && accountIdSet.has(active)) {
+        batch.set(userRef, { activeAccountId: null, updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+        ops++;
+        cleanedUsers++;
+        if (ops >= 450) {
+          await batch.commit();
+          batch = db.batch();
+          ops = 0;
+        }
+      }
+    }
+    if (ops > 0) await batch.commit();
+  }
+
+  await auditLog('admin_purge_accounts', callerId, {
+    dryRun: false,
+    deletedAccounts,
+    deletedTrades,
+    deletedOrders,
+    deletedPayouts,
+    cleanedUsers,
+  });
+
+  return {
+    success: true,
+    deleted: {
+      accounts: deletedAccounts,
+      trades: deletedTrades,
+      orders: deletedOrders,
+      payouts: deletedPayouts,
+      usersCleaned: cleanedUsers,
+    }
+  };
 });
 
 // ==========================================
@@ -2255,42 +2445,11 @@ export const checkPayoutEligibility = onCall(async (request) => {
       };
     }
 
-    const requiredBalance = initialBalance * 1.05;
+    const requiredBalance = initialBalance * 1.03;
     if (currentBalance < requiredBalance) {
       return {
         eligible: false,
-        reason: `Solde requis 105% (${requiredBalance.toFixed(2)}).`,
-        maxPayout,
-        accountId: resolvedAccountId,
-      };
-    }
-
-    // $150 profit on 4 different days since funding
-    const tradesSnapshot = await db.collection('trades')
-      .where('userId', '==', userId)
-      .where('status', '==', 'closed')
-      .get();
-
-    const profitByDay = new Map<string, number>();
-    tradesSnapshot.forEach((doc) => {
-      const trade = doc.data() as any;
-      if (!trade || trade.accountId !== resolvedAccountId) return;
-      const closedDate = toJsDate(trade.closedAt);
-      if (!closedDate) return;
-      if (closedDate.getTime() < fundedDate.getTime()) return;
-      const dateKey = closedDate.toISOString().split('T')[0];
-      profitByDay.set(dateKey, (profitByDay.get(dateKey) || 0) + (Number(trade.pnl) || 0));
-    });
-
-    let daysWithTarget = 0;
-    for (const profit of profitByDay.values()) {
-      if (profit >= 150) daysWithTarget++;
-    }
-
-    if (daysWithTarget < 4) {
-      return {
-        eligible: false,
-        reason: `Requis: $150 sur 4 jours (${daysWithTarget}/4).`,
+        reason: `Solde requis 103% (${requiredBalance.toFixed(2)}).`,
         maxPayout,
         accountId: resolvedAccountId,
       };
@@ -2385,47 +2544,12 @@ export const requestPayout = onCall(async (request) => {
     // Règle B: 105% du solde initial
     const initialBalance = acc.initialFundedBalance || acc.initialBalance;
     const currentBalance = acc.accountBalance;
-    const requiredBalance = initialBalance * 1.05;
+    const requiredBalance = initialBalance * 1.03;
 
     if (currentBalance < requiredBalance) {
       throw new HttpsError(
         'failed-precondition',
-        `Solde insuffisant. Requis: ${requiredBalance.toFixed(2)} USD (105%), Actuel: ${currentBalance.toFixed(2)} USD`
-      );
-    }
-
-    // Règle C: $150 de profit sur 4 jours différents
-    const tradesSnapshot = await db.collection('trades')
-      .where('userId', '==', userId)
-      .where('status', '==', 'closed')
-      .get();
-
-    // Grouper par jour
-    const profitByDay = new Map<string, number>();
-    tradesSnapshot.forEach((doc) => {
-      const trade = doc.data();
-      if (!trade || trade.accountId !== resolvedAccountId) return;
-      if (!trade.closedAt) return;
-      const closedDate = new Date(trade.closedAt);
-      if (isNaN(closedDate.getTime())) return;
-      if (closedDate.getTime() < fundedDate.getTime()) return;
-      const dateKey = closedDate.toISOString().split('T')[0];
-      const currentProfit = profitByDay.get(dateKey) || 0;
-      profitByDay.set(dateKey, currentProfit + (trade.pnl || 0));
-    });
-
-    // Compter les jours avec $150+ de profit
-    let daysWithTarget = 0;
-    for (const [day, profit] of profitByDay.entries()) {
-      if (profit >= 150) {
-        daysWithTarget++;
-      }
-    }
-
-    if (daysWithTarget < 4) {
-      throw new HttpsError(
-        'failed-precondition',
-        `Vous devez faire $150 de profit sur 4 jours différents. Jours validés: ${daysWithTarget}/4`
+        `Solde insuffisant. Requis: ${requiredBalance.toFixed(2)} USD (103%), Actuel: ${currentBalance.toFixed(2)} USD`
       );
     }
 

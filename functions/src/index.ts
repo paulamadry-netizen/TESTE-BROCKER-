@@ -2353,7 +2353,8 @@ export {
   checkPayoutEligibility,
   requestPayout,
   approvePayout,
-  adminForcePayoutEligible
+  adminForcePayoutEligible,
+  adminPurgeAccounts
 } from './tradeSecurity';
 
 // ==========================================
