@@ -89,21 +89,31 @@
           ? window.activeAccountData.accountStatus
           : window.userData.accountStatus;
 
-        const resolvedBalance = (window.activeAccountData && typeof window.activeAccountData.accountBalance === 'number')
+        const resolvedBalanceRaw = (window.activeAccountData && window.activeAccountData.accountBalance !== undefined && window.activeAccountData.accountBalance !== null)
           ? window.activeAccountData.accountBalance
           : window.userData.accountBalance;
+
+        const resolvedAvailableRaw = (window.activeAccountData && window.activeAccountData.availableBalance !== undefined && window.activeAccountData.availableBalance !== null)
+          ? window.activeAccountData.availableBalance
+          : window.userData.availableBalance;
+
+        const resolvedBalance = Number(resolvedBalanceRaw);
+        const resolvedAvailable = Number(resolvedAvailableRaw);
 
         // Check account status
         if (window.checkAccountStatus) {
           window.checkAccountStatus(resolvedAccountStatus);
         }
 
-        // Update broker balance with real account balance
-        if (typeof resolvedBalance === 'number') {
+        if (Number.isFinite(resolvedBalance)) {
+          const payload = {
+            balance: resolvedBalance,
+            availableBalance: Number.isFinite(resolvedAvailable) ? resolvedAvailable : resolvedBalance,
+          };
           if (window.updateBrokerBalance) {
-            window.updateBrokerBalance(resolvedBalance);
+            window.updateBrokerBalance(payload.balance, payload.availableBalance);
           } else {
-            window.__pendingBrokerBalance = resolvedBalance;
+            window.__pendingBrokerBalance = payload;
           }
         }
 
@@ -2767,8 +2777,8 @@ const renderAll=()=>{renderPositions();renderHistory();renderOrders();renderTota
  }
 
 // Firebase callbacks
-window.updateBrokerBalance=(balance)=>{simBalance=Number(balance);availableBalance=Number(balance);if(initialBalance===0){initialBalance=Number(balance);startOfDayBalance=Number(balance)}console.log('Broker balance updated:',simBalance);renderTotals()};
-if(window.__pendingBrokerBalance!==undefined&&window.__pendingBrokerBalance!==null){try{window.updateBrokerBalance(window.__pendingBrokerBalance)}catch(e){}window.__pendingBrokerBalance=null}
+window.updateBrokerBalance=(balance,avail)=>{const b=Number(balance);if(!Number.isFinite(b))return;const a=avail===undefined||avail===null?b:Number(avail);simBalance=b;availableBalance=Number.isFinite(a)?a:b;if(initialBalance===0){initialBalance=b;startOfDayBalance=b}console.log('Broker balance updated:',simBalance);renderTotals()};
+if(window.__pendingBrokerBalance!==undefined&&window.__pendingBrokerBalance!==null){try{const p=window.__pendingBrokerBalance;if(p&&typeof p==='object'){window.updateBrokerBalance(p.balance,p.availableBalance)}else{window.updateBrokerBalance(p)}}catch(e){}window.__pendingBrokerBalance=null}
 window.updateUserEmail=(email)=>{const emailEl=document.getElementById('userEmail');if(emailEl)emailEl.innerText=email};
 window.checkAccountStatus=(status)=>{if(status==='suspended'){accountSuspended=true;showToast('Compte suspendu - Trading desactive','error',10000);alert('COMPTE DESACTIVE\n\nVotre compte a ete suspendu pour violation des regles de trading.\nVeuillez contacter le support.')}};
 
