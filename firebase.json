@@ -51,18 +51,13 @@
     },
     {
       "site": "ama-board",
-      "public": "hosting-board",
+      "public": "dashboard/out",
       "ignore": [
         "firebase.json",
         "**/.*",
         "**/node_modules/**"
       ],
-      "rewrites": [
-        {
-          "source": "**",
-          "destination": "/index.html"
-        }
-      ]
+      "cleanUrls": true
     }
   ],
   "functions": [
