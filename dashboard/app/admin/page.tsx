@@ -49,19 +49,30 @@ export default function AdminPage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
 
-  const [loading, setLoading] = useState(true);
+  const [loadingRole, setLoadingRole] = useState(true);
+  const [loadingPayouts, setLoadingPayouts] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [adminDataError, setAdminDataError] = useState<string | null>(null);
   const [payouts, setPayouts] = useState<Array<{ id: string; data: PayoutDoc }>>([]);
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [rejectReasons, setRejectReasons] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    if (!user) return;
+    if (!user) {
+      setIsAdmin(false);
+      setLoadingRole(false);
+      setLoadingPayouts(false);
+      setAdminDataError(null);
+      setPayouts([]);
+      return;
+    }
 
     let unsub: (() => void) | null = null;
 
     (async () => {
       try {
+        setLoadingRole(true);
+        setAdminDataError(null);
         const userSnap = await getDocFromServer(doc(db, "users", user.uid));
         const role = userSnap.exists() ? (userSnap.data() as any)?.role : null;
         const admin = String(role ?? "").trim().toLowerCase() === "admin";
@@ -73,9 +84,11 @@ export default function AdminPage() {
           admin,
         });
         setIsAdmin(admin);
+        setLoadingRole(false);
 
         if (!admin) {
-          setLoading(false);
+          setLoadingPayouts(false);
+          setAdminDataError(null);
           return;
         }
 
@@ -84,6 +97,7 @@ export default function AdminPage() {
           where("status", "==", "pending")
         );
 
+        setLoadingPayouts(true);
         unsub = onSnapshot(
           q,
           (snap) => {
@@ -97,7 +111,8 @@ export default function AdminPage() {
             });
 
             setPayouts(rows);
-            setLoading(false);
+            setAdminDataError(null);
+            setLoadingPayouts(false);
           },
           (error) => {
             console.error("[admin-check][/admin][error]", {
@@ -106,8 +121,8 @@ export default function AdminPage() {
               code: (error as any)?.code,
               message: (error as any)?.message,
             });
-            setIsAdmin(false);
-            setLoading(false);
+            setAdminDataError((error as any)?.message || "Erreur chargement payouts");
+            setLoadingPayouts(false);
           }
         );
       } catch (error) {
@@ -118,7 +133,9 @@ export default function AdminPage() {
           message: (error as any)?.message,
         });
         setIsAdmin(false);
-        setLoading(false);
+        setLoadingRole(false);
+        setLoadingPayouts(false);
+        setAdminDataError((error as any)?.message || "Erreur vérification admin");
       }
     })();
 
@@ -175,7 +192,9 @@ export default function AdminPage() {
     );
   }, [router, user]);
 
-  if (authLoading || loading) {
+  const loading = authLoading || loadingRole || (isAdmin && loadingPayouts);
+
+  if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <Loader2 className="h-8 w-8 animate-spin" />
@@ -211,6 +230,17 @@ export default function AdminPage() {
         </div>
         {headerRight}
       </div>
+
+      {adminDataError && (
+        <Card className="border-yellow-500 bg-yellow-500/5">
+          <CardHeader>
+            <CardTitle>⚠️ Données admin indisponibles</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground">{adminDataError}</p>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>
