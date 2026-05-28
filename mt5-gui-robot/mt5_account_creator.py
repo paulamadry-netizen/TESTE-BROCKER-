@@ -1,24 +1,28 @@
 #!/usr/bin/env python3
 """
 MT5 Account Creator Robot
-Automates MT5 demo account creation via GUI automation
+Automates MT5 demo account creation via GUI automation (Admirals SC)
+Uses win32gui for window-relative positioning - robust to window movement
 """
 
 import time
 import logging
+import random
+import string
+import re
 import pyautogui
-import cv2
-import numpy as np
+import win32gui
+import win32con
+import win32api
 from datetime import datetime
 import firebase_admin
-from firebase_admin import credentials, firestore, db as realtime_db
+from firebase_admin import credentials, firestore
 import json
 import os
 
-# Configure logging
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
         logging.FileHandler('mt5_account_creator.log'),
         logging.StreamHandler()
@@ -26,338 +30,324 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# --- Window helper ---
+
+def find_window(title_contains):
+    result = []
+    def enum_cb(hwnd, _):
+        if win32gui.IsWindowVisible(hwnd):
+            t = win32gui.GetWindowText(hwnd)
+            if title_contains.lower() in t.lower():
+                result.append(hwnd)
+    win32gui.EnumWindows(enum_cb, None)
+    return result[0] if result else None
+
+def win_rect(hwnd):
+    return win32gui.GetWindowRect(hwnd)  # (left, top, right, bottom)
+
+def click_rel(hwnd, rx, ry):
+    """Click at relative position (rx, ry) as fraction of window size."""
+    l, t, r, b = win_rect(hwnd)
+    x = int(l + (r - l) * rx)
+    y = int(t + (b - t) * ry)
+    win32gui.SetForegroundWindow(hwnd)
+    time.sleep(0.2)
+    pyautogui.click(x, y)
+    return x, y
+
+def type_in_field(hwnd, rx, ry, text):
+    """Click field and type text."""
+    click_rel(hwnd, rx, ry)
+    time.sleep(0.3)
+    pyautogui.hotkey('ctrl', 'a')
+    pyautogui.hotkey('ctrl', 'a')
+    pyautogui.typewrite(text, interval=0.05)
+
+def screenshot_window(hwnd):
+    """Take screenshot of window region."""
+    l, t, r, b = win_rect(hwnd)
+    return pyautogui.screenshot(region=(l, t, r - l, b - t))
+
+# --- Account data generator ---
+
+FIRST_NAMES = ['Alex', 'Jordan', 'Morgan', 'Taylor', 'Casey', 'Riley', 'Quinn', 'Drew', 'Blake', 'Jamie']
+LAST_NAMES = ['Smith', 'Johnson', 'Brown', 'Davis', 'Wilson', 'Moore', 'Martin', 'Lee', 'White', 'Clark']
+
+def generate_account_data(capital):
+    ts = int(time.time())
+    first = random.choice(FIRST_NAMES)
+    last = random.choice(LAST_NAMES)
+    email = f"demo.{ts}.{random.randint(1000,9999)}@tradedemo.net"
+    return {
+        'first_name': first,
+        'last_name': last,
+        'email': email,
+        'deposit': str(capital),
+        'dob': '01/01/1990',
+        'phone': '0600000000',
+    }
+
+
 class MT5AccountCreator:
     def __init__(self, config_path='config.json'):
-        """Initialize the MT5 Account Creator"""
-        self.config = self.load_config(config_path)
-        self.setup_firebase()
-        self.setup_pyautogui()
-        
-    def load_config(self, config_path):
-        """Load configuration from JSON file"""
-        try:
-            with open(config_path, 'r') as f:
-                config = json.load(f)
-            logger.info(f"Configuration loaded from {config_path}")
-            return config
-        except FileNotFoundError:
-            logger.error(f"Configuration file not found: {config_path}")
-            raise
-        except json.JSONDecodeError as e:
-            logger.error(f"Invalid JSON in configuration file: {e}")
-            raise
-    
-    def setup_firebase(self):
-        """Setup Firebase connection"""
-        try:
-            cred_path = self.config.get('firebase_credentials_path')
-            if not cred_path:
-                raise ValueError("firebase_credentials_path not in config")
-            
-            cred = credentials.Certificate(cred_path)
-            firebase_admin.initialize_app(cred, {
-                'databaseURL': self.config.get('firebase_database_url')
-            })
-            
-            self.firestore = firestore.client()
-            self.realtime_db = realtime_db.reference()
-            logger.info("Firebase connection established")
-        except Exception as e:
-            logger.error(f"Failed to setup Firebase: {e}")
-            raise
-    
-    def setup_pyautogui(self):
-        """Setup PyAutoGUI with safety settings"""
-        pyautogui.PAUSE = self.config.get('pyautogui_pause', 1)
-        pyautogui.FAILSAFE = self.config.get('pyautogui_failsafe', True)
-        logger.info("PyAutoGUI configured")
-    
-    def check_mt5_terminal_open(self):
-        """Check if MT5 terminal is open"""
-        try:
-            # Try to find MT5 window by title
-            mt5_window = pyautogui.locateOnScreen(
-                self.config.get('mt5_window_screenshot', 'mt5_window.png'),
-                confidence=self.config.get('image_confidence', 0.8)
-            )
-            if mt5_window:
-                logger.info("MT5 terminal detected")
-                return True
-            else:
-                logger.warning("MT5 terminal not detected")
-                return False
-        except Exception as e:
-            logger.error(f"Error checking MT5 terminal: {e}")
-            return False
-    
-    def open_mt5_terminal(self):
-        """Open MT5 terminal"""
-        try:
-            mt5_path = self.config.get('mt5_terminal_path')
-            if not mt5_path:
-                raise ValueError("mt5_terminal_path not in config")
-            
-            logger.info(f"Opening MT5 terminal from {mt5_path}")
-            os.startfile(mt5_path)
-            
-            # Wait for terminal to open
-            time.sleep(self.config.get('mt5_open_wait_time', 10))
-            
-            if not self.check_mt5_terminal_open():
-                raise Exception("Failed to open MT5 terminal")
-            
-            logger.info("MT5 terminal opened successfully")
-            return True
-        except Exception as e:
-            logger.error(f"Failed to open MT5 terminal: {e}")
-            return False
-    
-    def navigate_to_open_account(self):
-        """Navigate to File -> Open Account menu"""
-        try:
-            logger.info("Navigating to File -> Open Account")
-            
-            # Click on File menu
-            file_menu_pos = self.config.get('file_menu_position', {'x': 50, 'y': 50})
-            pyautogui.click(file_menu_pos['x'], file_menu_pos['y'])
-            time.sleep(1)
-            
-            # Click on Open Account
-            open_account_pos = self.config.get('open_account_position', {'x': 50, 'y': 100})
-            pyautogui.click(open_account_pos['x'], open_account_pos['y'])
-            time.sleep(2)
-            
-            logger.info("Navigated to Open Account dialog")
-            return True
-        except Exception as e:
-            logger.error(f"Failed to navigate to Open Account: {e}")
-            return False
-    
-    def select_broker_server(self, broker_name):
-        """Select broker server from list"""
-        try:
-            logger.info(f"Selecting broker: {broker_name}")
-            
-            # Find and click on broker in list
-            broker_position = self.config.get('broker_positions', {}).get(broker_name)
-            if not broker_position:
-                raise ValueError(f"Broker position not configured for {broker_name}")
-            
-            pyautogui.click(broker_position['x'], broker_position['y'])
-            time.sleep(1)
-            
-            logger.info(f"Broker {broker_name} selected")
-            return True
-        except Exception as e:
-            logger.error(f"Failed to select broker: {e}")
-            return False
-    
-    def fill_account_form(self, capital, email=None):
-        """Fill account creation form"""
-        try:
-            logger.info(f"Filling account form with capital: {capital}")
-            
-            # Click on Next button if needed
-            next_pos = self.config.get('next_button_position', {'x': 500, 'y': 400})
-            pyautogui.click(next_pos['x'], next_pos['y'])
-            time.sleep(2)
-            
-            # Fill capital/leverage fields
-            capital_field = self.config.get('capital_field_position', {'x': 300, 'y': 200})
-            pyautogui.click(capital_field['x'], capital_field['y'])
+        self.config = self._load_config(config_path)
+        self._setup_firebase()
+        pyautogui.PAUSE = self.config.get('pyautogui_pause', 0.8)
+        pyautogui.FAILSAFE = True
+
+    def _load_config(self, path):
+        with open(path, 'r') as f:
+            return json.load(f)
+
+    def _setup_firebase(self):
+        cred_path = self.config['firebase_credentials_path']
+        cred = credentials.Certificate(cred_path)
+        firebase_admin.initialize_app(cred, {
+            'databaseURL': self.config.get('firebase_database_url')
+        })
+        self.db = firestore.client()
+        logger.info("Firebase connected")
+
+    # --- MT5 window ---
+
+    def ensure_mt5_open(self):
+        hwnd = find_window('MetaTrader 5')
+        if not hwnd:
+            logger.info("Opening MT5...")
+            os.startfile(self.config['mt5_terminal_path'])
+            time.sleep(self.config.get('mt5_open_wait_time', 12))
+            hwnd = find_window('MetaTrader 5')
+        if not hwnd:
+            raise Exception("MT5 window not found")
+        win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
+        win32gui.SetForegroundWindow(hwnd)
+        return hwnd
+
+    def open_account_dialog(self, mt5_hwnd):
+        """Open File -> Open Account via keyboard shortcut."""
+        win32gui.SetForegroundWindow(mt5_hwnd)
+        time.sleep(0.5)
+        pyautogui.hotkey('alt', 'F4')  # close any open dialog
+        time.sleep(0.3)
+        win32gui.SetForegroundWindow(mt5_hwnd)
+        time.sleep(0.3)
+        # Use menu: File -> Open Account
+        pyautogui.hotkey('alt', 'f')
+        time.sleep(0.8)
+        pyautogui.press('o')
+        time.sleep(2)
+        dlg = find_window('Open an Account')
+        if not dlg:
+            raise Exception("'Open an Account' dialog not found")
+        return dlg
+
+    def select_admirals_sc(self, dlg):
+        """In company list, search and select Admirals SC."""
+        l, t, r, b = win_rect(dlg)
+        win32gui.SetForegroundWindow(dlg)
+        time.sleep(0.5)
+        # Click search field (top area of dialog)
+        search_x = int(l + (r - l) * 0.45)
+        search_y = int(t + (b - t) * 0.18)
+        pyautogui.click(search_x, search_y)
+        time.sleep(0.3)
+        pyautogui.hotkey('ctrl', 'a')
+        pyautogui.typewrite('Admirals', interval=0.05)
+        time.sleep(0.5)
+        # Click Find your company button
+        find_x = int(l + (r - l) * 0.82)
+        find_y = int(t + (b - t) * 0.18)
+        pyautogui.click(find_x, find_y)
+        time.sleep(3)
+        # Click first result (Admirals SC Ltd row)
+        row_x = int(l + (r - l) * 0.45)
+        row_y = int(t + (b - t) * 0.38)
+        pyautogui.click(row_x, row_y)
+        time.sleep(0.5)
+        # Click Next
+        next_x = int(l + (r - l) * 0.82)
+        next_y = int(t + (b - t) * 0.92)
+        pyautogui.click(next_x, next_y)
+        time.sleep(2)
+
+    def select_demo_and_next(self):
+        """Select 'Open a demo account' radio and click Next."""
+        dlg = find_window('Open an Account')
+        if not dlg:
+            raise Exception("Account type dialog not found")
+        l, t, r, b = win_rect(dlg)
+        win32gui.SetForegroundWindow(dlg)
+        time.sleep(0.3)
+        # Click demo radio button (top option)
+        radio_x = int(l + (r - l) * 0.1)
+        radio_y = int(t + (b - t) * 0.28)
+        pyautogui.click(radio_x, radio_y)
+        time.sleep(0.5)
+        # Click Next
+        next_x = int(l + (r - l) * 0.82)
+        next_y = int(t + (b - t) * 0.92)
+        pyautogui.click(next_x, next_y)
+        time.sleep(2)
+
+    def fill_form(self, data):
+        """Fill the account creation form. Returns True if submitted."""
+        dlg = find_window('Open an Account')
+        if not dlg:
+            raise Exception("Form dialog not found")
+        l, t, r, b = win_rect(dlg)
+        win32gui.SetForegroundWindow(dlg)
+        time.sleep(0.5)
+        w = r - l
+        h = b - t
+
+        def field(rx, ry, text):
+            x = int(l + w * rx)
+            y = int(t + h * ry)
+            pyautogui.click(x, y)
+            time.sleep(0.3)
             pyautogui.hotkey('ctrl', 'a')
-            pyautogui.typewrite(str(capital))
-            time.sleep(0.5)
-            
-            # Fill email if provided
-            if email:
-                email_field = self.config.get('email_field_position', {'x': 300, 'y': 250})
-                pyautogui.click(email_field['x'], email_field['y'])
-                pyautogui.hotkey('ctrl', 'a')
-                pyautogui.typewrite(email)
-                time.sleep(0.5)
-            
-            logger.info("Account form filled")
-            return True
-        except Exception as e:
-            logger.error(f"Failed to fill account form: {e}")
-            return False
-    
-    def submit_account_creation(self):
-        """Submit account creation"""
-        try:
-            logger.info("Submitting account creation")
-            
-            # Click on Create/Open button
-            create_button_pos = self.config.get('create_button_position', {'x': 400, 'y': 500})
-            pyautogui.click(create_button_pos['x'], create_button_pos['y'])
-            time.sleep(3)
-            
-            logger.info("Account creation submitted")
-            return True
-        except Exception as e:
-            logger.error(f"Failed to submit account creation: {e}")
-            return False
-    
+            pyautogui.typewrite(text, interval=0.05)
+            time.sleep(0.2)
+
+        # Form field relative positions (calibrated for Admirals SC form)
+        field(0.55, 0.175, data['first_name'])   # First name
+        field(0.55, 0.255, data['last_name'])     # Last name
+        field(0.55, 0.335, data['dob'])           # Date of birth
+        field(0.55, 0.415, data['email'])         # Email
+        field(0.65, 0.495, data['phone'])         # Phone number
+
+        # Set deposit via dropdown - click and select custom value
+        deposit_x = int(l + w * 0.38)
+        deposit_y = int(t + h * 0.635)
+        pyautogui.click(deposit_x, deposit_y)
+        time.sleep(0.5)
+        pyautogui.hotkey('ctrl', 'a')
+        pyautogui.typewrite(data['deposit'], interval=0.05)
+        time.sleep(0.3)
+
+        # Check terms checkbox if not checked
+        chk_x = int(l + w * 0.1)
+        chk_y = int(t + h * 0.84)
+        pyautogui.click(chk_x, chk_y)
+        time.sleep(0.3)
+
+        # Click Next to submit
+        next_x = int(l + w * 0.82)
+        next_y = int(t + h * 0.92)
+        pyautogui.click(next_x, next_y)
+        time.sleep(4)
+        return True
+
     def extract_credentials(self):
-        """Extract login and password from success dialog"""
+        """Extract login/password from success screen using OCR."""
         try:
-            logger.info("Extracting credentials from success dialog")
-            
-            # Take screenshot of success dialog
-            screenshot = pyautogui.screenshot()
-            
-            # Use OCR to extract login and password
-            # This is a placeholder - actual implementation would use Tesseract or similar
-            login = "extracted_login"
-            password = "extracted_password"
-            
-            logger.info(f"Credentials extracted: login={login}")
-            return {
-                'login': login,
-                'password': password,
-                'server': self.config.get('mt5_server', 'TMGM-Demo')
-            }
-        except Exception as e:
-            logger.error(f"Failed to extract credentials: {e}")
+            import pytesseract
+            from PIL import Image
+            dlg = find_window('Open an Account')
+            if not dlg:
+                raise Exception("Success dialog not found")
+            l, t, r, b = win_rect(dlg)
+            img = pyautogui.screenshot(region=(l, t, r - l, b - t))
+            text = pytesseract.image_to_string(img)
+            logger.info(f"OCR result: {text[:300]}")
+            login_match = re.search(r'(?:Login|Account)[:\s]+(\d{6,12})', text)
+            pass_match = re.search(r'(?:Password|Pass)[:\s]+(\S+)', text)
+            if login_match and pass_match:
+                return {
+                    'login': login_match.group(1),
+                    'password': pass_match.group(1),
+                    'server': 'AdmiralsSC-Demo'
+                }
+            # Fallback: save screenshot for manual review
+            img.save(f'credential_screenshot_{int(time.time())}.png')
+            logger.warning("OCR failed - screenshot saved for manual review")
             return None
-    
-    def save_to_firebase(self, credentials, capital, user_id):
-        """Save credentials to Firebase"""
-        try:
-            logger.info(f"Saving credentials to Firebase for user {user_id}")
-            
-            # Add to mt5_demo_pool
-            pool_ref = self.firestore.collection('mt5_demo_pool').document()
-            pool_ref.set({
-                'login': credentials['login'],
-                'password': credentials['password'],
-                'server': credentials['server'],
-                'capital': capital,
-                'status': 'available',
-                'poolKind': 'challenge',
-                'createdAt': firestore.SERVER_TIMESTAMP,
-                'updatedAt': firestore.SERVER_TIMESTAMP,
-                'createdBy': 'gui_robot'
-            })
-            
-            logger.info(f"Credentials saved to Firebase: {pool_ref.id}")
-            return pool_ref.id
         except Exception as e:
-            logger.error(f"Failed to save to Firebase: {e}")
+            logger.error(f"Credential extraction failed: {e}")
             return None
-    
-    def process_queue(self):
-        """Process account creation requests from Firebase queue"""
+
+    def close_dialog(self):
+        dlg = find_window('Open an Account')
+        if dlg:
+            win32gui.PostMessage(dlg, win32con.WM_CLOSE, 0, 0)
+            time.sleep(1)
+
+    def save_to_pool(self, creds, capital, pool_kind='challenge'):
+        doc = self.db.collection('mt5_demo_pool').document()
+        doc.set({
+            'login': creds['login'],
+            'password': creds['password'],
+            'server': creds['server'],
+            'capital': capital,
+            'status': 'available',
+            'poolKind': pool_kind,
+            'createdAt': firestore.SERVER_TIMESTAMP,
+            'updatedAt': firestore.SERVER_TIMESTAMP,
+            'createdBy': 'gui_robot'
+        })
+        logger.info(f"Saved to pool: {doc.id} login={creds['login']}")
+        return doc.id
+
+    def create_account(self, capital, pool_kind='challenge'):
+        """Full account creation flow."""
+        logger.info(f"Creating account: capital={capital}")
+        data = generate_account_data(capital)
         try:
-            logger.info("Checking Firebase queue for account creation requests")
-            
-            # Get pending requests from queue
-            queue_ref = self.firestore.collection('account_creation_queue').where('status', '==', 'pending').limit(1)
-            requests = queue_ref.get()
-            
-            if not requests:
-                logger.info("No pending requests in queue")
-                return
-            
-            for request in requests:
-                request_data = request.to_dict()
-                request_id = request.id
-                
-                logger.info(f"Processing request {request_id}: capital={request_data.get('capital')}")
-                
-                # Update status to processing
-                request.reference.update({
-                    'status': 'processing',
-                    'startedAt': firestore.SERVER_TIMESTAMP
-                })
-                
-                # Create account
-                success = self.create_account(
-                    capital=request_data.get('capital'),
-                    email=request_data.get('email'),
-                    user_id=request_data.get('user_id'),
-                    broker=request_data.get('broker', 'TMGM')
-                )
-                
-                # Update request status
-                if success:
-                    request.reference.update({
-                        'status': 'completed',
-                        'completedAt': firestore.SERVER_TIMESTAMP
-                    })
-                else:
-                    request.reference.update({
-                        'status': 'failed',
-                        'error': 'Account creation failed',
-                        'failedAt': firestore.SERVER_TIMESTAMP
-                    })
-                
-        except Exception as e:
-            logger.error(f"Error processing queue: {e}")
-    
-    def create_account(self, capital, email=None, user_id=None, broker='TMGM'):
-        """Complete account creation process"""
-        try:
-            logger.info(f"Starting account creation: capital={capital}, broker={broker}")
-            
-            # Check if MT5 is open
-            if not self.check_mt5_terminal_open():
-                if not self.open_mt5_terminal():
-                    return False
-            
-            # Navigate to Open Account
-            if not self.navigate_to_open_account():
-                return False
-            
-            # Select broker
-            if not self.select_broker_server(broker):
-                return False
-            
-            # Fill form
-            if not self.fill_account_form(capital, email):
-                return False
-            
-            # Submit
-            if not self.submit_account_creation():
-                return False
-            
-            # Extract credentials
-            credentials = self.extract_credentials()
-            if not credentials:
-                return False
-            
-            # Save to Firebase
-            if user_id:
-                pool_id = self.save_to_firebase(credentials, capital, user_id)
-                if not pool_id:
-                    return False
-            
-            logger.info("Account creation completed successfully")
-            return True
-            
+            mt5_hwnd = self.ensure_mt5_open()
+            time.sleep(1)
+
+            dlg = self.open_account_dialog(mt5_hwnd)
+            self.select_admirals_sc(dlg)
+            self.select_demo_and_next()
+            self.fill_form(data)
+
+            creds = self.extract_credentials()
+            self.close_dialog()
+
+            if creds:
+                self.save_to_pool(creds, capital, pool_kind)
+                logger.info(f"Account created: {creds['login']}")
+                return creds
+            else:
+                logger.error("Could not extract credentials")
+                return None
         except Exception as e:
             logger.error(f"Account creation failed: {e}")
-            return False
-    
+            self.close_dialog()
+            return None
+
+    def process_queue(self):
+        """Process pending requests from Firestore queue."""
+        queue = self.db.collection('account_creation_queue') \
+            .where('status', '==', 'pending').limit(1).get()
+        if not queue:
+            return
+        for req in queue:
+            data = req.to_dict()
+            req.reference.update({'status': 'processing', 'startedAt': firestore.SERVER_TIMESTAMP})
+            creds = self.create_account(
+                capital=data.get('capital', 10000),
+                pool_kind=data.get('poolKind', 'challenge')
+            )
+            if creds:
+                req.reference.update({'status': 'completed', 'completedAt': firestore.SERVER_TIMESTAMP})
+            else:
+                req.reference.update({'status': 'failed', 'failedAt': firestore.SERVER_TIMESTAMP})
+
     def run(self):
-        """Main loop - process queue continuously"""
-        logger.info("Starting MT5 Account Creator robot")
-        
+        logger.info("MT5 Account Creator started")
         while True:
             try:
                 self.process_queue()
                 time.sleep(self.config.get('queue_check_interval', 30))
             except KeyboardInterrupt:
-                logger.info("Shutting down robot")
+                logger.info("Stopped")
                 break
             except Exception as e:
-                logger.error(f"Error in main loop: {e}")
-                time.sleep(60)  # Wait before retry
+                logger.error(f"Loop error: {e}")
+                time.sleep(60)
+
 
 if __name__ == '__main__':
-    try:
-        robot = MT5AccountCreator('config.json')
-        robot.run()
-    except Exception as e:
-        logger.error(f"Fatal error: {e}")
+    robot = MT5AccountCreator('config.json')
+    robot.run()
