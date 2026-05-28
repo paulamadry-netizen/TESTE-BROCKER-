@@ -239,28 +239,37 @@ class MT5AccountCreator:
         return True
 
     def extract_credentials(self):
-        """Extract login/password from success screen using OCR."""
+        """Extract login/password from success screen using pywinauto (no OCR needed)."""
         try:
-            import pytesseract
-            from PIL import Image
-            dlg = find_window('Open an Account')
-            if not dlg:
+            from pywinauto import Application, findwindows
+            time.sleep(1)
+            wins = findwindows.find_windows(title_re='.*Open an Account.*')
+            if not wins:
                 raise Exception("Success dialog not found")
-            l, t, r, b = win_rect(dlg)
-            img = pyautogui.screenshot(region=(l, t, r - l, b - t))
-            text = pytesseract.image_to_string(img)
-            logger.info(f"OCR result: {text[:300]}")
-            login_match = re.search(r'(?:Login|Account)[:\s]+(\d{6,12})', text)
-            pass_match = re.search(r'(?:Password|Pass)[:\s]+(\S+)', text)
+            app = Application().connect(handle=wins[0])
+            dlg = app.window(handle=wins[0])
+            full_text = dlg.window_text() + '\n'
+            for ctrl in dlg.children():
+                try:
+                    full_text += ctrl.window_text() + '\n'
+                except Exception:
+                    pass
+            logger.info(f"Dialog text: {full_text[:500]}")
+            login_match = re.search(r'(?:Login|login|Account)[:\s]+(\d{5,12})', full_text)
+            pass_match = re.search(r'(?:Password|password|Pass)[:\s]+(\S{4,20})', full_text)
             if login_match and pass_match:
                 return {
                     'login': login_match.group(1),
                     'password': pass_match.group(1),
                     'server': 'AdmiralsSC-Demo'
                 }
-            # Fallback: save screenshot for manual review
-            img.save(f'credential_screenshot_{int(time.time())}.png')
-            logger.warning("OCR failed - screenshot saved for manual review")
+            # Fallback: screenshot for manual review
+            dlg_hwnd = find_window('Open an Account')
+            if dlg_hwnd:
+                l, t, r, b = win_rect(dlg_hwnd)
+                img = pyautogui.screenshot(region=(l, t, r - l, b - t))
+                img.save(f'credential_screenshot_{int(time.time())}.png')
+            logger.warning("Could not extract credentials - screenshot saved")
             return None
         except Exception as e:
             logger.error(f"Credential extraction failed: {e}")
