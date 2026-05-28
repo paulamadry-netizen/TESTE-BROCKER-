@@ -111,12 +111,12 @@ class MT5AccountCreator:
     # --- MT5 window ---
 
     def ensure_mt5_open(self):
-        hwnd = find_window('MetaTrader 5')
+        hwnd = find_window('ICMarketsEU') or find_window('MetaTrader 5') or find_window('IC Markets')
         if not hwnd:
             logger.info("Opening MT5...")
             os.startfile(self.config['mt5_terminal_path'])
             time.sleep(self.config.get('mt5_open_wait_time', 12))
-            hwnd = find_window('MetaTrader 5')
+            hwnd = find_window('ICMarketsEU') or find_window('MetaTrader 5') or find_window('IC Markets')
         if not hwnd:
             raise Exception("MT5 window not found")
         win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
